@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "Smart Spizarnia",
+    "slug": "smart-spizarnia",
+    "version": "0.1.0",
+    "orientation": "landscape",
+    "scheme": "smartspizarnia",
+    "userInterfaceStyle": "light",
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Aplikacja potrzebuje aparatu do skanowania kodow kreskowych."
+        }
+      ],
+      "expo-asset"
+    ],
+    "android": {
+      "package": "pl.smartspizarnia.app",
+      "permissions": [
+        "CAMERA"
+      ]
+    }
+  }
+}
