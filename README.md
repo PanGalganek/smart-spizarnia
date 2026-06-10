@@ -34,6 +34,8 @@ Tabletowa aplikacja mobilna do zarzadzania domowa spizarnia. Projekt jest podzie
 - `pantry/{barcode}` - produkt i aktualna ilosc
 - `meals/{mealId}` - posilek, skladniki i podsumowanie odzywcze
 
+Reguly Firestore ograniczaja odczyt i zapis do jednego, wskazanego konta tabletu. Samodzielna rejestracja nowych uzytkownikow jest wylaczona.
+
 Zmiana stanu produktu jest transakcja Firestore, co chroni licznik przed przypadkowym nadpisaniem. Zapis posilku i odjecie wszystkich jego skladnikow powinny byc jedna transakcja.
 
 ## Stan pierwszej wersji
