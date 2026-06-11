@@ -132,7 +132,7 @@ export function ScannerScreen() {
 
 const styles = StyleSheet.create({
   card: { backgroundColor: colors.surface, padding: 24, borderRadius: 20 },
-  row: { flexDirection: "row", gap: 12 },
+  row: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   input: { flex: 1, backgroundColor: colors.background, padding: 16, borderRadius: 12, fontSize: 18 },
   button: { backgroundColor: colors.primary, paddingHorizontal: 24, justifyContent: "center", borderRadius: 12 },
   scan: { backgroundColor: "#1565C0", paddingHorizontal: 24, justifyContent: "center", borderRadius: 12 },
@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
   product: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 18, gap: 8 },
   name: { fontSize: 24, fontWeight: "800" },
   package: { fontSize: 18, fontWeight: "800", color: colors.primary },
-  actions: { flexDirection: "row", gap: 12, marginTop: 12 },
+  actions: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 12 },
   amount: { width: 80, backgroundColor: colors.background, borderRadius: 10, padding: 12, textAlign: "center" },
   metaInput: { flex: 1, backgroundColor: colors.background, borderRadius: 10, padding: 12 },
   unitChoice: { backgroundColor: colors.background, padding: 12, borderRadius: 10 }, unitActive: { backgroundColor: colors.primary },

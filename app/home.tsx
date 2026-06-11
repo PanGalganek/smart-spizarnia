@@ -1,6 +1,6 @@
 import { Redirect, router } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useAuth } from "@/core/auth/AuthProvider";
 import { colors } from "@/core/theme";
 
@@ -13,35 +13,43 @@ const tiles = [
 
 export default function HomeScreen() {
   const { user, signOut } = useAuth();
+  const { width } = useWindowDimensions();
+  const compact = width < 700;
   if (!user) return <Redirect href="/login" />;
 
   return (
-    <View style={styles.page}>
+    <ScrollView style={styles.page} contentContainerStyle={[styles.content, compact && styles.compactContent]}>
       <View style={styles.header}>
-        <View><Text style={styles.title}>Smart Spizarnia</Text><Text style={styles.subtitle}>Co chcesz dzis zrobic?</Text></View>
+        <View style={styles.heading}><Text style={[styles.title, compact && styles.compactTitle]}>Smart Spizarnia</Text><Text style={styles.subtitle}>Co chcesz dzis zrobic? · wersja 0.2.0</Text></View>
         <Pressable onPress={signOut} style={styles.logout}><Text>Wyloguj</Text></Pressable>
       </View>
       <View style={styles.grid}>
         {tiles.map((tile) => (
-          <Pressable key={tile.title} onPress={() => router.push(tile.route)} style={[styles.tile, { borderTopColor: tile.color }]}>
-            <MaterialCommunityIcons name={tile.icon} size={64} color={tile.color} />
-            <Text style={styles.tileTitle}>{tile.title}</Text>
+          <Pressable key={tile.title} onPress={() => router.push(tile.route)} style={[styles.tile, compact && styles.compactTile, { borderTopColor: tile.color }]}>
+            <MaterialCommunityIcons name={tile.icon} size={compact ? 48 : 64} color={tile.color} />
+            <Text style={[styles.tileTitle, compact && styles.compactTileTitle]}>{tile.title}</Text>
             <Text style={styles.tileSubtitle}>{tile.subtitle}</Text>
           </Pressable>
         ))}
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, padding: 28, backgroundColor: colors.background },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 24 },
+  page: { flex: 1, backgroundColor: colors.background },
+  content: { flexGrow: 1, padding: 28 },
+  compactContent: { padding: 16 },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 24 },
+  heading: { flex: 1 },
   title: { fontSize: 32, fontWeight: "800", color: colors.text },
+  compactTitle: { fontSize: 25 },
   subtitle: { color: colors.muted, fontSize: 16 },
   logout: { backgroundColor: colors.surface, paddingHorizontal: 18, paddingVertical: 12, borderRadius: 12 },
-  grid: { flex: 1, flexDirection: "row", flexWrap: "wrap", gap: 20 },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: 20 },
   tile: { width: "48%", flexGrow: 1, minHeight: 180, backgroundColor: colors.surface, borderRadius: 22, borderTopWidth: 8, padding: 24, justifyContent: "center", elevation: 3 },
+  compactTile: { width: "100%", minHeight: 145, padding: 20 },
   tileTitle: { fontSize: 27, fontWeight: "800", color: colors.text, marginTop: 12 },
+  compactTileTitle: { fontSize: 23, marginTop: 8 },
   tileSubtitle: { fontSize: 15, color: colors.muted, marginTop: 4 }
 });
