@@ -1,10 +1,13 @@
-import { collection, deleteDoc, doc, getDocs, setDoc } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDocs, runTransaction, setDoc } from "firebase/firestore";
 import { db } from "@/core/firebase";
-import { Product } from "@/domain/product";
+import { PantryItem, Product, Unit } from "@/domain/product";
 import { ShoppingItem, ShoppingItemSource } from "@/domain/shopping";
 import { manualShoppingItemId, productShoppingItemId } from "@/services/shopping";
+import { convertPantryAmount, preferredPantryUnit } from "@/services/pantryUnits";
 
 const shoppingList = collection(db, "shoppingList");
+const pantry = collection(db, "pantry");
+const products = collection(db, "products");
 
 function withoutUndefined<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -55,6 +58,36 @@ export async function listShoppingItems() {
 export async function markShoppingItemPurchased(item: ShoppingItem) {
   const now = Date.now();
   await setDoc(doc(shoppingList, item.id), { status: "purchased", purchasedAt: now, updatedAt: now }, { merge: true });
+}
+
+export async function purchaseKnownProduct(item: ShoppingItem, amount: number, inputUnit: Unit) {
+  if (!item.product) throw new Error("Ten wpis nie ma zapisanego produktu. Użyj skanera.");
+  const product = item.product;
+  const shoppingRef = doc(shoppingList, item.id);
+  const pantryRef = doc(pantry, product.barcode);
+  const productRef = doc(products, product.barcode);
+  const now = Date.now();
+
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(pantryRef);
+    const current = snapshot.exists() ? snapshot.data() as PantryItem : null;
+    const pantryUnit = current?.unit ?? preferredPantryUnit(product, inputUnit);
+    const addedAmount = convertPantryAmount(product, amount, inputUnit, pantryUnit);
+    const previousQuantity = Number(current?.quantity) || 0;
+    const next: PantryItem = {
+      barcode: product.barcode,
+      product,
+      quantity: Math.round((previousQuantity + addedAmount) * 100) / 100,
+      unit: pantryUnit,
+      expiryDate: previousQuantity > 0 ? current?.expiryDate : undefined,
+      location: current?.location,
+      status: "active",
+      updatedAt: now
+    };
+    transaction.set(pantryRef, withoutUndefined(next));
+    transaction.set(productRef, withoutUndefined(product), { merge: true });
+    transaction.set(shoppingRef, { status: "purchased", purchasedAt: now, updatedAt: now }, { merge: true });
+  });
 }
 
 export async function restoreShoppingItem(item: ShoppingItem) {

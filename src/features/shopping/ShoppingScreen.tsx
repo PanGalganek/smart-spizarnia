@@ -4,9 +4,11 @@ import { FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from "r
 import { ModuleScreen } from "@/core/components/ModuleScreen";
 import { colors } from "@/core/theme";
 import { ShoppingItem } from "@/domain/shopping";
-import { addManualShoppingItem, deleteShoppingItem, listShoppingItems, markShoppingItemPurchased, restoreShoppingItem } from "@/services/shoppingRepository";
+import { Unit } from "@/domain/product";
+import { addManualShoppingItem, deleteShoppingItem, listShoppingItems, markShoppingItemPurchased, purchaseKnownProduct, restoreShoppingItem } from "@/services/shoppingRepository";
+import { canUseWholePackage } from "@/services/pantryUnits";
 
-type PurchaseStep = "same-product" | "open-scanner";
+type PurchaseStep = "same-product" | "quantity" | "open-scanner";
 
 export function ShoppingScreen() {
   const [items, setItems] = useState<ShoppingItem[]>([]);
@@ -14,6 +16,10 @@ export function ShoppingScreen() {
   const [message, setMessage] = useState("");
   const [selected, setSelected] = useState<ShoppingItem | null>(null);
   const [purchaseStep, setPurchaseStep] = useState<PurchaseStep>("same-product");
+  const [purchaseAmount, setPurchaseAmount] = useState("1");
+  const [purchaseUnit, setPurchaseUnit] = useState<Unit>("szt");
+  const [purchaseError, setPurchaseError] = useState("");
+  const [purchaseBusy, setPurchaseBusy] = useState(false);
   const active = useMemo(() => items.filter((item) => item.status === "active"), [items]);
   const purchased = useMemo(() => items.filter((item) => item.status === "purchased"), [items]);
 
@@ -29,14 +35,35 @@ export function ShoppingScreen() {
   }
 
   function startPurchase(item: ShoppingItem) {
-    setSelected(item); setPurchaseStep("same-product");
+    setSelected(item); setPurchaseError("");
+    if (!item.product) {
+      setPurchaseStep("open-scanner");
+      return;
+    }
+    const wholePackage = canUseWholePackage(item.product);
+    setPurchaseAmount(wholePackage ? "1" : String(item.product.packageAmount ?? 1));
+    setPurchaseUnit(wholePackage ? "szt" : (item.product.defaultUnit ?? "szt"));
+    setPurchaseStep("same-product");
   }
 
-  async function confirmSameProduct() {
-    if (!selected) return;
-    await markShoppingItemPurchased(selected);
-    setSelected(null); setMessage(`Oznaczono jako kupione: ${selected.name}.`);
-    await refresh();
+  function confirmSameProduct() {
+    setPurchaseError("");
+    setPurchaseStep("quantity");
+  }
+
+  async function addPurchasedProduct() {
+    if (!selected?.product) return;
+    const amount = Number(purchaseAmount.replace(",", "."));
+    if (!Number.isFinite(amount) || amount <= 0) return setPurchaseError("Wpisz prawidłową ilość większą od zera.");
+    try {
+      setPurchaseBusy(true); setPurchaseError("");
+      await purchaseKnownProduct(selected, amount, purchaseUnit);
+      setSelected(null);
+      setMessage(`Kupiono i dodano do spiżarni: ${selected.name} (${amount} ${purchaseUnit}).`);
+      await refresh();
+    } catch (error) {
+      setPurchaseError(error instanceof Error ? error.message : "Nie udało się dodać zakupu do spiżarni.");
+    } finally { setPurchaseBusy(false); }
   }
 
   async function openScannerForReplacement() {
@@ -88,10 +115,20 @@ export function ShoppingScreen() {
             <Text style={styles.modalTitle}>Czy kupiono ten sam produkt?</Text>
             <Text style={styles.modalProduct}>{selected?.name}</Text>
             <Text style={styles.modalText}>Jeśli wybrano inny produkt lub inną markę, można od razu zeskanować jego kod.</Text>
-            <View style={styles.modalActions}><Pressable onPress={() => setSelected(null)} style={styles.secondary}><Text>Anuluj</Text></Pressable><Pressable onPress={() => setPurchaseStep("open-scanner")} style={styles.secondary}><Text>Nie, inny</Text></Pressable><Pressable onPress={() => void confirmSameProduct()} style={styles.primary}><Text style={styles.white}>Tak, ten sam</Text></Pressable></View>
+            <View style={styles.modalActions}><Pressable onPress={() => setSelected(null)} style={styles.secondary}><Text>Anuluj</Text></Pressable><Pressable onPress={() => setPurchaseStep("open-scanner")} style={styles.secondary}><Text>Nie, inny</Text></Pressable><Pressable onPress={confirmSameProduct} style={styles.primary}><Text style={styles.white}>Tak, ten sam</Text></Pressable></View>
+          </> : purchaseStep === "quantity" ? <>
+            <Text style={styles.modalTitle}>Ile kupiono?</Text>
+            <Text style={styles.modalProduct}>{selected?.name}</Text>
+            {selected?.product && canUseWholePackage(selected.product) && <Text style={styles.packageHint}>1 szt. = {selected.product.packageAmount} {selected.product.packageUnit}</Text>}
+            <View style={styles.quantityRow}>
+              <TextInput value={purchaseAmount} onChangeText={setPurchaseAmount} keyboardType="decimal-pad" selectTextOnFocus style={styles.quantityInput} />
+              {(["g", "ml", "szt"] as Unit[]).map((unit) => <Pressable key={unit} onPress={() => setPurchaseUnit(unit)} style={[styles.unitButton, purchaseUnit === unit && styles.unitActive]}><Text style={purchaseUnit === unit && styles.white}>{unit}</Text></Pressable>)}
+            </View>
+            {!!purchaseError && <Text style={styles.purchaseError}>{purchaseError}</Text>}
+            <View style={styles.modalActions}><Pressable onPress={() => setPurchaseStep("same-product")} style={styles.secondary}><Text>Wstecz</Text></Pressable><Pressable disabled={purchaseBusy} onPress={() => void addPurchasedProduct()} style={[styles.primary, purchaseBusy && styles.disabled]}><Text style={styles.white}>{purchaseBusy ? "Dodawanie..." : "Dodaj do spiżarni"}</Text></Pressable></View>
           </> : <>
             <Text style={styles.modalTitle}>Otworzyć skaner?</Text>
-            <Text style={styles.modalText}>Zeskanuj nowy produkt, aby zapisać jego kod i dane w aplikacji.</Text>
+            <Text style={styles.modalText}>{selected?.product ? "Zeskanuj nowy produkt, aby zapisać jego kod i dane w aplikacji." : "Ten ręczny wpis nie ma jeszcze danych produktu. Zeskanuj kod, aby dodać zakup do spiżarni."}</Text>
             <View style={styles.modalActions}><Pressable onPress={() => setPurchaseStep("same-product")} style={styles.secondary}><Text>Wstecz</Text></Pressable><Pressable onPress={() => void finishWithoutScanner()} style={styles.secondary}><Text>Nie otwieraj</Text></Pressable><Pressable onPress={() => void openScannerForReplacement()} style={styles.primary}><Text style={styles.white}>Otwórz skaner</Text></Pressable></View>
           </>}
         </View></View>
@@ -114,5 +151,5 @@ const styles = StyleSheet.create({
   content: { paddingBottom: 36 }, addBox: { backgroundColor: colors.surface, borderRadius: 18, padding: 18, marginBottom: 12 }, heading: { fontSize: 20, fontWeight: "900", marginBottom: 12 }, addRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 }, input: { flex: 1, minWidth: 190, backgroundColor: colors.background, borderRadius: 12, padding: 15, fontSize: 16 }, addButton: { backgroundColor: colors.primary, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 15, justifyContent: "center" }, white: { color: "white", fontWeight: "800" },
   message: { backgroundColor: "#E8F5E9", color: "#1B5E20", padding: 12, borderRadius: 10, marginBottom: 12, fontWeight: "700" }, sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginVertical: 12 }, sectionTitle: { fontSize: 21, fontWeight: "900" }, count: { color: colors.muted, fontWeight: "800" }, empty: { textAlign: "center", color: colors.muted, lineHeight: 22, marginVertical: 40 },
   item: { backgroundColor: colors.surface, borderRadius: 15, padding: 16, marginBottom: 10, flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12 }, purchased: { opacity: 0.72 }, itemText: { flex: 1, minWidth: 170 }, itemName: { fontSize: 18, fontWeight: "800" }, strike: { textDecorationLine: "line-through" }, source: { color: colors.muted, fontSize: 12, marginTop: 4 }, itemActions: { flexDirection: "row", flexWrap: "wrap", gap: 7 }, boughtButton: { backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11 }, restoreButton: { backgroundColor: "#E8F5E9", borderRadius: 10, paddingHorizontal: 13, paddingVertical: 11 }, restoreText: { color: colors.primary, fontWeight: "800" }, deleteButton: { backgroundColor: "#FFEBEE", borderRadius: 10, paddingHorizontal: 13, paddingVertical: 11 }, deleteText: { color: colors.danger, fontWeight: "800" }, purchasedSection: { marginTop: 18 },
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.48)", alignItems: "center", justifyContent: "center", padding: 18 }, modalCard: { width: "100%", maxWidth: 540, backgroundColor: colors.surface, borderRadius: 20, padding: 22 }, modalTitle: { fontSize: 23, fontWeight: "900" }, modalProduct: { fontSize: 19, fontWeight: "800", color: colors.primary, marginTop: 12 }, modalText: { color: colors.muted, fontSize: 16, lineHeight: 23, marginTop: 8 }, modalActions: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 9, marginTop: 22 }, secondary: { backgroundColor: colors.background, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 13 }, primary: { backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 13 }
+  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.48)", alignItems: "center", justifyContent: "center", padding: 18 }, modalCard: { width: "100%", maxWidth: 540, backgroundColor: colors.surface, borderRadius: 20, padding: 22 }, modalTitle: { fontSize: 23, fontWeight: "900" }, modalProduct: { fontSize: 19, fontWeight: "800", color: colors.primary, marginTop: 12 }, modalText: { color: colors.muted, fontSize: 16, lineHeight: 23, marginTop: 8 }, packageHint: { color: colors.primary, backgroundColor: "#E8F5E9", borderRadius: 10, padding: 10, marginTop: 10, fontWeight: "800" }, quantityRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center", marginTop: 16 }, quantityInput: { flex: 1, minWidth: 110, backgroundColor: colors.background, borderRadius: 11, padding: 14, fontSize: 20, fontWeight: "800" }, unitButton: { backgroundColor: colors.background, borderRadius: 10, paddingHorizontal: 15, paddingVertical: 14 }, unitActive: { backgroundColor: colors.primary }, purchaseError: { color: colors.danger, marginTop: 10, fontWeight: "700" }, modalActions: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 9, marginTop: 22 }, secondary: { backgroundColor: colors.background, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 13 }, primary: { backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 13 }, disabled: { opacity: 0.55 }
 });

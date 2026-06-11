@@ -12,6 +12,7 @@ import { AddDepletedPrompt } from "@/features/shopping/AddDepletedPrompt";
 import { getProductByBarcode } from "@/services/openFoodFacts";
 import { changePantryQuantity, createUntrackedMeal, saveProduct } from "@/services/inventoryRepository";
 import { createUntrackedMealIngredient } from "@/services/nutrition";
+import { canUseWholePackage, convertPantryAmount, preferredPantryUnit } from "@/services/pantryUnits";
 import { searchUsdaFoods, UsdaFoodResult } from "@/services/usdaFoodData";
 
 export function ScannerScreen() {
@@ -106,7 +107,7 @@ export function ScannerScreen() {
       setBusy(true);
       const updated = await changePantryQuantity(product, amount * direction, stockUnit, { expiryDate: expiryDate.trim() || undefined, location: location.trim() || undefined });
       const operation = direction > 0 ? "Dodano" : "Odjęto";
-      setActionMessage(`${operation} ${amount} ${updated.unit}. Stan: ${updated.quantity} ${updated.unit}.`);
+      setActionMessage(`${operation} ${amount} ${stockUnit}. Stan: ${updated.quantity} ${updated.unit}.`);
       setMessage(direction > 0 ? "Produkt dodany do spiżarni." : "Produkt odjęty ze spiżarni.");
       if (direction < 0 && updated.quantity === 0) setDepletedProducts([product]);
     } catch (error) {
@@ -122,7 +123,11 @@ export function ScannerScreen() {
     setActionError(false);
     try {
       setBusy(true);
-      const ingredient = createUntrackedMealIngredient(product, amount, stockUnit);
+      const nutritionUnit = stockUnit === "szt" && canUseWholePackage(product) && product.nutritionBasis !== "perUnit"
+        ? preferredPantryUnit(product, stockUnit)
+        : stockUnit;
+      const nutritionAmount = nutritionUnit === stockUnit ? amount : convertPantryAmount(product, amount, stockUnit, nutritionUnit);
+      const ingredient = createUntrackedMealIngredient(product, nutritionAmount, nutritionUnit);
       await saveProduct(product);
       await createUntrackedMeal(`Przekąska: ${product.name}`, "snack", ingredient);
       setActionMessage(`Dodano do dzisiejszego bilansu: ${amount} ${stockUnit}, ${ingredient.nutrients.energyKcal ?? 0} kcal. Stan spiżarni nie został zmieniony.`);
@@ -187,6 +192,7 @@ export function ScannerScreen() {
               <Text>B: {product.nutrientsPer100g.proteins ?? "-"} g  W: {product.nutrientsPer100g.carbohydrates ?? "-"} g  T: {product.nutrientsPer100g.fat ?? "-"} g</Text>
               <Text style={styles.micro}>Potas: {product.nutrientsPer100g.potassium ?? "-"} mg  Wapń: {product.nutrientsPer100g.calcium ?? "-"} mg  Żelazo: {product.nutrientsPer100g.iron ?? "-"} mg  Magnez: {product.nutrientsPer100g.magnesium ?? "-"} mg</Text>
               <View style={styles.row}><DatePickerField value={expiryDate} onChange={setExpiryDate} /><LocationPicker value={location} onChange={setLocation} label="Lokalizacja w spiżarni" /></View>
+              {canUseWholePackage(product) && <Pressable onPress={() => { setStockAmount("1"); setStockUnit("szt"); }} style={styles.wholePackage}><Text style={styles.wholePackageText}>Całe opakowanie: 1 szt. ({product.packageAmount} {product.packageUnit})</Text></Pressable>}
               <View style={styles.actions}>
                 <TextInput value={stockAmount} onChangeText={setStockAmount} keyboardType="decimal-pad" style={styles.amount} />
                 {(["g", "ml", "szt"] as Unit[]).map((unit) => <Pressable key={unit} onPress={() => setStockUnit(unit)} style={[styles.unitChoice, stockUnit === unit && styles.unitActive]}><Text style={stockUnit === unit ? styles.white : undefined}>{unit}</Text></Pressable>)}
@@ -223,7 +229,7 @@ const styles = StyleSheet.create({
   usdaResult: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10, backgroundColor: colors.background, borderRadius: 11, padding: 13 }, usdaResultText: { flex: 1, minWidth: 180 }, usdaName: { fontSize: 16, fontWeight: "800" }, usdaNutrition: { alignItems: "flex-end" }, usdaKcal: { color: colors.primary, fontWeight: "900" },
   product: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 18, gap: 8 },
   name: { fontSize: 24, fontWeight: "800" },
-  package: { fontSize: 18, fontWeight: "800", color: colors.primary },
+  package: { fontSize: 18, fontWeight: "800", color: colors.primary }, wholePackage: { alignSelf: "flex-start", backgroundColor: "#E8F5E9", borderWidth: 1, borderColor: colors.primary, borderRadius: 11, paddingHorizontal: 14, paddingVertical: 11, marginTop: 10 }, wholePackageText: { color: colors.primary, fontWeight: "800" },
   micro: { color: colors.muted, lineHeight: 20 },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 12 },
   amount: { width: 80, backgroundColor: colors.background, borderRadius: 10, padding: 12, textAlign: "center" },

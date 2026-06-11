@@ -3,6 +3,7 @@ import { db } from "@/core/firebase";
 import { DailySummary, Meal, MealIngredient, MealType } from "@/domain/meal";
 import { PantryItem, Product, Unit } from "@/domain/product";
 import { addNutrients, dateKey, scaleNutrients, sumNutrients } from "@/services/nutrition";
+import { convertPantryAmount, preferredPantryUnit } from "@/services/pantryUnits";
 
 const products = collection(db, "products");
 const pantry = collection(db, "pantry");
@@ -57,14 +58,15 @@ export async function changePantryQuantity(
   metadata?: { expiryDate?: string; location?: string }
 ): Promise<PantryItem> {
   const ref = doc(pantry, product.barcode);
-  const unit = selectedUnit ?? product.defaultUnit ?? "szt";
+  const inputUnit = selectedUnit ?? product.defaultUnit ?? "szt";
   const updated = await runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(ref);
     const current = snapshot.exists() ? normalizePantryItem(snapshot.data() as PantryItem) : null;
-    if (current && current.quantity > 0 && current.unit !== unit) throw new Error(`Produkt jest zapisany w jednostce ${current.unit}.`);
+    const unit = current?.unit ?? preferredPantryUnit(product, inputUnit);
+    const convertedDelta = convertPantryAmount(product, Math.abs(delta), inputUnit, unit) * Math.sign(delta);
     const previousQuantity = current?.quantity ?? 0;
-    if (delta < 0 && Math.abs(delta) > previousQuantity) throw new Error(`W spiżarni jest tylko ${previousQuantity} ${current?.unit ?? unit}.`);
-    const quantity = Math.round((previousQuantity + delta) * 100) / 100;
+    if (convertedDelta < 0 && Math.abs(convertedDelta) > previousQuantity) throw new Error(`W spiżarni jest tylko ${previousQuantity} ${unit}.`);
+    const quantity = Math.round((previousQuantity + convertedDelta) * 100) / 100;
     const next: PantryItem = {
       barcode: product.barcode,
       product,
