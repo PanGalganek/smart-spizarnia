@@ -198,7 +198,12 @@ function DailyNutritionSummary({ summary }: { summary: DailySummary }) {
     ["Weglowodany", summary.totals.carbohydrates, "g", false],
     ["Tluszcz", summary.totals.fat, "g", false],
     ["Blonnik", summary.totals.fiber, "g", false],
-    ["Sol", summary.totals.salt, "g", false]
+    ["Sol", summary.totals.salt, "g", false],
+    ["Potas", summary.totals.potassium, "mg", false],
+    ["Wapn", summary.totals.calcium, "mg", false],
+    ["Zelazo", summary.totals.iron, "mg", false],
+    ["Magnez", summary.totals.magnesium, "mg", false],
+    ["Wit. C", summary.totals.vitaminC, "mg", false]
   ] as const;
   return <View style={styles.dailyPanel}><View style={styles.dailyHeading}><Text style={styles.dailyTitle}>Spozycie dzisiaj</Text><Text style={styles.dailyCount}>{summary.mealCount} posilkow</Text></View><View style={styles.dailyGrid}>{entries.map(([label, value, unit, highlighted]) => <View key={label} style={styles.dailyItem}><Text style={[styles.dailyValue, highlighted && styles.dailyKcal]}>{value ?? 0} {unit}</Text><Text style={styles.dailyLabel}>{label}</Text></View>)}</View></View>;
 }

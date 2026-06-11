@@ -9,6 +9,13 @@ export type Nutrients = {
   fat?: number;
   fiber?: number;
   salt?: number;
+  sodium?: number;
+  potassium?: number;
+  calcium?: number;
+  iron?: number;
+  magnesium?: number;
+  vitaminC?: number;
+  vitaminA?: number;
 };
 
 export type Product = {
@@ -23,7 +30,7 @@ export type Product = {
   defaultUnit?: Unit;
   nutritionBasis?: NutritionBasis;
   nutrientsPer100g: Nutrients;
-  source: "open-food-facts" | "manual";
+  source: "open-food-facts" | "usda" | "manual";
   updatedAt: number;
 };
 

@@ -11,6 +11,7 @@ import { BarcodeCamera } from "@/features/scanner/BarcodeCamera";
 import { getProductByBarcode } from "@/services/openFoodFacts";
 import { changePantryQuantity, createUntrackedMeal, saveProduct } from "@/services/inventoryRepository";
 import { createUntrackedMealIngredient } from "@/services/nutrition";
+import { searchUsdaFoods, UsdaFoodResult } from "@/services/usdaFoodData";
 
 export function ScannerScreen() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -26,6 +27,10 @@ export function ScannerScreen() {
   const [actionMessage, setActionMessage] = useState("");
   const [actionError, setActionError] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [foodName, setFoodName] = useState("");
+  const [usdaResults, setUsdaResults] = useState<UsdaFoodResult[]>([]);
+  const [usdaBusy, setUsdaBusy] = useState(false);
+  const [usdaMessage, setUsdaMessage] = useState("");
 
   async function search(value = barcode) {
     const normalized = value.trim();
@@ -55,6 +60,29 @@ export function ScannerScreen() {
     const result = permission?.granted ? permission : await requestPermission();
     if (result?.granted) setCameraOpen(true);
     else setMessage("Aby skanowac, zezwol aplikacji na dostep do aparatu.");
+  }
+
+  async function searchByName() {
+    const query = foodName.trim();
+    if (!query) return setUsdaMessage("Wpisz nazwe produktu, np. pomidor.");
+    try {
+      setUsdaBusy(true); setUsdaMessage("Wyszukiwanie w bazie USDA..."); setUsdaResults([]);
+      const results = await searchUsdaFoods(query);
+      setUsdaResults(results);
+      setUsdaMessage(results.length ? "Wybierz produkt najbardziej pasujacy do Twojego." : "USDA nie znalazlo produktu z danymi kalorycznymi.");
+    } catch { setUsdaMessage("Nie udalo sie polaczyc z USDA FoodData Central."); }
+    finally { setUsdaBusy(false); }
+  }
+
+  function selectUsda(result: UsdaFoodResult) {
+    setProduct(result.product);
+    setBarcode(result.product.barcode);
+    setStockAmount("100");
+    setStockUnit("g");
+    setUsdaResults([]);
+    setUsdaMessage(`Wybrano: ${result.description}. Podaj ilosc i dodaj produkt do spizarni.`);
+    setMessage("Produkt bez kodu pobrany z USDA.");
+    setActionMessage("");
   }
 
   function scanned(value: string) {
@@ -134,14 +162,28 @@ export function ScannerScreen() {
             <Pressable onPress={openCamera} style={styles.scan}><Text style={styles.white}>Skanuj</Text></Pressable>
           </View>
           <Text style={styles.message}>{message}</Text>
+          <View style={styles.usdaPanel}>
+            <Text style={styles.usdaTitle}>Produkt bez kodu kreskowego</Text>
+            <Text style={styles.usdaHint}>Wpisz np. pomidor, marchew lub jablko. Dane odzywcze pobierzemy z USDA.</Text>
+            <View style={styles.row}>
+              <TextInput value={foodName} onChangeText={setFoodName} onSubmitEditing={() => void searchByName()} placeholder="Nazwa produktu, np. pomidor" style={styles.input} />
+              <Pressable disabled={usdaBusy} onPress={() => void searchByName()} style={[styles.usdaButton, usdaBusy && styles.disabled]}><Text style={styles.white}>{usdaBusy ? "Szukam..." : "Szukaj USDA"}</Text></Pressable>
+            </View>
+            {!!usdaMessage && <Text style={styles.usdaMessage}>{usdaMessage}</Text>}
+            {usdaResults.map((result) => <Pressable key={result.fdcId} onPress={() => selectUsda(result)} style={styles.usdaResult}>
+              <View style={styles.usdaResultText}><Text style={styles.usdaName}>{result.description}</Text><Text style={styles.muted}>{result.dataType}</Text></View>
+              <View style={styles.usdaNutrition}><Text style={styles.usdaKcal}>{result.product.nutrientsPer100g.energyKcal ?? 0} kcal</Text><Text style={styles.muted}>B {result.product.nutrientsPer100g.proteins ?? 0} | W {result.product.nutrientsPer100g.carbohydrates ?? 0} | T {result.product.nutrientsPer100g.fat ?? 0}</Text></View>
+            </Pressable>)}
+          </View>
           {!product && !!barcode && <Pressable onPress={() => setManualOpen(true)} style={styles.manual}><Text style={styles.white}>Dodaj produkt recznie</Text></Pressable>}
           {product && (
             <View style={styles.product}>
               <Text style={styles.name}>{product.name}</Text>
               <Text>{product.brand}</Text>
-              <Text style={styles.package}>Gramatura opakowania: {product.packageAmount ? `${product.packageAmount} ${product.packageUnit}` : product.servingSize || "brak danych"}</Text>
+              <Text style={styles.package}>{product.source === "usda" ? "Produkt bez kodu - wartosci na 100 g" : `Gramatura opakowania: ${product.packageAmount ? `${product.packageAmount} ${product.packageUnit}` : product.servingSize || "brak danych"}`}</Text>
               <Text>{product.nutrientsPer100g.energyKcal ?? "-"} kcal / 100 g</Text>
               <Text>B: {product.nutrientsPer100g.proteins ?? "-"} g  W: {product.nutrientsPer100g.carbohydrates ?? "-"} g  T: {product.nutrientsPer100g.fat ?? "-"} g</Text>
+              <Text style={styles.micro}>Potas: {product.nutrientsPer100g.potassium ?? "-"} mg  Wapn: {product.nutrientsPer100g.calcium ?? "-"} mg  Zelazo: {product.nutrientsPer100g.iron ?? "-"} mg  Magnez: {product.nutrientsPer100g.magnesium ?? "-"} mg</Text>
               <View style={styles.row}><DatePickerField value={expiryDate} onChange={setExpiryDate} /><LocationPicker value={location} onChange={setLocation} label="Lokalizacja w spizarni" /></View>
               <View style={styles.actions}>
                 <TextInput value={stockAmount} onChangeText={setStockAmount} keyboardType="decimal-pad" style={styles.amount} />
@@ -173,9 +215,14 @@ const styles = StyleSheet.create({
   manual: { alignSelf: "flex-start", backgroundColor: "#6A1B9A", padding: 14, borderRadius: 12, marginBottom: 16 },
   white: { color: "white", fontWeight: "700" },
   message: { color: colors.muted, marginVertical: 18 },
+  muted: { color: colors.muted, fontSize: 12 },
+  usdaPanel: { borderTopWidth: 1, borderTopColor: colors.border, borderBottomWidth: 1, borderBottomColor: colors.border, paddingVertical: 16, marginBottom: 16, gap: 9 },
+  usdaTitle: { fontSize: 19, fontWeight: "900" }, usdaHint: { color: colors.muted, lineHeight: 19 }, usdaButton: { backgroundColor: "#7A4E22", paddingHorizontal: 20, paddingVertical: 14, justifyContent: "center", borderRadius: 12 }, usdaMessage: { color: colors.muted, fontWeight: "600" },
+  usdaResult: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10, backgroundColor: colors.background, borderRadius: 11, padding: 13 }, usdaResultText: { flex: 1, minWidth: 180 }, usdaName: { fontSize: 16, fontWeight: "800" }, usdaNutrition: { alignItems: "flex-end" }, usdaKcal: { color: colors.primary, fontWeight: "900" },
   product: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 18, gap: 8 },
   name: { fontSize: 24, fontWeight: "800" },
   package: { fontSize: 18, fontWeight: "800", color: colors.primary },
+  micro: { color: colors.muted, lineHeight: 20 },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 12 },
   amount: { width: 80, backgroundColor: colors.background, borderRadius: 10, padding: 12, textAlign: "center" },
   metaInput: { flex: 1, backgroundColor: colors.background, borderRadius: 10, padding: 12 },

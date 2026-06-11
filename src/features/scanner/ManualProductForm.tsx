@@ -7,7 +7,7 @@ import { Nutrients, NutritionBasis, Product, Unit } from "@/domain/product";
 import { savePantryItem, saveProduct } from "@/services/inventoryRepository";
 
 type Props = { barcode: string; onCancel: () => void; onSaved: (product: Product) => void };
-type NumericKey = keyof Nutrients | "netWeightGrams" | "quantity";
+type NumericKey = "energyKcal" | "proteins" | "carbohydrates" | "fat" | "fiber" | "salt" | "netWeightGrams" | "quantity";
 
 export function ManualProductForm({ barcode, onCancel, onSaved }: Props) {
   const [name, setName] = useState("");

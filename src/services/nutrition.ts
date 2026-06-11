@@ -2,7 +2,8 @@ import { MealIngredient } from "@/domain/meal";
 import { Nutrients, PantryItem, Product, Unit } from "@/domain/product";
 
 export const nutrientKeys: (keyof Nutrients)[] = [
-  "energyKcal", "proteins", "carbohydrates", "fat", "fiber", "salt"
+  "energyKcal", "proteins", "carbohydrates", "fat", "fiber", "salt",
+  "sodium", "potassium", "calcium", "iron", "magnesium", "vitaminC", "vitaminA"
 ];
 
 export function calculateNutrients(product: Product, amount: number, unit: Unit): Nutrients {
