@@ -77,6 +77,15 @@ export function sumNutrients(values: Nutrients[]): Nutrients {
   return values.reduce<Nutrients>((total, nutrients) => addNutrients(total, nutrients), {});
 }
 
+export function scaleNutrients(nutrients: Nutrients, divisor: number): Nutrients {
+  if (!Number.isFinite(divisor) || divisor <= 0) throw new Error("Liczba porcji musi byc wieksza od zera.");
+  return nutrientKeys.reduce<Nutrients>((result, key) => {
+    const value = nutrients[key];
+    if (value !== undefined) result[key] = round(value / divisor);
+    return result;
+  }, {});
+}
+
 export function addNutrients(left: Nutrients, right: Nutrients, multiplier = 1): Nutrients {
   return nutrientKeys.reduce<Nutrients>((result, key) => {
     const value = (left[key] ?? 0) + (right[key] ?? 0) * multiplier;

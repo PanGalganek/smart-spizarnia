@@ -17,6 +17,8 @@ export type Meal = {
   name: string;
   type: MealType;
   ingredients: MealIngredient[];
+  servings?: number;
+  recipeTotals?: Nutrients;
   totals: Nutrients;
   dateKey: string;
   createdAt: number;

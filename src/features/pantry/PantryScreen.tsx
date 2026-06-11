@@ -1,10 +1,11 @@
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
-import { ModuleScreen } from "@/core/components/ModuleScreen";
 import { formatPolishDate } from "@/core/components/DatePickerField";
+import { ModuleScreen } from "@/core/components/ModuleScreen";
 import { colors } from "@/core/theme";
 import { PantryItem } from "@/domain/product";
+import { getExpiryWarning } from "@/services/expiry";
 import { listPantry } from "@/services/inventoryRepository";
 
 export function PantryScreen() {
@@ -17,33 +18,47 @@ export function PantryScreen() {
   }, []);
   useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
 
+  const expiringCount = useMemo(() => items.filter((item) => item.quantity > 0 && getExpiryWarning(item.expiryDate)).length, [items]);
+  const sortedItems = useMemo(() => [...items].sort((left, right) => expiryPriority(left.expiryDate) - expiryPriority(right.expiryDate) || left.product.name.localeCompare(right.product.name, "pl")), [items]);
+
   return (
     <ModuleScreen title="Spizarnia">
       {!!message && <Text style={styles.message}>{message}</Text>}
+      {expiringCount > 0 && <Text style={styles.expirySummary}>Uwaga: {expiringCount} produktow ma termin w ciagu 7 dni lub jest po terminie.</Text>}
       <FlatList
-        data={items}
+        data={sortedItems}
         keyExtractor={(item) => item.barcode}
-        contentContainerStyle={items.length ? styles.list : styles.emptyList}
+        contentContainerStyle={sortedItems.length ? styles.list : styles.emptyList}
         ListEmptyComponent={<Text style={styles.empty}>Spizarnia jest pusta.</Text>}
-        renderItem={({ item }) => (
-          <Pressable
-            onPress={() => router.push({ pathname: "/pantry/[barcode]", params: { barcode: item.barcode } })}
-            style={({ pressed }) => [styles.card, item.quantity === 0 && styles.consumed, pressed && styles.pressed]}
-          >
-            <View style={styles.header}>
-              <View style={styles.heading}><Text style={styles.name}>{item.product.name}</Text><Text style={styles.muted}>{item.barcode} | {item.location || "brak lokalizacji"}</Text></View>
-              <Text style={styles.qty}>{item.quantity} {item.unit}</Text>
-            </View>
-            <View style={styles.meta}>
-              <Text>{item.expiryDate ? `Wazne do: ${formatPolishDate(item.expiryDate)}` : "Brak daty waznosci"}</Text>
-              <Text style={item.quantity === 0 ? styles.used : styles.active}>{item.quantity === 0 ? "ZUZYTY" : "AKTYWNY"}</Text>
-            </View>
-            <Text style={styles.open}>Otworz szczegoly ›</Text>
-          </Pressable>
-        )}
+        renderItem={({ item }) => {
+          const warning = item.quantity > 0 ? getExpiryWarning(item.expiryDate) : null;
+          return (
+            <Pressable
+              onPress={() => router.push({ pathname: "/pantry/[barcode]", params: { barcode: item.barcode } })}
+              style={({ pressed }) => [styles.card, item.quantity === 0 && styles.consumed, pressed && styles.pressed]}
+            >
+              <View style={styles.header}>
+                <View style={styles.heading}><Text style={styles.name}>{item.product.name}</Text><Text style={styles.muted}>{item.barcode} | {item.location || "brak lokalizacji"}</Text></View>
+                <Text style={styles.qty}>{item.quantity} {item.unit}</Text>
+              </View>
+              <View style={styles.meta}>
+                <Text>{item.expiryDate ? `Wazne do: ${formatPolishDate(item.expiryDate)}` : "Brak daty waznosci"}</Text>
+                <Text style={item.quantity === 0 ? styles.used : styles.active}>{item.quantity === 0 ? "ZUZYTY" : "AKTYWNY"}</Text>
+              </View>
+              {warning && <Text style={[styles.expiryWarning, warning.level === "soon" ? styles.expirySoon : styles.expiryUrgent]}>{warning.label}</Text>}
+              <Text style={styles.open}>Otworz szczegoly &gt;</Text>
+            </Pressable>
+          );
+        }}
       />
     </ModuleScreen>
   );
+}
+
+function expiryPriority(expiryDate?: string) {
+  const warning = getExpiryWarning(expiryDate);
+  if (!warning) return 4;
+  return warning.level === "expired" ? 0 : warning.level === "today" ? 1 : warning.level === "urgent" ? 2 : 3;
 }
 
 const styles = StyleSheet.create({
@@ -51,5 +66,6 @@ const styles = StyleSheet.create({
   consumed: { opacity: 0.65 }, pressed: { opacity: 0.75 }, header: { flexDirection: "row", justifyContent: "space-between", gap: 12 }, heading: { flex: 1 },
   name: { fontWeight: "800", fontSize: 18 }, muted: { color: colors.muted }, qty: { fontWeight: "800", fontSize: 22, color: colors.primary }, meta: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 8 },
   active: { color: colors.primary, fontWeight: "800" }, used: { color: colors.danger, fontWeight: "800" }, open: { color: colors.primary, fontWeight: "800" },
+  expirySummary: { color: "#8A4B00", backgroundColor: "#FFF3E0", borderRadius: 11, padding: 12, marginBottom: 12, fontWeight: "800" }, expiryWarning: { alignSelf: "flex-start", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, fontWeight: "900" }, expiryUrgent: { color: colors.danger, backgroundColor: "#FFEBEE" }, expirySoon: { color: "#8A4B00", backgroundColor: "#FFF3E0" },
   message: { color: colors.danger, textAlign: "center", marginBottom: 10, fontWeight: "600" }, empty: { textAlign: "center", color: colors.muted, marginTop: 80 }
 });

@@ -2,7 +2,7 @@ import { collection, deleteDoc, doc, getDoc, getDocs, runTransaction, setDoc } f
 import { db } from "@/core/firebase";
 import { DailySummary, Meal, MealIngredient, MealType } from "@/domain/meal";
 import { PantryItem, Product, Unit } from "@/domain/product";
-import { addNutrients, dateKey, sumNutrients } from "@/services/nutrition";
+import { addNutrients, dateKey, scaleNutrients, sumNutrients } from "@/services/nutrition";
 
 const products = collection(db, "products");
 const pantry = collection(db, "pantry");
@@ -24,10 +24,13 @@ function normalizePantryItem(item: PantryItem): PantryItem {
 }
 
 function normalizeMeal(meal: Meal): Meal {
+  const servings = Math.max(1, Number(meal.servings) || 1);
   return {
     ...meal,
     type: meal.type ?? "custom",
     dateKey: meal.dateKey ?? dateKey(meal.createdAt),
+    servings,
+    recipeTotals: meal.recipeTotals ?? (servings === 1 ? meal.totals : undefined),
     ingredients: meal.ingredients.map((item) => ({
       ...item,
       unit: item.unit ?? "szt",
@@ -105,18 +108,23 @@ export async function createMeal(
   name: string,
   type: MealType,
   ingredients: MealIngredient[],
+  servings = 1,
   createdAt = Date.now()
 ): Promise<Meal> {
   if (!ingredients.length) throw new Error("Dodaj przynajmniej jeden skladnik.");
+  if (!Number.isInteger(servings) || servings < 1 || servings > 100) throw new Error("Podaj liczbe porcji od 1 do 100.");
   const mealRef = doc(meals);
   const day = dateKey(createdAt);
   const summaryRef = doc(dailySummaries, day);
+  const recipeTotals = sumNutrients(ingredients.map((item) => item.nutrients));
   const meal: Meal = {
     id: mealRef.id,
     name,
     type,
     ingredients,
-    totals: sumNutrients(ingredients.map((item) => item.nutrients)),
+    servings,
+    recipeTotals,
+    totals: scaleNutrients(recipeTotals, servings),
     dateKey: day,
     createdAt
   };

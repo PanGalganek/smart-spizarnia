@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { PantryItem, Product } from "@/domain/product";
-import { calculateNutrients, consumePantryItem, createMealIngredient, createUntrackedMealIngredient, restorePantryItem } from "@/services/nutrition";
+import { calculateNutrients, consumePantryItem, createMealIngredient, createUntrackedMealIngredient, restorePantryItem, scaleNutrients } from "@/services/nutrition";
 
 function product(overrides: Partial<Product> = {}): Product {
   return {
@@ -80,5 +80,17 @@ describe("produkt spozyty bez dodawania do spizarni", () => {
 
   it("nadal wymaga kalorii", () => {
     expect(() => createUntrackedMealIngredient(product({ nutrientsPer100g: {} }), 1, "g")).toThrow("Uzupelnij kalorie produktu");
+  });
+});
+
+describe("dzielenie posilku na porcje", () => {
+  it("dzieli kalorie oraz wszystkie makro i mikroelementy", () => {
+    expect(scaleNutrients({ energyKcal: 800, proteins: 40, potassium: 1200, vitaminC: 30 }, 4)).toEqual({
+      energyKcal: 200, proteins: 10, potassium: 300, vitaminC: 7.5
+    });
+  });
+
+  it("odrzuca nieprawidlowa liczbe porcji", () => {
+    expect(() => scaleNutrients({ energyKcal: 100 }, 0)).toThrow("Liczba porcji");
   });
 });

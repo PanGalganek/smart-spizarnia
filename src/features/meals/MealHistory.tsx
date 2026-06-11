@@ -72,6 +72,7 @@ export function MealHistory({ meals, onChanged }: Props) {
                 <Text style={styles.kcal}>{item.totals.energyKcal ?? 0} kcal</Text>
               </View>
             )}
+            {(item.servings ?? 1) > 1 && <Text style={styles.portions}>Bilans: 1 z {item.servings} porcji | cale danie: {item.recipeTotals?.energyKcal ?? 0} kcal</Text>}
             <Text style={styles.nutrients}>B: {item.totals.proteins ?? 0} g   W: {item.totals.carbohydrates ?? 0} g   T: {item.totals.fat ?? 0} g</Text>
             {item.ingredients.map((ingredient) => <Text key={ingredient.barcode} style={styles.ingredient}>- {ingredient.productName}: {ingredient.amount} {ingredient.unit} | {ingredient.nutrients.energyKcal ?? 0} kcal</Text>)}
             {deleting?.id === item.id ? (
@@ -104,7 +105,7 @@ const styles = StyleSheet.create({
   card: { backgroundColor: colors.background, borderRadius: 14, padding: 16, marginBottom: 12, gap: 6 },
   header: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-start", gap: 8 },
   heading: { flex: 1 }, name: { fontSize: 18, fontWeight: "800" }, date: { color: colors.muted, fontSize: 12 },
-  kcal: { color: colors.primary, fontSize: 18, fontWeight: "800" }, nutrients: { fontWeight: "600", marginTop: 4 }, ingredient: { color: colors.muted },
+  kcal: { color: colors.primary, fontSize: 18, fontWeight: "800" }, portions: { color: colors.primary, fontWeight: "800" }, nutrients: { fontWeight: "600", marginTop: 4 }, ingredient: { color: colors.muted },
   actions: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 8, marginTop: 8 }, editRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   input: { flex: 1, backgroundColor: colors.surface, borderRadius: 9, padding: 10 },
   save: { backgroundColor: colors.primary, borderRadius: 9, paddingHorizontal: 14, justifyContent: "center" },

@@ -7,7 +7,7 @@ import { DailySummary, Meal, MealIngredient, MealType } from "@/domain/meal";
 import { Nutrients, PantryItem } from "@/domain/product";
 import { MealHistory } from "@/features/meals/MealHistory";
 import { createMeal, getDailySummary, listMeals, listPantry } from "@/services/inventoryRepository";
-import { createMealIngredient, dateKey, sumNutrients } from "@/services/nutrition";
+import { createMealIngredient, dateKey, scaleNutrients, sumNutrients } from "@/services/nutrition";
 
 const mealTypes: { value: MealType; label: string; description: string }[] = [
   { value: "breakfast", label: "Sniadanie", description: "Pierwszy posilek dnia" },
@@ -32,6 +32,7 @@ export function MealsScreen() {
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [editedItem, setEditedItem] = useState<PantryItem | null>(null);
   const [amountDraft, setAmountDraft] = useState("");
+  const [servings, setServings] = useState("1");
   const [message, setMessage] = useState("");
   const [modalMessage, setModalMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -48,6 +49,8 @@ export function MealsScreen() {
 
   const ingredientResult = useMemo(() => buildIngredients(pantry, amounts), [amounts, pantry]);
   const totals = useMemo(() => sumNutrients(ingredientResult.ingredients.map((item) => item.nutrients)), [ingredientResult.ingredients]);
+  const servingCount = parseServings(servings);
+  const portionTotals = useMemo(() => scaleNutrients(totals, servingCount || 1), [servingCount, totals]);
   const mealName = type === "custom" ? customName.trim() : mealTypes.find((item) => item.value === type)?.label ?? "";
 
   function openCreator() {
@@ -56,6 +59,7 @@ export function MealsScreen() {
     setAmounts({});
     setEditedItem(null);
     setAmountDraft("");
+    setServings("1");
     setModalMessage("");
     setStep("type");
     setCreatorOpen(true);
@@ -111,13 +115,14 @@ export function MealsScreen() {
 
   async function saveMeal() {
     if (!type || !mealName || !ingredientResult.ingredients.length) return;
+    if (!servingCount) return setModalMessage("Podaj liczbe porcji od 1 do 100.");
     try {
       setBusy(true);
       setModalMessage("");
-      await createMeal(mealName, type, ingredientResult.ingredients);
+      await createMeal(mealName, type, ingredientResult.ingredients, servingCount);
       await refresh();
       setCreatorOpen(false);
-      setMessage(`Zapisano posilek: ${mealName}. Produkty zostaly odjete ze spizarni.`);
+      setMessage(`Zapisano 1 z ${servingCount} porcji: ${mealName}. Pelne zuzycie produktow zostalo odjete ze spizarni.`);
     } catch (error) {
       setModalMessage(error instanceof Error ? error.message : "Nie udalo sie zapisac posilku.");
     } finally { setBusy(false); }
@@ -146,7 +151,7 @@ export function MealsScreen() {
             {step === "type" && <TypeStep type={type} customName={customName} onType={chooseType} onCustomName={setCustomName} />}
             {step === "products" && <ProductsStep pantry={pantry} amounts={amounts} onEdit={editAmount} onRemove={removeIngredient} />}
             {step === "amount" && editedItem && <AmountStep item={editedItem} value={amountDraft} onChange={setAmountDraft} />}
-            {step === "review" && <ReviewStep name={mealName} ingredients={ingredientResult.ingredients} totals={totals} />}
+            {step === "review" && <ReviewStep name={mealName} ingredients={ingredientResult.ingredients} totals={totals} portionTotals={portionTotals} servings={servings} onServings={setServings} />}
 
             {!!modalMessage && <Text style={styles.errorBanner}>{modalMessage}</Text>}
             {(step !== "type" || type === "custom") && <View style={[styles.modalActions, compact && styles.compactModalActions]}>
@@ -182,8 +187,8 @@ function AmountStep({ item, value, onChange }: { item: PantryItem; value: string
   return <View style={styles.amountStep}><Text style={styles.amountProduct}>{item.product.name}</Text><Text style={styles.available}>Dostepne w spizarni: {item.quantity} {item.unit}</Text><View style={styles.amountEntry}><TextInput autoFocus selectTextOnFocus value={value} onChangeText={onChange} keyboardType="decimal-pad" placeholder="0" style={styles.amountInput} /><Text style={styles.amountUnit}>{item.unit}</Text></View><Text style={styles.caloriePreview}>Wybrana ilosc: {amount || 0} {item.unit} | ok. {kcal} kcal</Text></View>;
 }
 
-function ReviewStep({ name, ingredients, totals }: { name: string; ingredients: MealIngredient[]; totals: Nutrients }) {
-  return <ScrollView style={styles.stepScroll} contentContainerStyle={styles.stepContent}><Text style={styles.reviewName}>{name}</Text><NutritionSummary totals={totals} /><Text style={styles.sectionTitle}>Skladniki</Text>{ingredients.map((ingredient) => <View key={ingredient.barcode} style={styles.reviewRow}><Text style={styles.reviewProduct}>{ingredient.productName}</Text><Text>{ingredient.amount} {ingredient.unit} | {ingredient.nutrients.energyKcal ?? 0} kcal</Text></View>)}</ScrollView>;
+function ReviewStep({ name, ingredients, totals, portionTotals, servings, onServings }: { name: string; ingredients: MealIngredient[]; totals: Nutrients; portionTotals: Nutrients; servings: string; onServings: (value: string) => void }) {
+  return <ScrollView style={styles.stepScroll} contentContainerStyle={styles.stepContent} keyboardShouldPersistTaps="always"><Text style={styles.reviewName}>{name}</Text><View style={styles.servingsBox}><View style={styles.servingsText}><Text style={styles.sectionTitle}>Ile porcji powstalo?</Text><Text style={styles.muted}>Ze spizarni odejmiemy cale zuzycie. Do Twojego bilansu trafi 1 porcja.</Text></View><TextInput value={servings} onChangeText={onServings} keyboardType="number-pad" selectTextOnFocus style={styles.servingsInput} /></View><Text style={styles.portionTitle}>Wartosci jednej porcji</Text><NutritionSummary totals={portionTotals} /><Text style={styles.recipeInfo}>Cale danie: {totals.energyKcal ?? 0} kcal</Text><Text style={styles.sectionTitle}>Skladniki calego dania</Text>{ingredients.map((ingredient) => <View key={ingredient.barcode} style={styles.reviewRow}><Text style={styles.reviewProduct}>{ingredient.productName}</Text><Text>{ingredient.amount} {ingredient.unit} | {ingredient.nutrients.energyKcal ?? 0} kcal</Text></View>)}</ScrollView>;
 }
 
 function NutritionSummary({ totals }: { totals: Nutrients }) {
@@ -211,6 +216,7 @@ function DailyNutritionSummary({ summary }: { summary: DailySummary }) {
 function PrimaryButton({ label, onPress, disabled }: { label: string; onPress: () => void; disabled?: boolean }) { return <Pressable disabled={disabled} onPress={onPress} style={[styles.primary, disabled && styles.disabled]}><Text style={styles.white}>{label}</Text></Pressable>; }
 function buildIngredients(pantry: PantryItem[], amounts: Record<string, string>) { const ingredients: MealIngredient[] = []; let error = ""; for (const item of pantry) { const amount = parseAmount(amounts[item.barcode]); if (amount <= 0) continue; try { ingredients.push(createMealIngredient(item, amount)); } catch (cause) { error = cause instanceof Error ? cause.message : "Nieprawidlowa ilosc."; } } return { ingredients, error }; }
 function parseAmount(value?: string) { const number = Number((value ?? "").replace(",", ".")); return Number.isFinite(number) && number > 0 ? Math.round(number * 100) / 100 : 0; }
+function parseServings(value?: string) { const number = Number(value); return Number.isInteger(number) && number >= 1 && number <= 100 ? number : 0; }
 function stepLabel(step: Step) { return step === "type" ? "KROK 1 Z 3" : step === "review" ? "KROK 3 Z 3" : "KROK 2 Z 3"; }
 function stepTitle(step: Step, item: PantryItem | null) { if (step === "type") return "Jaki to posilek?"; if (step === "products") return "Wybierz produkty"; if (step === "amount") return `Podaj ilosc: ${item?.product.name ?? "produkt"}`; return "Sprawdz posilek"; }
 function formatToday() { return new Date().toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long" }); }
@@ -223,6 +229,6 @@ const styles = StyleSheet.create({
   typeHint: { color: colors.primary, fontWeight: "800", marginBottom: 2 }, typeCard: { flexDirection: "row", alignItems: "center", gap: 14, borderWidth: 2, borderColor: colors.border, borderRadius: 14, padding: 15 }, selectedCard: { borderColor: colors.primary, backgroundColor: "#EDF7EE" }, radio: { width: 22, height: 22, borderWidth: 2, borderColor: colors.primary, borderRadius: 11, alignItems: "center", justifyContent: "center" }, radioDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: colors.primary }, typeName: { fontSize: 17, fontWeight: "800" }, customInput: { backgroundColor: colors.background, borderRadius: 12, padding: 14, fontSize: 17 },
   listContent: { paddingVertical: 14, gap: 9 }, productCard: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: colors.border, borderRadius: 13, padding: 15 }, selectedProduct: { borderColor: colors.primary, backgroundColor: "#EDF7EE" }, productText: { flex: 1 }, productName: { fontSize: 17, fontWeight: "800" }, addText: { color: colors.primary, fontWeight: "800" }, selectedAmount: { alignItems: "flex-end", gap: 4 }, selectedAmountText: { color: colors.primary, fontSize: 17, fontWeight: "900" }, removeText: { color: colors.danger, fontWeight: "700", fontSize: 12 }, empty: { color: colors.muted, textAlign: "center", marginTop: 70, lineHeight: 21 },
   amountStep: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14, paddingHorizontal: 4 }, amountProduct: { fontSize: 26, fontWeight: "900", textAlign: "center" }, available: { color: colors.muted, fontSize: 17, textAlign: "center" }, amountEntry: { width: "100%", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12 }, amountInput: { width: "70%", maxWidth: 220, backgroundColor: colors.background, borderWidth: 2, borderColor: colors.primary, borderRadius: 14, padding: 18, fontSize: 30, fontWeight: "900", textAlign: "center" }, amountUnit: { fontSize: 25, fontWeight: "900" }, caloriePreview: { fontSize: 16, color: colors.muted, textAlign: "center" },
-  reviewName: { fontSize: 23, fontWeight: "900" }, nutritionGrid: { flexDirection: "row", flexWrap: "wrap", gap: 9 }, nutritionCard: { flexGrow: 1, flexBasis: 120, backgroundColor: colors.background, borderRadius: 12, padding: 13 }, nutritionValue: { fontSize: 21, fontWeight: "900", color: colors.primary }, sectionTitle: { fontSize: 18, fontWeight: "800", marginTop: 4 }, reviewRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 12, borderBottomWidth: 1, borderBottomColor: colors.border, paddingVertical: 10 }, reviewProduct: { flex: 1, minWidth: 120, fontWeight: "700" },
+  reviewName: { fontSize: 23, fontWeight: "900" }, servingsBox: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "#EDF7EE", borderRadius: 13, padding: 13 }, servingsText: { flex: 1, minWidth: 0 }, servingsInput: { width: 76, backgroundColor: colors.surface, borderWidth: 2, borderColor: colors.primary, borderRadius: 11, padding: 12, textAlign: "center", fontSize: 22, fontWeight: "900" }, portionTitle: { color: colors.primary, fontSize: 18, fontWeight: "900", marginTop: 4 }, recipeInfo: { color: colors.muted, fontWeight: "700" }, nutritionGrid: { flexDirection: "row", flexWrap: "wrap", gap: 9 }, nutritionCard: { flexGrow: 1, flexBasis: 120, backgroundColor: colors.background, borderRadius: 12, padding: 13 }, nutritionValue: { fontSize: 21, fontWeight: "900", color: colors.primary }, sectionTitle: { fontSize: 18, fontWeight: "800", marginTop: 4 }, reviewRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 12, borderBottomWidth: 1, borderBottomColor: colors.border, paddingVertical: 10 }, reviewProduct: { flex: 1, minWidth: 120, fontWeight: "700" },
   errorBanner: { color: colors.danger, backgroundColor: "#FFEBEE", borderRadius: 10, padding: 12, fontWeight: "700", marginTop: 10 }, modalActions: { flexDirection: "row", alignItems: "center", gap: 8, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 14, marginTop: 8 }, compactModalActions: { flexWrap: "wrap" }, actionSpacer: { flex: 1 }, secondary: { backgroundColor: colors.background, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 14 }, primary: { backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 22, paddingVertical: 14 }, disabled: { opacity: 0.55 }
 });
