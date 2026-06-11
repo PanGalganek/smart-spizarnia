@@ -62,6 +62,7 @@ export function MealsScreen() {
   function chooseType(nextType: MealType) {
     setType(nextType);
     setModalMessage("");
+    if (nextType !== "custom") setStep("products");
   }
 
   function continueFromType() {
@@ -147,7 +148,7 @@ export function MealsScreen() {
             <View style={styles.modalActions}>
               {step !== "type" && <Pressable onPress={() => setStep(step === "amount" ? "products" : step === "review" ? "products" : "type")} style={styles.secondary}><Text>Wstecz</Text></Pressable>}
               <View style={styles.actionSpacer} />
-              {step === "type" && <PrimaryButton label="Dalej: wybierz produkty" onPress={continueFromType} />}
+              {step === "type" && type === "custom" && <PrimaryButton label="Dalej: wybierz produkty" onPress={continueFromType} />}
               {step === "products" && <PrimaryButton label="Dalej: podsumowanie" onPress={continueToReview} />}
               {step === "amount" && <PrimaryButton label="Dodaj ilosc" onPress={confirmAmount} />}
               {step === "review" && <PrimaryButton label={busy ? "Zapisywanie..." : "Zapisz i odejmij produkty"} onPress={() => void saveMeal()} disabled={busy} />}
