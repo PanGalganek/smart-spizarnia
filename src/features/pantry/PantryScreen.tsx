@@ -43,7 +43,7 @@ export function PantryScreen() {
               style={({ pressed }) => [styles.card, item.quantity === 0 && styles.consumed, pressed && styles.pressed]}
             >
               <View style={styles.header}>
-                <View style={styles.heading}><Text style={styles.name}>{item.product.name}</Text><Text style={styles.muted}>{item.barcode} | {item.location ? displayLocationName(item.location) : "brak lokalizacji"}</Text></View>
+                <View style={styles.heading}><Text style={styles.name}>{item.product.name}</Text><Text style={styles.muted}>{item.location ? displayLocationName(item.location) : "brak lokalizacji"}</Text></View>
                 <Text style={styles.qty}>{item.quantity} {item.unit}</Text>
               </View>
               <View style={styles.meta}>
