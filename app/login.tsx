@@ -20,7 +20,7 @@ export default function LoginScreen() {
       await signIn(email.trim(), password);
       router.replace("/home");
     } catch {
-      setError("Nieprawidlowy login lub haslo.");
+      setError("Nieprawidłowy login lub hasło.");
     } finally {
       setBusy(false);
     }
@@ -29,10 +29,10 @@ export default function LoginScreen() {
   return (
     <View style={styles.page}>
       <View style={styles.card}>
-        <Text style={styles.title}>Smart Spizarnia</Text>
-        <Text style={styles.subtitle}>Panel domowej spizarni</Text>
+        <Text style={styles.title}>Smart Spiżarnia</Text>
+        <Text style={styles.subtitle}>Panel domowej spiżarni</Text>
         <TextInput autoCapitalize="none" keyboardType="email-address" placeholder="E-mail" style={styles.input} value={email} onChangeText={setEmail} />
-        <TextInput secureTextEntry placeholder="Haslo" style={styles.input} value={password} onChangeText={setPassword} />
+        <TextInput secureTextEntry placeholder="Hasło" style={styles.input} value={password} onChangeText={setPassword} />
         {!!error && <Text style={styles.error}>{error}</Text>}
         <Pressable disabled={busy || !email || !password} onPress={submit} style={styles.button}>
           <Text style={styles.buttonText}>{busy ? "Logowanie..." : "Zaloguj"}</Text>

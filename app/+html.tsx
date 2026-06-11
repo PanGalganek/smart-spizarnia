@@ -13,7 +13,7 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="theme-color" content="#2E7D32" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="Spizarnia" />
+        <meta name="apple-mobile-web-app-title" content="Spiżarnia" />
         <link rel="manifest" href="/smart-spizarnia/manifest.json" />
         <link rel="apple-touch-icon" href="/smart-spizarnia/icon-192.png" />
         <ScrollViewStyleReset />

@@ -10,11 +10,11 @@ import { createMeal, getDailySummary, listMeals, listPantry } from "@/services/i
 import { createMealIngredient, dateKey, scaleNutrients, sumNutrients } from "@/services/nutrition";
 
 const mealTypes: { value: MealType; label: string; description: string }[] = [
-  { value: "breakfast", label: "Sniadanie", description: "Pierwszy posilek dnia" },
-  { value: "lunch", label: "Obiad", description: "Glowny posilek dnia" },
-  { value: "dinner", label: "Kolacja", description: "Posilek wieczorny" },
-  { value: "snack", label: "Przekaska", description: "Mniejszy posilek" },
-  { value: "custom", label: "Wlasna nazwa", description: "Inny rodzaj posilku" }
+  { value: "breakfast", label: "Śniadanie", description: "Pierwszy posiłek dnia" },
+  { value: "lunch", label: "Obiad", description: "Główny posiłek dnia" },
+  { value: "dinner", label: "Kolacja", description: "Posiłek wieczorny" },
+  { value: "snack", label: "Przekąska", description: "Mniejszy posiłek" },
+  { value: "custom", label: "Własna nazwa", description: "Inny rodzaj posiłku" }
 ];
 
 type Step = "type" | "products" | "amount" | "review";
@@ -43,7 +43,7 @@ export function MealsScreen() {
       setPantry(nextPantry);
       setMeals(nextMeals);
       setDailySummary(nextSummary);
-    } catch { setMessage("Nie udalo sie pobrac danych."); }
+    } catch { setMessage("Nie udało się pobrać danych."); }
   }, []);
   useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
 
@@ -72,8 +72,8 @@ export function MealsScreen() {
   }
 
   function continueFromType() {
-    if (!type) return setModalMessage("Wybierz rodzaj posilku.");
-    if (type === "custom" && !customName.trim()) return setModalMessage("Wpisz wlasna nazwe posilku.");
+    if (!type) return setModalMessage("Wybierz rodzaj posiłku.");
+    if (type === "custom" && !customName.trim()) return setModalMessage("Wpisz własną nazwę posiłku.");
     setModalMessage("");
     setStep("products");
   }
@@ -88,10 +88,10 @@ export function MealsScreen() {
   function confirmAmount() {
     if (!editedItem) return;
     const amount = parseAmount(amountDraft);
-    if (amount <= 0) return setModalMessage("Wpisz ilosc wieksza od zera.");
-    if (amount > editedItem.quantity) return setModalMessage(`Dostepne jest tylko ${editedItem.quantity} ${editedItem.unit}.`);
+    if (amount <= 0) return setModalMessage("Wpisz ilość większą od zera.");
+    if (amount > editedItem.quantity) return setModalMessage(`Dostępne jest tylko ${editedItem.quantity} ${editedItem.unit}.`);
     try { createMealIngredient(editedItem, amount); }
-    catch (error) { return setModalMessage(error instanceof Error ? error.message : "Nieprawidlowa ilosc."); }
+    catch (error) { return setModalMessage(error instanceof Error ? error.message : "Nieprawidłowa ilość."); }
     setAmounts((current) => ({ ...current, [editedItem.barcode]: String(amount) }));
     setEditedItem(null);
     setModalMessage("");
@@ -115,25 +115,25 @@ export function MealsScreen() {
 
   async function saveMeal() {
     if (!type || !mealName || !ingredientResult.ingredients.length) return;
-    if (!servingCount) return setModalMessage("Podaj liczbe porcji od 1 do 100.");
+    if (!servingCount) return setModalMessage("Podaj liczbę porcji od 1 do 100.");
     try {
       setBusy(true);
       setModalMessage("");
       await createMeal(mealName, type, ingredientResult.ingredients, servingCount);
       await refresh();
       setCreatorOpen(false);
-      setMessage(`Zapisano 1 z ${servingCount} porcji: ${mealName}. Pelne zuzycie produktow zostalo odjete ze spizarni.`);
+      setMessage(`Zapisano 1 z ${servingCount} porcji: ${mealName}. Pełne zużycie produktów zostało odjęte ze spiżarni.`);
     } catch (error) {
-      setModalMessage(error instanceof Error ? error.message : "Nie udalo sie zapisac posilku.");
+      setModalMessage(error instanceof Error ? error.message : "Nie udało się zapisać posiłku.");
     } finally { setBusy(false); }
   }
 
   return (
-    <ModuleScreen title="Posilki">
+    <ModuleScreen title="Posiłki">
       <ScrollView style={styles.pageScroll} contentContainerStyle={styles.pageContent} keyboardShouldPersistTaps="handled">
         <View style={[styles.pageHeader, compact && styles.compactPageHeader]}>
-          <View style={styles.pageHeading}><Text style={styles.pageTitle}>Posilki i dzienny bilans</Text><Text style={styles.muted}>{formatToday()} | Tworz posilki z produktow zapisanych w spizarni.</Text></View>
-          <Pressable onPress={openCreator} style={[styles.newButton, compact && styles.compactNewButton]}><Text style={styles.white}>+ Nowy posilek</Text></Pressable>
+          <View style={styles.pageHeading}><Text style={styles.pageTitle}>Posiłki i dzienny bilans</Text><Text style={styles.muted}>{formatToday()} | Twórz posiłki z produktów zapisanych w spiżarni.</Text></View>
+          <Pressable onPress={openCreator} style={[styles.newButton, compact && styles.compactNewButton]}><Text style={styles.white}>+ Nowy posiłek</Text></Pressable>
         </View>
         <DailyNutritionSummary summary={dailySummary} />
         {!!message && <Text style={styles.successBanner}>{message}</Text>}
@@ -159,7 +159,7 @@ export function MealsScreen() {
               <View style={styles.actionSpacer} />
               {step === "type" && type === "custom" && <PrimaryButton label="Dalej: wybierz produkty" onPress={continueFromType} />}
               {step === "products" && <PrimaryButton label="Dalej: podsumowanie" onPress={continueToReview} />}
-              {step === "amount" && <PrimaryButton label="Dodaj ilosc" onPress={confirmAmount} />}
+              {step === "amount" && <PrimaryButton label="Dodaj ilość" onPress={confirmAmount} />}
               {step === "review" && <PrimaryButton label={busy ? "Zapisywanie..." : "Zapisz i odejmij produkty"} onPress={() => void saveMeal()} disabled={busy} />}
             </View>}
           </View>
@@ -170,13 +170,13 @@ export function MealsScreen() {
 }
 
 function TypeStep({ type, customName, onType, onCustomName }: { type: MealType | null; customName: string; onType: (type: MealType) => void; onCustomName: (value: string) => void }) {
-  return <ScrollView style={styles.stepScroll} contentContainerStyle={styles.stepContent}><Text style={styles.typeHint}>Kliknij rodzaj posilku, aby od razu przejsc do produktow.</Text>{mealTypes.map((item) => <Pressable key={item.value} onPress={() => onType(item.value)} style={[styles.typeCard, type === item.value && styles.selectedCard]}><View style={styles.radio}>{type === item.value && <View style={styles.radioDot} />}</View><View><Text style={styles.typeName}>{item.label}</Text><Text style={styles.muted}>{item.description}</Text></View></Pressable>)}{type === "custom" && <TextInput autoFocus value={customName} onChangeText={onCustomName} placeholder="Nazwa posilku" style={styles.customInput} />}</ScrollView>;
+  return <ScrollView style={styles.stepScroll} contentContainerStyle={styles.stepContent}><Text style={styles.typeHint}>Kliknij rodzaj posiłku, aby od razu przejść do produktów.</Text>{mealTypes.map((item) => <Pressable key={item.value} onPress={() => onType(item.value)} style={[styles.typeCard, type === item.value && styles.selectedCard]}><View style={styles.radio}>{type === item.value && <View style={styles.radioDot} />}</View><View><Text style={styles.typeName}>{item.label}</Text><Text style={styles.muted}>{item.description}</Text></View></Pressable>)}{type === "custom" && <TextInput autoFocus value={customName} onChangeText={onCustomName} placeholder="Nazwa posiłku" style={styles.customInput} />}</ScrollView>;
 }
 
 function ProductsStep({ pantry, amounts, onEdit, onRemove }: { pantry: PantryItem[]; amounts: Record<string, string>; onEdit: (item: PantryItem) => void; onRemove: (barcode: string) => void }) {
-  return <FlatList style={styles.stepScroll} contentContainerStyle={styles.listContent} data={pantry} keyExtractor={(item) => item.barcode} ListEmptyComponent={<Text style={styles.empty}>Spizarnia jest pusta. Najpierw dodaj produkty w zakladce Spizarnia lub Skaner.</Text>} renderItem={({ item }) => {
+  return <FlatList style={styles.stepScroll} contentContainerStyle={styles.listContent} data={pantry} keyExtractor={(item) => item.barcode} ListEmptyComponent={<Text style={styles.empty}>Spiżarnia jest pusta. Najpierw dodaj produkty w zakładce Spiżarnia lub Skaner.</Text>} renderItem={({ item }) => {
     const selected = parseAmount(amounts[item.barcode]);
-    return <Pressable onPress={() => onEdit(item)} style={[styles.productCard, selected > 0 && styles.selectedProduct]}><View style={styles.productText}><Text style={styles.productName}>{item.product.name}</Text><Text style={styles.muted}>Dostepne: {item.quantity} {item.unit}</Text></View>{selected > 0 ? <View style={styles.selectedAmount}><Text style={styles.selectedAmountText}>{selected} {item.unit}</Text><Pressable onPress={(event: GestureResponderEvent) => { event.stopPropagation(); onRemove(item.barcode); }} hitSlop={10}><Text style={styles.removeText}>Usun</Text></Pressable></View> : <Text style={styles.addText}>Wybierz</Text>}</Pressable>;
+    return <Pressable onPress={() => onEdit(item)} style={[styles.productCard, selected > 0 && styles.selectedProduct]}><View style={styles.productText}><Text style={styles.productName}>{item.product.name}</Text><Text style={styles.muted}>Dostępne: {item.quantity} {item.unit}</Text></View>{selected > 0 ? <View style={styles.selectedAmount}><Text style={styles.selectedAmountText}>{selected} {item.unit}</Text><Pressable onPress={(event: GestureResponderEvent) => { event.stopPropagation(); onRemove(item.barcode); }} hitSlop={10}><Text style={styles.removeText}>Usuń</Text></Pressable></View> : <Text style={styles.addText}>Wybierz</Text>}</Pressable>;
   }} />;
 }
 
@@ -184,41 +184,41 @@ function AmountStep({ item, value, onChange }: { item: PantryItem; value: string
   const amount = parseAmount(value);
   let kcal = 0;
   try { if (amount > 0) kcal = createMealIngredient(item, Math.min(amount, item.quantity)).nutrients.energyKcal ?? 0; } catch { /* Validation message is shown after confirmation. */ }
-  return <View style={styles.amountStep}><Text style={styles.amountProduct}>{item.product.name}</Text><Text style={styles.available}>Dostepne w spizarni: {item.quantity} {item.unit}</Text><View style={styles.amountEntry}><TextInput autoFocus selectTextOnFocus value={value} onChangeText={onChange} keyboardType="decimal-pad" placeholder="0" style={styles.amountInput} /><Text style={styles.amountUnit}>{item.unit}</Text></View><Text style={styles.caloriePreview}>Wybrana ilosc: {amount || 0} {item.unit} | ok. {kcal} kcal</Text></View>;
+  return <View style={styles.amountStep}><Text style={styles.amountProduct}>{item.product.name}</Text><Text style={styles.available}>Dostępne w spiżarni: {item.quantity} {item.unit}</Text><View style={styles.amountEntry}><TextInput autoFocus selectTextOnFocus value={value} onChangeText={onChange} keyboardType="decimal-pad" placeholder="0" style={styles.amountInput} /><Text style={styles.amountUnit}>{item.unit}</Text></View><Text style={styles.caloriePreview}>Wybrana ilość: {amount || 0} {item.unit} | ok. {kcal} kcal</Text></View>;
 }
 
 function ReviewStep({ name, ingredients, totals, portionTotals, servings, onServings }: { name: string; ingredients: MealIngredient[]; totals: Nutrients; portionTotals: Nutrients; servings: string; onServings: (value: string) => void }) {
-  return <ScrollView style={styles.stepScroll} contentContainerStyle={styles.stepContent} keyboardShouldPersistTaps="always"><Text style={styles.reviewName}>{name}</Text><View style={styles.servingsBox}><View style={styles.servingsText}><Text style={styles.sectionTitle}>Ile porcji powstalo?</Text><Text style={styles.muted}>Ze spizarni odejmiemy cale zuzycie. Do Twojego bilansu trafi 1 porcja.</Text></View><TextInput value={servings} onChangeText={onServings} keyboardType="number-pad" selectTextOnFocus style={styles.servingsInput} /></View><Text style={styles.portionTitle}>Wartosci jednej porcji</Text><NutritionSummary totals={portionTotals} /><Text style={styles.recipeInfo}>Cale danie: {totals.energyKcal ?? 0} kcal</Text><Text style={styles.sectionTitle}>Skladniki calego dania</Text>{ingredients.map((ingredient) => <View key={ingredient.barcode} style={styles.reviewRow}><Text style={styles.reviewProduct}>{ingredient.productName}</Text><Text>{ingredient.amount} {ingredient.unit} | {ingredient.nutrients.energyKcal ?? 0} kcal</Text></View>)}</ScrollView>;
+  return <ScrollView style={styles.stepScroll} contentContainerStyle={styles.stepContent} keyboardShouldPersistTaps="always"><Text style={styles.reviewName}>{name}</Text><View style={styles.servingsBox}><View style={styles.servingsText}><Text style={styles.sectionTitle}>Ile porcji powstało?</Text><Text style={styles.muted}>Ze spiżarni odejmiemy całe zużycie. Do Twojego bilansu trafi 1 porcja.</Text></View><TextInput value={servings} onChangeText={onServings} keyboardType="number-pad" selectTextOnFocus style={styles.servingsInput} /></View><Text style={styles.portionTitle}>Wartości jednej porcji</Text><NutritionSummary totals={portionTotals} /><Text style={styles.recipeInfo}>Całe danie: {totals.energyKcal ?? 0} kcal</Text><Text style={styles.sectionTitle}>Składniki całego dania</Text>{ingredients.map((ingredient) => <View key={ingredient.barcode} style={styles.reviewRow}><Text style={styles.reviewProduct}>{ingredient.productName}</Text><Text>{ingredient.amount} {ingredient.unit} | {ingredient.nutrients.energyKcal ?? 0} kcal</Text></View>)}</ScrollView>;
 }
 
 function NutritionSummary({ totals }: { totals: Nutrients }) {
-  const entries = [["Kalorie", totals.energyKcal, "kcal"], ["Bialko", totals.proteins, "g"], ["Weglowodany", totals.carbohydrates, "g"], ["Tluszcz", totals.fat, "g"]];
+  const entries = [["Kalorie", totals.energyKcal, "kcal"], ["Białko", totals.proteins, "g"], ["Węglowodany", totals.carbohydrates, "g"], ["Tłuszcz", totals.fat, "g"]];
   return <View style={styles.nutritionGrid}>{entries.map(([label, value, unit]) => <View key={String(label)} style={styles.nutritionCard}><Text style={styles.nutritionValue}>{value ?? 0}</Text><Text style={styles.muted}>{label} ({unit})</Text></View>)}</View>;
 }
 
 function DailyNutritionSummary({ summary }: { summary: DailySummary }) {
   const entries = [
     ["Kalorie", summary.totals.energyKcal, "kcal", true],
-    ["Bialko", summary.totals.proteins, "g", false],
-    ["Weglowodany", summary.totals.carbohydrates, "g", false],
-    ["Tluszcz", summary.totals.fat, "g", false],
-    ["Blonnik", summary.totals.fiber, "g", false],
-    ["Sol", summary.totals.salt, "g", false],
+    ["Białko", summary.totals.proteins, "g", false],
+    ["Węglowodany", summary.totals.carbohydrates, "g", false],
+    ["Tłuszcz", summary.totals.fat, "g", false],
+    ["Błonnik", summary.totals.fiber, "g", false],
+    ["Sól", summary.totals.salt, "g", false],
     ["Potas", summary.totals.potassium, "mg", false],
-    ["Wapn", summary.totals.calcium, "mg", false],
-    ["Zelazo", summary.totals.iron, "mg", false],
+    ["Wapń", summary.totals.calcium, "mg", false],
+    ["Żelazo", summary.totals.iron, "mg", false],
     ["Magnez", summary.totals.magnesium, "mg", false],
     ["Wit. C", summary.totals.vitaminC, "mg", false]
   ] as const;
-  return <View style={styles.dailyPanel}><View style={styles.dailyHeading}><Text style={styles.dailyTitle}>Spozycie dzisiaj</Text><Text style={styles.dailyCount}>{summary.mealCount} posilkow</Text></View><View style={styles.dailyGrid}>{entries.map(([label, value, unit, highlighted]) => <View key={label} style={styles.dailyItem}><Text style={[styles.dailyValue, highlighted && styles.dailyKcal]}>{value ?? 0} {unit}</Text><Text style={styles.dailyLabel}>{label}</Text></View>)}</View></View>;
+  return <View style={styles.dailyPanel}><View style={styles.dailyHeading}><Text style={styles.dailyTitle}>Spożycie dzisiaj</Text><Text style={styles.dailyCount}>{summary.mealCount} posiłków</Text></View><View style={styles.dailyGrid}>{entries.map(([label, value, unit, highlighted]) => <View key={label} style={styles.dailyItem}><Text style={[styles.dailyValue, highlighted && styles.dailyKcal]}>{value ?? 0} {unit}</Text><Text style={styles.dailyLabel}>{label}</Text></View>)}</View></View>;
 }
 
 function PrimaryButton({ label, onPress, disabled }: { label: string; onPress: () => void; disabled?: boolean }) { return <Pressable disabled={disabled} onPress={onPress} style={[styles.primary, disabled && styles.disabled]}><Text style={styles.white}>{label}</Text></Pressable>; }
-function buildIngredients(pantry: PantryItem[], amounts: Record<string, string>) { const ingredients: MealIngredient[] = []; let error = ""; for (const item of pantry) { const amount = parseAmount(amounts[item.barcode]); if (amount <= 0) continue; try { ingredients.push(createMealIngredient(item, amount)); } catch (cause) { error = cause instanceof Error ? cause.message : "Nieprawidlowa ilosc."; } } return { ingredients, error }; }
+function buildIngredients(pantry: PantryItem[], amounts: Record<string, string>) { const ingredients: MealIngredient[] = []; let error = ""; for (const item of pantry) { const amount = parseAmount(amounts[item.barcode]); if (amount <= 0) continue; try { ingredients.push(createMealIngredient(item, amount)); } catch (cause) { error = cause instanceof Error ? cause.message : "Nieprawidłowa ilość."; } } return { ingredients, error }; }
 function parseAmount(value?: string) { const number = Number((value ?? "").replace(",", ".")); return Number.isFinite(number) && number > 0 ? Math.round(number * 100) / 100 : 0; }
 function parseServings(value?: string) { const number = Number(value); return Number.isInteger(number) && number >= 1 && number <= 100 ? number : 0; }
 function stepLabel(step: Step) { return step === "type" ? "KROK 1 Z 3" : step === "review" ? "KROK 3 Z 3" : "KROK 2 Z 3"; }
-function stepTitle(step: Step, item: PantryItem | null) { if (step === "type") return "Jaki to posilek?"; if (step === "products") return "Wybierz produkty"; if (step === "amount") return `Podaj ilosc: ${item?.product.name ?? "produkt"}`; return "Sprawdz posilek"; }
+function stepTitle(step: Step, item: PantryItem | null) { if (step === "type") return "Jaki to posiłek?"; if (step === "products") return "Wybierz produkty"; if (step === "amount") return `Podaj ilość: ${item?.product.name ?? "produkt"}`; return "Sprawdź posiłek"; }
 function formatToday() { return new Date().toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long" }); }
 
 const styles = StyleSheet.create({

@@ -25,21 +25,21 @@ export function PantryItemScreen() {
   useEffect(() => {
     if (!barcode) return setMessage("Brak kodu produktu.");
     void getPantryItem(barcode).then((found) => {
-      if (!found) return setMessage("Tego produktu nie ma juz w spizarni.");
+      if (!found) return setMessage("Tego produktu nie ma już w spiżarni.");
       setItem(found); setQuantity(String(found.quantity)); setUnit(found.unit);
       setExpiryDate(found.expiryDate ?? ""); setLocation(found.location ?? ""); setMessage("");
-    }).catch(() => setMessage("Nie udalo sie pobrac produktu."));
+    }).catch(() => setMessage("Nie udało się pobrać produktu."));
   }, [barcode]);
 
   async function save() {
     if (!item) return;
     const nextQuantity = Number(quantity.replace(",", "."));
-    if (!Number.isFinite(nextQuantity) || nextQuantity < 0) return setMessage("Ilosc musi byc liczba nie mniejsza od zera.");
+    if (!Number.isFinite(nextQuantity) || nextQuantity < 0) return setMessage("Ilość musi byc liczba nie mniejsza od zera.");
     try {
       setBusy(true); setMessage("");
       const next = { ...item, quantity: nextQuantity, unit, expiryDate: expiryDate.trim() || undefined, location: location.trim() || undefined, status: nextQuantity === 0 ? "consumed" as const : "active" as const };
-      await savePantryItem(next); setItem(next); setMessage("Zmiany zostaly zapisane.");
-    } catch { setMessage("Nie udalo sie zapisac produktu."); }
+      await savePantryItem(next); setItem(next); setMessage("Zmiany zostały zapisane.");
+    } catch { setMessage("Nie udało się zapisać produktu."); }
     finally { setBusy(false); }
   }
 
@@ -49,7 +49,7 @@ export function PantryItemScreen() {
       setBusy(true);
       await deletePantryItem(barcode);
       router.replace("/pantry");
-    } catch { setMessage("Nie udalo sie usunac produktu ze spizarni."); setBusy(false); }
+    } catch { setMessage("Nie udało się usunąć produktu ze spiżarni."); setBusy(false); }
   }
 
   return <ModuleScreen title="Produkt">
@@ -58,9 +58,9 @@ export function PantryItemScreen() {
         <Text style={styles.name}>{item.product.name}</Text>
         <Text style={styles.muted}>{item.product.brand || "Brak marki"} | kod: {item.barcode}</Text>
         <View style={styles.nutrition}><Text>{item.product.nutrientsPer100g.energyKcal ?? "-"} kcal</Text><Text>B: {item.product.nutrientsPer100g.proteins ?? "-"} g</Text><Text>W: {item.product.nutrientsPer100g.carbohydrates ?? "-"} g</Text><Text>T: {item.product.nutrientsPer100g.fat ?? "-"} g</Text></View>
-        <View style={styles.micronutrients}><Text style={styles.sectionLabel}>Mikroelementy na 100 g/ml</Text><Text style={styles.muted}>Potas: {item.product.nutrientsPer100g.potassium ?? "-"} mg | Wapn: {item.product.nutrientsPer100g.calcium ?? "-"} mg | Zelazo: {item.product.nutrientsPer100g.iron ?? "-"} mg | Magnez: {item.product.nutrientsPer100g.magnesium ?? "-"} mg | Wit. C: {item.product.nutrientsPer100g.vitaminC ?? "-"} mg</Text></View>
+        <View style={styles.micronutrients}><Text style={styles.sectionLabel}>Mikroelementy na 100 g/ml</Text><Text style={styles.muted}>Potas: {item.product.nutrientsPer100g.potassium ?? "-"} mg | Wapń: {item.product.nutrientsPer100g.calcium ?? "-"} mg | Żelazo: {item.product.nutrientsPer100g.iron ?? "-"} mg | Magnez: {item.product.nutrientsPer100g.magnesium ?? "-"} mg | Wit. C: {item.product.nutrientsPer100g.vitaminC ?? "-"} mg</Text></View>
         <View style={styles.row}>
-          <Field label="Ilosc" value={quantity} onChangeText={setQuantity} numeric />
+          <Field label="Ilość" value={quantity} onChangeText={setQuantity} numeric />
           <View style={styles.field}><Text style={styles.label}>Jednostka</Text><View style={styles.units}>{(["g", "ml", "szt"] as Unit[]).map((value) => <Pressable key={value} onPress={() => setUnit(value)} style={[styles.unit, unit === value && styles.unitActive]}><Text style={unit === value ? styles.white : undefined}>{value}</Text></Pressable>)}</View></View>
         </View>
         <DatePickerField value={expiryDate} onChange={setExpiryDate} />
@@ -69,9 +69,9 @@ export function PantryItemScreen() {
         {!!message && <Text style={message.includes("zapisane") ? styles.success : styles.error}>{message}</Text>}
         <Pressable disabled={busy} onPress={() => void save()} style={[styles.save, busy && styles.disabled]}><Text style={styles.white}>{busy ? "Zapisywanie..." : "Zapisz zmiany"}</Text></Pressable>
         <View style={styles.dangerZone}>
-          <Text style={styles.dangerTitle}>Usuniecie ze spizarni</Text>
+          <Text style={styles.dangerTitle}>Usuńiecie ze spiżarni</Text>
           <Text style={styles.muted}>Produkt zniknie ze stanu, ale pozostanie w katalogu Zapisane i w dotychczasowej historii.</Text>
-          {confirmDelete ? <View style={styles.confirm}><Pressable disabled={busy} onPress={() => void remove()} style={styles.delete}><Text style={styles.white}>Tak, usun produkt</Text></Pressable><Pressable onPress={() => setConfirmDelete(false)} style={styles.cancel}><Text>Anuluj</Text></Pressable></View> : <Pressable onPress={() => setConfirmDelete(true)} style={styles.deleteOutline}><Text style={styles.deleteText}>Usun produkt ze spizarni</Text></Pressable>}
+          {confirmDelete ? <View style={styles.confirm}><Pressable disabled={busy} onPress={() => void remove()} style={styles.delete}><Text style={styles.white}>Tak, usuń produkt</Text></Pressable><Pressable onPress={() => setConfirmDelete(false)} style={styles.cancel}><Text>Anuluj</Text></Pressable></View> : <Pressable onPress={() => setConfirmDelete(true)} style={styles.deleteOutline}><Text style={styles.deleteText}>Usuń produkt ze spiżarni</Text></Pressable>}
         </View>
       </View>}
     </ScrollView>

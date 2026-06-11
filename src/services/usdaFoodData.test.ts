@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parseUsdaNutrients, translateFoodQuery } from "@/services/usdaFoodData";
 
 describe("wyszukiwanie USDA", () => {
-  it("tlumaczy popularne polskie nazwy produktow", () => {
+  it("tłumaczy popularne polskie nazwy produktów", () => {
     expect(translateFoodQuery("pomidor")).toBe("tomato");
     expect(translateFoodQuery("Jabłko")).toBe("apple");
   });

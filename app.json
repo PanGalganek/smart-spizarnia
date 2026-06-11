@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "Smart Spizarnia",
+    "name": "Smart Spiżarnia",
     "slug": "smart-spizarnia",
-    "version": "0.7.0",
+    "version": "0.7.1",
     "orientation": "default",
     "scheme": "smartspizarnia",
     "userInterfaceStyle": "light",
@@ -18,7 +18,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Aplikacja potrzebuje aparatu do skanowania kodow kreskowych.",
+          "cameraPermission": "Aplikacja potrzebuje aparatu do skanowania kodów kreskowych.",
           "barcodeScannerEnabled": true,
           "recordAudioAndroid": false
         }
@@ -39,7 +39,7 @@
       "bundleIdentifier": "pl.smartspizarnia.app",
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "Aplikacja potrzebuje aparatu do skanowania kodow kreskowych."
+        "NSCameraUsageDescription": "Aplikacja potrzebuje aparatu do skanowania kodów kreskowych."
       },
       "icon": "./assets/icon.png"
     },

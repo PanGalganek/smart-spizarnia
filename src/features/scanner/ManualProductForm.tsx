@@ -35,10 +35,10 @@ export function ManualProductForm({ barcode, onCancel, onSaved }: Props) {
   async function submit() {
     const kcal = numberValue("energyKcal");
     if (!barcode.trim() || !name.trim()) return setError("Kod kreskowy i nazwa produktu sa wymagane.");
-    if (kcal === undefined) return setError("Wpisz kalorie produktu. Bez nich produkt nie moze trafic do posilku.");
-    if (basis === "perUnit" && unit !== "szt") return setError("Kalorie na sztuke wymagaja jednostki szt.");
-    if (basis === "per100" && unit === "szt" && !numberValue("netWeightGrams")) return setError("Podaj mase jednej sztuki, aby poprawnie liczyc kalorie.");
-    if ((numberValue("quantity") ?? 0) > 0 && !location.trim()) return setError("Dla produktu w spizarni wybierz lokalizacje. Data waznosci jest opcjonalna.");
+    if (kcal === undefined) return setError("Wpisz kalorie produktu. Bez nich produkt nie może trafić do posiłku.");
+    if (basis === "perUnit" && unit !== "szt") return setError("Kalorie na sztukę wymagaja jednostki szt.");
+    if (basis === "per100" && unit === "szt" && !numberValue("netWeightGrams")) return setError("Podaj masę jednej sztuki, aby poprawnie liczyć kalorie.");
+    if ((numberValue("quantity") ?? 0) > 0 && !location.trim()) return setError("Dla produktu w spiżarni wybierz lokalizację. Data ważności jest opcjonalna.");
 
     const product: Product = {
       barcode: barcode.trim(), name: name.trim(), ...(brand.trim() ? { brand: brand.trim() } : {}),
@@ -58,17 +58,17 @@ export function ManualProductForm({ barcode, onCancel, onSaved }: Props) {
         await savePantryItem({ barcode: product.barcode, product, quantity, unit, expiryDate: expiryDate.trim() || undefined, location: location.trim() || undefined, status: "active" });
       } else await saveProduct(product);
       onSaved(product);
-    } catch { setError("Nie udalo sie zapisac produktu w Firebase."); }
+    } catch { setError("Nie udało się zapisać produktu w Firebase."); }
     finally { setBusy(false); }
   }
 
   return (
     <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
-      <Text style={styles.title}>Dodaj produkt recznie</Text><Text style={styles.muted}>Kod: {barcode}</Text>
+      <Text style={styles.title}>Dodaj produkt ręcznie</Text><Text style={styles.muted}>Kod: {barcode}</Text>
       <View style={styles.row}>
         <Field label="Nazwa produktu *" value={name} onChangeText={setName} />
         <Field label="Marka" value={brand} onChangeText={setBrand} />
-        <Field label="Ilosc poczatkowa" value={numbers.quantity} onChangeText={(v) => setNumber("quantity", v)} numeric />
+        <Field label="Ilość początkowa" value={numbers.quantity} onChangeText={(v) => setNumber("quantity", v)} numeric />
       </View>
       <Text style={styles.section}>Jednostka stanu</Text><ChoiceRow values={["g", "ml", "szt"]} selected={unit} onSelect={(value) => { setUnit(value as Unit); if (value !== "szt") setBasis("per100"); }} />
       <View style={styles.row}>
@@ -76,13 +76,13 @@ export function ManualProductForm({ barcode, onCancel, onSaved }: Props) {
         <LocationPicker value={location} onChange={setLocation} />
         {unit === "szt" && <Field label="Masa 1 sztuki (g)" value={numbers.netWeightGrams} onChangeText={(v) => setNumber("netWeightGrams", v)} numeric />}
       </View>
-      <Text style={styles.section}>Sposob liczenia</Text><ChoiceRow values={["per100", "perUnit"]} labels={["na 100 g/ml", "na sztuke"]} selected={basis} onSelect={(value) => setBasis(value as NutritionBasis)} disabled={unit !== "szt"} />
-      <Text style={styles.section}>Wartosci odzywcze {basis === "perUnit" ? "na sztuke" : "na 100 g/ml"}</Text>
+      <Text style={styles.section}>Sposób liczenia</Text><ChoiceRow values={["per100", "perUnit"]} labels={["na 100 g/ml", "na sztukę"]} selected={basis} onSelect={(value) => setBasis(value as NutritionBasis)} disabled={unit !== "szt"} />
+      <Text style={styles.section}>Wartości odżywcze {basis === "perUnit" ? "na sztukę" : "na 100 g/ml"}</Text>
       <View style={styles.row}>
         <Field label="kcal *" value={numbers.energyKcal} onChangeText={(v) => setNumber("energyKcal", v)} numeric />
-        <Field label="Bialko (g)" value={numbers.proteins} onChangeText={(v) => setNumber("proteins", v)} numeric />
-        <Field label="Weglowodany (g)" value={numbers.carbohydrates} onChangeText={(v) => setNumber("carbohydrates", v)} numeric />
-        <Field label="Tluszcz (g)" value={numbers.fat} onChangeText={(v) => setNumber("fat", v)} numeric />
+        <Field label="Białko (g)" value={numbers.proteins} onChangeText={(v) => setNumber("proteins", v)} numeric />
+        <Field label="Węglowodany (g)" value={numbers.carbohydrates} onChangeText={(v) => setNumber("carbohydrates", v)} numeric />
+        <Field label="Tłuszcz (g)" value={numbers.fat} onChangeText={(v) => setNumber("fat", v)} numeric />
       </View>
       {!!error && <Text style={styles.error}>{error}</Text>}
       <View style={styles.actions}><Pressable onPress={onCancel} style={styles.cancel}><Text>Anuluj</Text></Pressable><Pressable disabled={busy} onPress={() => void submit()} style={styles.save}><Text style={styles.white}>{busy ? "Zapisywanie..." : "Zapisz produkt"}</Text></Pressable></View>

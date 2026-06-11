@@ -11,7 +11,7 @@ export function getExpiryWarning(expiryDate?: string, now = new Date()): ExpiryW
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const days = Math.round((expiry.getTime() - today.getTime()) / 86_400_000);
   if (days < 0) return { level: "expired", days, label: `Po terminie o ${Math.abs(days)} dni` };
-  if (days === 0) return { level: "today", days, label: "Termin uplywa dzisiaj" };
+  if (days === 0) return { level: "today", days, label: "Termin upływa dzisiaj" };
   if (days <= 3) return { level: "urgent", days, label: `Termin za ${days} dni` };
   if (days <= 7) return { level: "soon", days, label: `Termin za ${days} dni` };
   return null;

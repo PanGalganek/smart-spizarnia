@@ -5,7 +5,7 @@ import { colors } from "@/core/theme";
 type Props = { value: string; onChange: (value: string) => void; label?: string };
 const weekdays = ["Pn", "Wt", "Sr", "Cz", "Pt", "So", "Nd"];
 
-export function DatePickerField({ value, onChange, label = "Data waznosci (opcjonalna)" }: Props) {
+export function DatePickerField({ value, onChange, label = "Data ważności (opcjonalna)" }: Props) {
   const selected = parseIsoDate(value);
   const [open, setOpen] = useState(false);
   const [visibleMonth, setVisibleMonth] = useState(() => selected ?? new Date());

@@ -1,8 +1,19 @@
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "@/core/firebase";
 
-export const defaultLocations = ["Lodowka", "Zamrazarka", "Spizarnia", "Szafka", "Polka", "Blat"];
+const legacyLocationNames: Record<string, string> = {
+  Lodowka: "Lodówka",
+  Zamrazarka: "Zamrażarka",
+  Spizarnia: "Spiżarnia",
+  Polka: "Półka"
+};
+
+export const defaultLocations = ["Lodówka", "Zamrażarka", "Spiżarnia", "Szafka", "Półka", "Blat"];
 const locationsRef = doc(db, "settings", "storageLocations");
+
+export function displayLocationName(value: string) {
+  return legacyLocationNames[value] ?? value;
+}
 
 export async function listLocations(): Promise<string[]> {
   const snapshot = await getDoc(locationsRef);
@@ -10,12 +21,15 @@ export async function listLocations(): Promise<string[]> {
     await setDoc(locationsRef, { values: defaultLocations, updatedAt: Date.now() });
     return defaultLocations;
   }
-  const values = snapshot.data().values;
-  return Array.isArray(values) ? values.filter((value): value is string => typeof value === "string" && !!value.trim()) : defaultLocations;
+  const stored = snapshot.data().values;
+  const raw = Array.isArray(stored) ? stored.filter((value): value is string => typeof value === "string" && !!value.trim()) : defaultLocations;
+  const values = [...new Set(raw.map((value) => displayLocationName(value.trim())))];
+  if (JSON.stringify(values) !== JSON.stringify(raw)) await setDoc(locationsRef, { values, updatedAt: Date.now() });
+  return values;
 }
 
 export async function addLocation(value: string): Promise<string[]> {
-  const name = value.trim();
+  const name = displayLocationName(value.trim());
   if (!name) return listLocations();
   const current = await listLocations();
   const next = current.some((item) => item.toLocaleLowerCase("pl") === name.toLocaleLowerCase("pl")) ? current : [...current, name];
@@ -24,8 +38,9 @@ export async function addLocation(value: string): Promise<string[]> {
 }
 
 export async function removeLocation(value: string): Promise<string[]> {
+  const name = displayLocationName(value);
   const current = await listLocations();
-  const next = current.filter((item) => item !== value);
+  const next = current.filter((item) => item !== name);
   await setDoc(locationsRef, { values: next, updatedAt: Date.now() });
   return next;
 }

@@ -6,6 +6,7 @@ import { ModuleScreen } from "@/core/components/ModuleScreen";
 import { colors } from "@/core/theme";
 import { PantryItem } from "@/domain/product";
 import { getExpiryWarning } from "@/services/expiry";
+import { displayLocationName } from "@/services/locationRepository";
 import { listPantry } from "@/services/inventoryRepository";
 
 export function PantryScreen() {
@@ -14,7 +15,7 @@ export function PantryScreen() {
 
   const refresh = useCallback(async () => {
     try { setItems(await listPantry(true)); setMessage(""); }
-    catch { setMessage("Nie udalo sie pobrac stanu spizarni."); }
+    catch { setMessage("Nie udało się pobrać stanu spiżarni."); }
   }, []);
   useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
 
@@ -26,14 +27,14 @@ export function PantryScreen() {
   const sortedItems = useMemo(() => [...items].sort((left, right) => expiryPriority(left.expiryDate) - expiryPriority(right.expiryDate) || left.product.name.localeCompare(right.product.name, "pl")), [items]);
 
   return (
-    <ModuleScreen title="Spizarnia">
+    <ModuleScreen title="Spiżarnia">
       {!!message && <Text style={styles.message}>{message}</Text>}
-      {urgentExpiryCount > 0 && <Text style={styles.expirySummary}>Uwaga: {urgentExpiryCount} produktow ma termin najpozniej jutro lub jest po terminie.</Text>}
+      {urgentExpiryCount > 0 && <Text style={styles.expirySummary}>Uwaga: {urgentExpiryCount} produktów ma termin najpóźniej jutro lub jest po terminie.</Text>}
       <FlatList
         data={sortedItems}
         keyExtractor={(item) => item.barcode}
         contentContainerStyle={sortedItems.length ? styles.list : styles.emptyList}
-        ListEmptyComponent={<Text style={styles.empty}>Spizarnia jest pusta.</Text>}
+        ListEmptyComponent={<Text style={styles.empty}>Spiżarnia jest pusta.</Text>}
         renderItem={({ item }) => {
           const warning = item.quantity > 0 ? getExpiryWarning(item.expiryDate) : null;
           return (
@@ -42,11 +43,11 @@ export function PantryScreen() {
               style={({ pressed }) => [styles.card, item.quantity === 0 && styles.consumed, pressed && styles.pressed]}
             >
               <View style={styles.header}>
-                <View style={styles.heading}><Text style={styles.name}>{item.product.name}</Text><Text style={styles.muted}>{item.barcode} | {item.location || "brak lokalizacji"}</Text></View>
+                <View style={styles.heading}><Text style={styles.name}>{item.product.name}</Text><Text style={styles.muted}>{item.barcode} | {item.location ? displayLocationName(item.location) : "brak lokalizacji"}</Text></View>
                 <Text style={styles.qty}>{item.quantity} {item.unit}</Text>
               </View>
               <View style={styles.meta}>
-                <Text>{item.expiryDate ? `Wazne do: ${formatPolishDate(item.expiryDate)}` : "Brak daty waznosci"}</Text>
+                <Text>{item.expiryDate ? `Ważne do: ${formatPolishDate(item.expiryDate)}` : "Brak daty ważności"}</Text>
                 <Text style={item.quantity === 0 ? styles.used : styles.active}>{item.quantity === 0 ? "ZUZYTY" : "AKTYWNY"}</Text>
               </View>
               {warning && <Text style={[styles.expiryWarning, warning.level === "soon" ? styles.expirySoon : styles.expiryUrgent]}>{warning.label}</Text>}

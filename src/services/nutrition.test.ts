@@ -21,7 +21,7 @@ describe("liczenie kalorii", () => {
     });
   });
 
-  it("liczy produkt rozliczany na sztuke", () => {
+  it("liczy produkt rozliczany na sztukę", () => {
     const bun = product({ name: "Bulka", defaultUnit: "szt", nutritionBasis: "perUnit", nutrientsPer100g: { energyKcal: 180, proteins: 6 } });
     expect(calculateNutrients(bun, 2, "szt")).toEqual({ energyKcal: 360, proteins: 12 });
   });
@@ -32,20 +32,20 @@ describe("liczenie kalorii", () => {
   });
 });
 
-describe("zmiany stanu spizarni", () => {
-  it("odejmuje dokladna ilosc i zachowuje jednostke", () => {
+describe("zmiany stanu spiżarni", () => {
+  it("odejmuje dokładną ilość i zachowuje jednostke", () => {
     expect(consumePantryItem(pantryItem(), 200)).toMatchObject({ quantity: 300, unit: "g", status: "active" });
   });
 
-  it("oznacza produkt jako zuzyty po zejsciu do zera", () => {
+  it("oznacza produkt jako zużyty po zejściu do zera", () => {
     expect(consumePantryItem(pantryItem({ quantity: 200 }), 200)).toMatchObject({ quantity: 0, status: "consumed" });
   });
 
-  it("blokuje zuzycie wiekszej ilosci niz dostepna", () => {
+  it("blokuje zużycie większej ilości niż dostępna", () => {
     expect(() => consumePantryItem(pantryItem({ quantity: 100 }), 200)).toThrow("Za malo produktu: Serek");
   });
 
-  it("cofniecie przywraca dokladnie poprzedni stan", () => {
+  it("cofnięcie przywraca dokładnie poprzedni stan", () => {
     const original = pantryItem({ quantity: 500 });
     const consumed = consumePantryItem(original, 200);
     expect(restorePantryItem(consumed, 200)).toMatchObject({ quantity: 500, status: "active" });
@@ -53,9 +53,9 @@ describe("zmiany stanu spizarni", () => {
 });
 
 describe("brak danych kalorycznych", () => {
-  it("nie pozwala dodac produktu bez kcal do posilku", () => {
+  it("nie pozwala dodać produktu bez kcal do posiłku", () => {
     const item = pantryItem({ product: product({ nutrientsPer100g: { proteins: 10 } }) });
-    expect(() => createMealIngredient(item, 50)).toThrow("Uzupelnij kalorie produktu: Serek");
+    expect(() => createMealIngredient(item, 50)).toThrow("Uzupełnij kalorie produktu: Serek");
   });
 
   it("wymaga masy sztuki dla produktu liczonego na 100 g", () => {
@@ -64,12 +64,12 @@ describe("brak danych kalorycznych", () => {
       quantity: 2,
       product: product({ defaultUnit: "szt", nutritionBasis: "per100" })
     });
-    expect(() => createMealIngredient(item, 1)).toThrow("Uzupelnij mase jednej sztuki");
+    expect(() => createMealIngredient(item, 1)).toThrow("Uzupełnij masę jednej sztuki");
   });
 });
 
-describe("produkt spozyty bez dodawania do spizarni", () => {
-  it("liczy wartosci i oznacza skladnik jako niepowiazany ze stanem", () => {
+describe("produkt spożyty bez dodawania do spiżarni", () => {
+  it("liczy wartości i oznacza składnik jako niepowiązany ze stanem", () => {
     expect(createUntrackedMealIngredient(product({ name: "Baton" }), 50, "g")).toMatchObject({
       productName: "Baton",
       amount: 50,
@@ -79,18 +79,18 @@ describe("produkt spozyty bez dodawania do spizarni", () => {
   });
 
   it("nadal wymaga kalorii", () => {
-    expect(() => createUntrackedMealIngredient(product({ nutrientsPer100g: {} }), 1, "g")).toThrow("Uzupelnij kalorie produktu");
+    expect(() => createUntrackedMealIngredient(product({ nutrientsPer100g: {} }), 1, "g")).toThrow("Uzupełnij kalorie produktu");
   });
 });
 
-describe("dzielenie posilku na porcje", () => {
+describe("dzielenie posiłku na porcje", () => {
   it("dzieli kalorie oraz wszystkie makro i mikroelementy", () => {
     expect(scaleNutrients({ energyKcal: 800, proteins: 40, potassium: 1200, vitaminC: 30 }, 4)).toEqual({
       energyKcal: 200, proteins: 10, potassium: 300, vitaminC: 7.5
     });
   });
 
-  it("odrzuca nieprawidlowa liczbe porcji", () => {
+  it("odrzuca nieprawidłową liczbę porcji", () => {
     expect(() => scaleNutrients({ energyKcal: 100 }, 0)).toThrow("Liczba porcji");
   });
 });

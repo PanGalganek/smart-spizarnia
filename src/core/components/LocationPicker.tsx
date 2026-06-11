@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { colors } from "@/core/theme";
-import { addLocation, listLocations, removeLocation } from "@/services/locationRepository";
+import { addLocation, displayLocationName, listLocations, removeLocation } from "@/services/locationRepository";
 
 type Props = { value: string; onChange: (value: string) => void; label?: string };
 
 export function LocationPicker({ value, onChange, label = "Lokalizacja" }: Props) {
+  const displayedValue = displayLocationName(value);
   const [locations, setLocations] = useState<string[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -16,36 +17,36 @@ export function LocationPicker({ value, onChange, label = "Lokalizacja" }: Props
 
   async function add() {
     const name = newLocation.trim();
-    if (!name) return setMessage("Wpisz nazwe nowej lokalizacji.");
+    if (!name) return setMessage("Wpisz nazwę nowej lokalizacji.");
     try {
       setLocations(await addLocation(name));
       onChange(name);
       setNewLocation("");
       setAdding(false);
       setPickerOpen(false);
-      setMessage(`Dodano lokalizacje: ${name}.`);
-    } catch { setMessage("Nie udalo sie dodac lokalizacji."); }
+      setMessage(`Dodano lokalizację: ${name}.`);
+    } catch { setMessage("Nie udało się dodać lokalizacji."); }
   }
 
   async function remove() {
-    if (!value) return setMessage("Najpierw wybierz lokalizacje do usuniecia.");
+    if (!value) return setMessage("Najpierw wybierz lokalizację do usunięcia.");
     try {
-      const removed = value;
+      const removed = displayLocationName(value);
       setLocations(await removeLocation(value));
       onChange("");
-      setMessage(`Usunieto lokalizacje: ${removed}.`);
-    } catch { setMessage("Nie udalo sie usunac lokalizacji."); }
+      setMessage(`Usunięto lokalizację: ${removed}.`);
+    } catch { setMessage("Nie udało się usunąć lokalizacji."); }
   }
 
   return <View style={styles.field}>
     <Text style={styles.label}>{label}</Text>
     <Pressable onPress={() => { setPickerOpen(true); setMessage(""); }} style={styles.select}>
-      <Text style={value ? styles.value : styles.placeholder}>{value || "Wybierz lokalizacje"}</Text>
+      <Text style={value ? styles.value : styles.placeholder}>{displayedValue || "Wybierz lokalizację"}</Text>
       <Text style={styles.arrow}>v</Text>
     </Pressable>
     <View style={styles.actions}>
-      <Pressable onPress={() => { setAdding((current) => !current); setMessage(""); }} style={styles.manage}><Text style={styles.manageText}>+ Dodaj lokalizacje</Text></Pressable>
-      <Pressable disabled={!value} onPress={() => void remove()} style={[styles.remove, !value && styles.disabled]}><Text style={styles.removeText}>- Usun wybrana</Text></Pressable>
+      <Pressable onPress={() => { setAdding((current) => !current); setMessage(""); }} style={styles.manage}><Text style={styles.manageText}>+ Dodaj lokalizację</Text></Pressable>
+      <Pressable disabled={!value} onPress={() => void remove()} style={[styles.remove, !value && styles.disabled]}><Text style={styles.removeText}>- Usuń wybraną</Text></Pressable>
     </View>
     {adding && <View style={styles.addPanel}><TextInput autoFocus value={newLocation} onChangeText={setNewLocation} placeholder="Nowa lokalizacja" style={styles.input} /><Pressable onPress={() => void add()} style={styles.add}><Text style={styles.white}>Dodaj</Text></Pressable></View>}
     {!!message && <Text style={styles.message}>{message}</Text>}
@@ -53,9 +54,9 @@ export function LocationPicker({ value, onChange, label = "Lokalizacja" }: Props
     <Modal visible={pickerOpen} transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
       <View style={styles.backdrop}>
         <View style={styles.dialog}>
-          <View style={styles.dialogHeader}><Text style={styles.dialogTitle}>Wybierz lokalizacje</Text><Pressable onPress={() => setPickerOpen(false)} style={styles.close}><Text style={styles.closeText}>Zamknij</Text></Pressable></View>
+          <View style={styles.dialogHeader}><Text style={styles.dialogTitle}>Wybierz lokalizację</Text><Pressable onPress={() => setPickerOpen(false)} style={styles.close}><Text style={styles.closeText}>Zamknij</Text></Pressable></View>
           <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
-            {!locations.length ? <Text style={styles.empty}>Brak lokalizacji. Dodaj pierwsza lokalizacje.</Text> : locations.map((item) => <Pressable key={item} onPress={() => { onChange(item); setPickerOpen(false); setMessage(""); }} style={[styles.option, value === item && styles.optionActive]}><Text style={[styles.optionText, value === item && styles.white]}>{item}</Text>{value === item && <Text style={styles.white}>Wybrana</Text>}</Pressable>)}
+            {!locations.length ? <Text style={styles.empty}>Brak lokalizacji. Dodaj pierwszą lokalizację.</Text> : locations.map((item) => <Pressable key={item} onPress={() => { onChange(item); setPickerOpen(false); setMessage(""); }} style={[styles.option, displayedValue === item && styles.optionActive]}><Text style={[styles.optionText, displayedValue === item && styles.white]}>{item}</Text>{displayedValue === item && <Text style={styles.white}>Wybrana</Text>}</Pressable>)}
           </ScrollView>
           <Pressable onPress={() => { onChange(""); setPickerOpen(false); }} style={styles.noLocation}><Text style={styles.removeText}>Bez lokalizacji</Text></Pressable>
         </View>

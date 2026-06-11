@@ -11,13 +11,13 @@ export function SavedScreen() {
   const [error, setError] = useState("");
   useFocusEffect(useCallback(() => {
     setError("");
-    void listSavedProducts().then(setProducts).catch(() => setError("Nie udalo sie pobrac zapisanych produktow."));
+    void listSavedProducts().then(setProducts).catch(() => setError("Nie udało się pobrać zapisanych produktów."));
   }, []));
   return (
     <ModuleScreen title="Zapisane">
       {!!error && <Text style={styles.error}>{error}</Text>}
-      <FlatList data={products} keyExtractor={(item) => item.barcode} numColumns={2} columnWrapperStyle={styles.columns} ListEmptyComponent={!error ? <Text style={styles.empty}>Brak zapisanych produktow.</Text> : null} renderItem={({ item }) => (
-        <View style={styles.card}><Text style={styles.name}>{item.name}</Text><Text style={styles.muted}>{item.source === "usda" ? "USDA - produkt bez kodu" : item.barcode}</Text><Text style={styles.kcal}>{item.nutrientsPer100g.energyKcal ?? "brak"} kcal / {item.nutritionBasis === "perUnit" ? "szt." : "100 g/ml"}</Text><Text>B: {item.nutrientsPer100g.proteins ?? "-"} g  W: {item.nutrientsPer100g.carbohydrates ?? "-"} g  T: {item.nutrientsPer100g.fat ?? "-"} g</Text><Text style={styles.muted}>Potas: {item.nutrientsPer100g.potassium ?? "-"} mg | Wapn: {item.nutrientsPer100g.calcium ?? "-"} mg | Zelazo: {item.nutrientsPer100g.iron ?? "-"} mg</Text></View>
+      <FlatList data={products} keyExtractor={(item) => item.barcode} numColumns={2} columnWrapperStyle={styles.columns} ListEmptyComponent={!error ? <Text style={styles.empty}>Brak zapisanych produktów.</Text> : null} renderItem={({ item }) => (
+        <View style={styles.card}><Text style={styles.name}>{item.name}</Text><Text style={styles.muted}>{item.source === "usda" ? "USDA - produkt bez kodu" : item.barcode}</Text><Text style={styles.kcal}>{item.nutrientsPer100g.energyKcal ?? "brak"} kcal / {item.nutritionBasis === "perUnit" ? "szt." : "100 g/ml"}</Text><Text>B: {item.nutrientsPer100g.proteins ?? "-"} g  W: {item.nutrientsPer100g.carbohydrates ?? "-"} g  T: {item.nutrientsPer100g.fat ?? "-"} g</Text><Text style={styles.muted}>Potas: {item.nutrientsPer100g.potassium ?? "-"} mg | Wapń: {item.nutrientsPer100g.calcium ?? "-"} mg | Żelazo: {item.nutrientsPer100g.iron ?? "-"} mg</Text></View>
       )} />
     </ModuleScreen>
   );

@@ -28,14 +28,14 @@ export function BarcodeCamera({ onCancel, onScanned }: Props) {
   }
 
   if (!permission) {
-    return <View style={styles.permission}><Text>Sprawdzanie dostepu do aparatu...</Text></View>;
+    return <View style={styles.permission}><Text>Sprawdźanie dostępu do aparatu...</Text></View>;
   }
 
   if (!permission.granted) {
     return (
       <View style={styles.permission}>
-        <Text style={styles.permissionText}>Zezwol aplikacji na dostep do aparatu, aby skanowac kody.</Text>
-        <Pressable onPress={() => void requestPermission()} style={styles.control}><Text style={styles.white}>Zezwol na aparat</Text></Pressable>
+        <Text style={styles.permissionText}>Zezwól aplikacji na dostęp do aparatu, aby skanować kody.</Text>
+        <Pressable onPress={() => void requestPermission()} style={styles.control}><Text style={styles.white}>Zezwól na aparat</Text></Pressable>
         <Pressable onPress={onCancel} style={styles.cancel}><Text style={styles.white}>Anuluj</Text></Pressable>
       </View>
     );
@@ -56,12 +56,12 @@ export function BarcodeCamera({ onCancel, onScanned }: Props) {
         onBarcodeScanned={handleScan}
       />
       <View pointerEvents="none" style={styles.overlay}>
-        <Text style={styles.help}>{ready ? "Trzymaj kod 15-25 cm od aparatu i poczekaj na ostrosc" : "Uruchamianie aparatu..."}</Text>
+        <Text style={styles.help}>{ready ? "Trzymaj kod 15-25 cm od aparatu i poczekaj na ostrość" : "Uruchamianie aparatu..."}</Text>
         <View style={styles.target}><View style={styles.line} /></View>
       </View>
       <View style={styles.actions}>
         <Pressable onPress={() => setTorch((value) => !value)} style={styles.control}>
-          <Text style={styles.white}>{torch ? "Wylacz latarke" : "Wlacz latarke"}</Text>
+          <Text style={styles.white}>{torch ? "Wyłącz latarkę" : "Włącz latarkę"}</Text>
         </Pressable>
         <Pressable onPress={onCancel} style={styles.cancel}><Text style={styles.white}>Anuluj</Text></Pressable>
       </View>

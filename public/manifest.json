@@ -1,7 +1,7 @@
 {
-  "name": "Smart Spizarnia",
-  "short_name": "Spizarnia",
-  "description": "Spizarnia, skaner produktow i licznik wartosci odzywczych.",
+  "name": "Smart Spiżarnia",
+  "short_name": "Spiżarnia",
+  "description": "Spiżarnia, skaner produktów i licznik wartości odżywczych.",
   "start_url": "/smart-spizarnia/",
   "scope": "/smart-spizarnia/",
   "display": "standalone",

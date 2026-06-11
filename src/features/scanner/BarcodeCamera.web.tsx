@@ -67,13 +67,13 @@ export function BarcodeCamera({ onCancel, onScanned }: Props) {
         const settings = track?.getSettings();
         const resolution = settings?.width && settings?.height ? ` (${settings.width}x${settings.height})` : "";
         const nativeDetector = await startNativeDetector(videoRef.current, finish, () => active, detectorFrameRef);
-        setStatus(`SKANOWANIE AKTYWNE${resolution}${nativeDetector ? " - podwojny odczyt" : ""}. Ustaw pionowe kreski kodu w ramce.`);
+        setStatus(`SKANOWANIE AKTYWNE${resolution}${nativeDetector ? " - podwójny odczyt" : ""}. Ustaw pionowe kreski kodu w ramce.`);
       } catch (error) {
         if (!active) return;
         const name = error instanceof Error ? error.name : "";
         setStatus(name === "NotAllowedError"
-          ? "Brak dostepu do aparatu. Zezwol na aparat w ustawieniach Chrome."
-          : "Nie udalo sie uruchomic tylnej kamery. Zamknij inne aplikacje korzystajace z aparatu.");
+          ? "Brak dostępu do aparatu. Zezwól na aparat w ustawieniach Chrome."
+          : "Nie udało się uruchomic tylnej kamery. Zamknij inne aplikacje korzystające z aparatu.");
       }
     }
 
@@ -94,7 +94,7 @@ export function BarcodeCamera({ onCancel, onScanned }: Props) {
       await controlsRef.current.switchTorch(next);
       setTorch(next);
     } catch {
-      setStatus("Latarka nie jest obslugiwana przez ten aparat.");
+      setStatus("Latarka nie jest obsługiwana przez ten aparat.");
     }
   }
 
@@ -122,8 +122,8 @@ export function BarcodeCamera({ onCancel, onScanned }: Props) {
         <View style={styles.target}><View style={styles.line} /></View>
       </View>
       <View style={styles.actions}>
-        {cameras.length > 1 && <Pressable onPress={switchCamera} style={styles.control}><Text style={styles.white}>Zmien aparat</Text></Pressable>}
-        {torchAvailable && <Pressable onPress={() => void toggleTorch()} style={styles.control}><Text style={styles.white}>{torch ? "Wylacz latarke" : "Wlacz latarke"}</Text></Pressable>}
+        {cameras.length > 1 && <Pressable onPress={switchCamera} style={styles.control}><Text style={styles.white}>Zmień aparat</Text></Pressable>}
+        {torchAvailable && <Pressable onPress={() => void toggleTorch()} style={styles.control}><Text style={styles.white}>{torch ? "Wyłącz latarkę" : "Włącz latarkę"}</Text></Pressable>}
         <Pressable onPress={onCancel} style={styles.cancel}><Text style={styles.white}>Anuluj</Text></Pressable>
       </View>
     </View>

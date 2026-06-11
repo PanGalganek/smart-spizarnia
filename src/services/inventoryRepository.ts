@@ -63,7 +63,7 @@ export async function changePantryQuantity(
     const current = snapshot.exists() ? normalizePantryItem(snapshot.data() as PantryItem) : null;
     if (current && current.quantity > 0 && current.unit !== unit) throw new Error(`Produkt jest zapisany w jednostce ${current.unit}.`);
     const previousQuantity = current?.quantity ?? 0;
-    if (delta < 0 && Math.abs(delta) > previousQuantity) throw new Error(`W spizarni jest tylko ${previousQuantity} ${current?.unit ?? unit}.`);
+    if (delta < 0 && Math.abs(delta) > previousQuantity) throw new Error(`W spiżarni jest tylko ${previousQuantity} ${current?.unit ?? unit}.`);
     const quantity = Math.round((previousQuantity + delta) * 100) / 100;
     const next: PantryItem = {
       barcode: product.barcode,
@@ -111,8 +111,8 @@ export async function createMeal(
   servings = 1,
   createdAt = Date.now()
 ): Promise<Meal> {
-  if (!ingredients.length) throw new Error("Dodaj przynajmniej jeden skladnik.");
-  if (!Number.isInteger(servings) || servings < 1 || servings > 100) throw new Error("Podaj liczbe porcji od 1 do 100.");
+  if (!ingredients.length) throw new Error("Dodaj przynajmniej jeden składnik.");
+  if (!Number.isInteger(servings) || servings < 1 || servings > 100) throw new Error("Podaj liczbę porcji od 1 do 100.");
   const mealRef = doc(meals);
   const day = dateKey(createdAt);
   const summaryRef = doc(dailySummaries, day);
@@ -241,7 +241,7 @@ export async function deleteMeal(mealInput: Meal, restoreIngredients = true) {
     pantrySnapshots.forEach((snapshot, index) => {
       const ingredient = restorableIngredients[index];
       const current = snapshot.exists() ? normalizePantryItem(snapshot.data() as PantryItem) : null;
-      if (!current) throw new Error(`Nie mozna przywrocic produktu: ${ingredient.productName}`);
+      if (!current) throw new Error(`Nie można przywrócić produktu: ${ingredient.productName}`);
       if (current.unit !== ingredient.unit) throw new Error(`Jednostka produktu ulegla zmianie: ${ingredient.productName}`);
     });
 
