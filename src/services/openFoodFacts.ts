@@ -26,6 +26,8 @@ export async function getProductByBarcode(barcode: string): Promise<Product | nu
     imageUrl: item.image_front_url,
     servingSize: item.serving_size,
     netWeightGrams: parseGrams(item.quantity) ?? parseGrams(item.serving_size),
+    defaultUnit: "szt",
+    nutritionBasis: "per100",
     nutrientsPer100g: {
       energyKcal: item.nutriments?.["energy-kcal_100g"],
       proteins: item.nutriments?.proteins_100g,

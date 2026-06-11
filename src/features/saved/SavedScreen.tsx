@@ -17,7 +17,7 @@ export function SavedScreen() {
     <ModuleScreen title="Zapisane">
       {!!error && <Text style={styles.error}>{error}</Text>}
       <FlatList data={products} keyExtractor={(item) => item.barcode} numColumns={2} columnWrapperStyle={styles.columns} ListEmptyComponent={!error ? <Text style={styles.empty}>Brak zapisanych produktow.</Text> : null} renderItem={({ item }) => (
-        <View style={styles.card}><Text style={styles.name}>{item.name}</Text><Text style={styles.muted}>{item.barcode}</Text><Text style={styles.kcal}>{item.nutrientsPer100g.energyKcal ?? "-"} kcal / 100 g</Text><Text>B: {item.nutrientsPer100g.proteins ?? "-"} g  W: {item.nutrientsPer100g.carbohydrates ?? "-"} g  T: {item.nutrientsPer100g.fat ?? "-"} g</Text></View>
+        <View style={styles.card}><Text style={styles.name}>{item.name}</Text><Text style={styles.muted}>{item.barcode}</Text><Text style={styles.kcal}>{item.nutrientsPer100g.energyKcal ?? "brak"} kcal / {item.nutritionBasis === "perUnit" ? "szt." : "100 g/ml"}</Text><Text>B: {item.nutrientsPer100g.proteins ?? "-"} g  W: {item.nutrientsPer100g.carbohydrates ?? "-"} g  T: {item.nutrientsPer100g.fat ?? "-"} g</Text></View>
       )} />
     </ModuleScreen>
   );

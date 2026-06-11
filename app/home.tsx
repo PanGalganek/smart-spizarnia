@@ -5,6 +5,7 @@ import { useAuth } from "@/core/auth/AuthProvider";
 import { colors } from "@/core/theme";
 
 const tiles = [
+  { title: "Dzisiaj", subtitle: "Dziennik i suma kalorii", icon: "calendar-today", route: "/today", color: "#00897B" },
   { title: "Skaner", subtitle: "Dodaj lub odejmij produkt", icon: "barcode-scan", route: "/scanner", color: "#2E7D32" },
   { title: "Spizarnia", subtitle: "Aktualny stan produktow", icon: "fridge-outline", route: "/pantry", color: "#1565C0" },
   { title: "Posilki", subtitle: "Kcal, makro i skladniki", icon: "silverware-fork-knife", route: "/meals", color: "#EF6C00" },
@@ -41,7 +42,7 @@ const styles = StyleSheet.create({
   subtitle: { color: colors.muted, fontSize: 16 },
   logout: { backgroundColor: colors.surface, paddingHorizontal: 18, paddingVertical: 12, borderRadius: 12 },
   grid: { flex: 1, flexDirection: "row", flexWrap: "wrap", gap: 20 },
-  tile: { width: "48%", flexGrow: 1, minHeight: 210, backgroundColor: colors.surface, borderRadius: 22, borderTopWidth: 8, padding: 28, justifyContent: "center", elevation: 3 },
+  tile: { width: "31%", flexGrow: 1, minHeight: 180, backgroundColor: colors.surface, borderRadius: 22, borderTopWidth: 8, padding: 24, justifyContent: "center", elevation: 3 },
   tileTitle: { fontSize: 27, fontWeight: "800", color: colors.text, marginTop: 12 },
   tileSubtitle: { fontSize: 15, color: colors.muted, marginTop: 4 }
 });

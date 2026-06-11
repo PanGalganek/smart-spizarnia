@@ -1,18 +1,29 @@
-import { Nutrients } from "@/domain/product";
+import { Nutrients, NutritionBasis, Unit } from "@/domain/product";
+
+export type MealType = "breakfast" | "lunch" | "dinner" | "snack" | "custom";
 
 export type MealIngredient = {
   barcode: string;
   productName: string;
   amount: number;
-  unit: "szt";
-  gramsPerUnit: number;
+  unit: Unit;
+  nutritionBasis: NutritionBasis;
   nutrients: Nutrients;
 };
 
 export type Meal = {
   id: string;
   name: string;
+  type: MealType;
   ingredients: MealIngredient[];
   totals: Nutrients;
+  dateKey: string;
   createdAt: number;
+};
+
+export type DailySummary = {
+  dateKey: string;
+  totals: Nutrients;
+  mealCount: number;
+  updatedAt: number;
 };

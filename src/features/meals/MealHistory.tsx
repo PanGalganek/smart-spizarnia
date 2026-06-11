@@ -35,14 +35,14 @@ export function MealHistory({ meals, onChanged }: Props) {
     }
   }
 
-  async function remove(restoreIngredients: boolean) {
+  async function remove() {
     if (!deleting) return;
     try {
       setBusy(true);
-      await deleteMeal(deleting, restoreIngredients);
+      await deleteMeal(deleting, true);
       setDeleting(null);
       await onChanged();
-      setMessage(restoreIngredients ? "Usunieto posilek i zwrocono produkty." : "Usunieto posilek.");
+      setMessage("Cofnieto posilek i zwrocono produkty do spizarni.");
     } catch {
       setMessage("Nie udalo sie usunac posilku.");
     } finally {
@@ -73,18 +73,17 @@ export function MealHistory({ meals, onChanged }: Props) {
               </View>
             )}
             <Text style={styles.nutrients}>B: {item.totals.proteins ?? 0} g   W: {item.totals.carbohydrates ?? 0} g   T: {item.totals.fat ?? 0} g</Text>
-            {item.ingredients.map((ingredient) => <Text key={ingredient.barcode} style={styles.ingredient}>- {ingredient.productName}: {ingredient.amount} szt.</Text>)}
+            {item.ingredients.map((ingredient) => <Text key={ingredient.barcode} style={styles.ingredient}>- {ingredient.productName}: {ingredient.amount} {ingredient.unit} | {ingredient.nutrients.energyKcal ?? 0} kcal</Text>)}
             {deleting?.id === item.id ? (
               <View style={styles.confirmBox}>
-                <Text style={styles.confirmText}>Czy zwrocic skladniki do spizarni?</Text>
-                <Pressable disabled={busy} onPress={() => void remove(true)} style={styles.restore}><Text style={styles.white}>Usun i zwroc</Text></Pressable>
-                <Pressable disabled={busy} onPress={() => void remove(false)} style={styles.delete}><Text style={styles.white}>Tylko usun</Text></Pressable>
+                <Text style={styles.confirmText}>Cofnac posilek i zwrocic wszystkie skladniki?</Text>
+                <Pressable disabled={busy} onPress={() => void remove()} style={styles.restore}><Text style={styles.white}>Cofnij posilek</Text></Pressable>
                 <Pressable onPress={() => setDeleting(null)} style={styles.cancel}><Text>Anuluj</Text></Pressable>
               </View>
             ) : (
               <View style={styles.actions}>
                 <Pressable onPress={() => startEditing(item)} style={styles.cancel}><Text>Edytuj nazwe</Text></Pressable>
-                <Pressable onPress={() => { setDeleting(item); setEditing(null); }} style={styles.delete}><Text style={styles.white}>Usun</Text></Pressable>
+                <Pressable onPress={() => { setDeleting(item); setEditing(null); }} style={styles.delete}><Text style={styles.white}>Cofnij</Text></Pressable>
               </View>
             )}
           </View>

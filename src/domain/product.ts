@@ -1,3 +1,7 @@
+export type Unit = "g" | "ml" | "szt";
+export type NutritionBasis = "per100" | "perUnit";
+export type PantryStatus = "active" | "consumed";
+
 export type Nutrients = {
   energyKcal?: number;
   proteins?: number;
@@ -14,6 +18,8 @@ export type Product = {
   imageUrl?: string;
   servingSize?: string;
   netWeightGrams?: number;
+  defaultUnit?: Unit;
+  nutritionBasis?: NutritionBasis;
   nutrientsPer100g: Nutrients;
   source: "open-food-facts" | "manual";
   updatedAt: number;
@@ -23,5 +29,9 @@ export type PantryItem = {
   barcode: string;
   product: Product;
   quantity: number;
-  unit: "szt" | "g" | "ml";
+  unit: Unit;
+  expiryDate?: string;
+  location?: string;
+  status?: PantryStatus;
+  updatedAt?: number;
 };

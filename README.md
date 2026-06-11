@@ -1,6 +1,6 @@
 # Smart Spizarnia
 
-Tabletowa aplikacja mobilna do zarzadzania domowa spizarnia. Projekt jest podzielony na niezalezne moduly: Skaner, Spizarnia, Posilki i Zapisane.
+Tabletowa aplikacja mobilna do zarzadzania domowa spizarnia. Projekt jest podzielony na niezalezne moduly: Skaner, Spizarnia, Posilki, Dzisiaj i Zapisane.
 
 ## Technologia
 
@@ -23,6 +23,7 @@ Tabletowa aplikacja mobilna do zarzadzania domowa spizarnia. Projekt jest podzie
 - `src/features/scanner/` - aparat, kody kreskowe i Open Food Facts
 - `src/features/pantry/` - aktualny stan produktow
 - `src/features/meals/` - kreator i historia posilkow
+- `src/features/today/` - dziennik i podsumowanie odzywcze dnia
 - `src/features/saved/` - katalog zapisanych produktow
 - `src/services/` - komunikacja z Firebase i zewnetrznym API
 - `src/domain/` - wspolne modele danych
@@ -31,21 +32,24 @@ Tabletowa aplikacja mobilna do zarzadzania domowa spizarnia. Projekt jest podzie
 ## Kolekcje Firestore
 
 - `products/{barcode}` - dane produktu z API lub wpisane recznie
-- `pantry/{barcode}` - produkt i aktualna ilosc
-- `meals/{mealId}` - posilek, skladniki i podsumowanie odzywcze
+- `pantry/{barcode}` - produkt, ilosc, jednostka, data waznosci, lokalizacja i status
+- `meals/{mealId}` - typ posilku, data, skladniki z ilosciami oraz podsumowanie odzywcze
+- `dailySummaries/{YYYY-MM-DD}` - dzienna suma kcal, makro i liczba posilkow
 
 Reguly Firestore ograniczaja odczyt i zapis do jednego, wskazanego konta tabletu. Samodzielna rejestracja nowych uzytkownikow jest wylaczona.
 
-Zmiana stanu produktu jest transakcja Firestore, co chroni licznik przed przypadkowym nadpisaniem. Zapis posilku i odjecie wszystkich jego skladnikow powinny byc jedna transakcja.
+Utworzenie posilku, odjecie wszystkich skladnikow i aktualizacja podsumowania dnia sa jedna transakcja Firestore. Cofniecie posilku atomowo przywraca te same ilosci i odejmuje wartosci posilku od podsumowania dnia.
 
-## Stan pierwszej wersji
+## Licznik kalorii i posilki
 
-Gotowe sa: trwale logowanie, ekran czterech kafelkow, skanowanie aparatem, reczne wpisanie kodu, pobieranie danych Open Food Facts, formularz produktu spoza API, dodawanie i odejmowanie sztuk oraz listy spizarni i zapisanych produktow.
+Produkty moga byc przechowywane w gramach, mililitrach albo sztukach. Kazdy wpis spizarni zawiera ilosc, jednostke, termin waznosci, lokalizacje i status. Dane odzywcze pochodza z Open Food Facts albo sa uzupelniane recznie.
 
-Kreator posilkow wybiera produkty bezposrednio ze spizarni, na zywo sumuje kcal i skladniki odzywcze, a podczas zapisu transakcyjnie odejmuje wszystkie wykorzystane produkty. Jezeli API nie podaje masy opakowania, kalkulator przyjmuje 100 g na sztuke.
+Kreator posilkow wybiera produkty bezposrednio ze spizarni, blokuje ilosc wieksza od dostepnej i na zywo sumuje kcal, bialko, tluszcz oraz weglowodany. Dla produktu liczonego na 100 g uzycie jednostki `szt` wymaga podania rzeczywistej masy jednej sztuki.
 
-Historia posilkow pokazuje skladniki i podsumowanie odzywcze. Pozwala zmienic nazwe posilku oraz usunac wpis z wyborem, czy zuzyte produkty maja zostac zwrocone do spizarni.
+Ekran Dzisiaj pokazuje posilki, ich skladniki, kalorie oraz dzienna sume. Cofniecie posilku przywraca dokladnie wykorzystane ilosci do spizarni.
 
-Do kolejnej iteracji pozostaja: edycja danych produktow, historia zmian stanu oraz testy aparatu i interfejsu na fizycznym tablecie.
+## Weryfikacja
 
-Projekt przechodzi `npm run typecheck` oraz testowe pakowanie `expo export --platform android`.
+Uruchom `npm test`, `npm run typecheck` oraz testowe pakowanie Expo dla platform `web` i `android`. Testy obejmuja obliczenia kcal, jednostki, odejmowanie stanu, blokowanie nadmiernego zuzycia, oznaczenie produktu jako zuzyty, cofanie posilku i brak danych kalorycznych.
+
+Do testow na fizycznym tablecie pozostaja aparat, ergonomia dotykowa oraz zachowanie przy chwilowej utracie sieci.

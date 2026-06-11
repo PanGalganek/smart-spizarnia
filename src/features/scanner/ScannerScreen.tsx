@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
 import { colors } from "@/core/theme";
-import { Product } from "@/domain/product";
+import { Product, Unit } from "@/domain/product";
 import { ManualProductForm } from "@/features/scanner/ManualProductForm";
 import { getProductByBarcode } from "@/services/openFoodFacts";
 import { changePantryQuantity } from "@/services/inventoryRepository";
@@ -15,6 +15,10 @@ export function ScannerScreen() {
   const [cameraOpen, setCameraOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [message, setMessage] = useState("Zeskanuj kod lub wpisz go recznie.");
+  const [stockAmount, setStockAmount] = useState("1");
+  const [stockUnit, setStockUnit] = useState<Unit>("szt");
+  const [expiryDate, setExpiryDate] = useState("");
+  const [location, setLocation] = useState("");
 
   async function search(value = barcode) {
     const normalized = value.trim();
@@ -24,6 +28,7 @@ export function ScannerScreen() {
     try {
       const result = await getProductByBarcode(normalized);
       setProduct(result);
+      if (result) setStockUnit(result.defaultUnit ?? "szt");
       setManualOpen(!result);
       setMessage(result ? "Produkt znaleziony." : "Brak produktu w Open Food Facts. Wymagany wpis reczny.");
     } catch {
@@ -42,10 +47,15 @@ export function ScannerScreen() {
     void search(result.data);
   }
 
-  async function update(delta: number) {
+  async function update(direction: 1 | -1) {
     if (!product) return;
-    await changePantryQuantity(product, delta);
-    setMessage(delta > 0 ? "Dodano produkt do spizarni." : "Odjeto produkt ze spizarni.");
+    const amount = Number(stockAmount.replace(",", "."));
+    if (!Number.isFinite(amount) || amount <= 0) return setMessage("Wpisz prawidlowa ilosc.");
+    if (direction > 0 && (!expiryDate.trim() || !location.trim())) return setMessage("Podaj date waznosci i lokalizacje produktu.");
+    try {
+      await changePantryQuantity(product, amount * direction, stockUnit, { expiryDate: expiryDate.trim() || undefined, location: location.trim() || undefined });
+      setMessage(direction > 0 ? "Dodano produkt do spizarni." : "Odjeto produkt ze spizarni.");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Nie udalo sie zmienic stanu."); }
   }
 
   return (
@@ -80,10 +90,14 @@ export function ScannerScreen() {
               <Text>{product.brand}</Text>
               <Text>{product.nutrientsPer100g.energyKcal ?? "-"} kcal / 100 g</Text>
               <Text>B: {product.nutrientsPer100g.proteins ?? "-"} g  W: {product.nutrientsPer100g.carbohydrates ?? "-"} g  T: {product.nutrientsPer100g.fat ?? "-"} g</Text>
+              <View style={styles.row}><TextInput value={expiryDate} onChangeText={setExpiryDate} placeholder="Data waznosci RRRR-MM-DD" style={styles.metaInput} /><TextInput value={location} onChangeText={setLocation} placeholder="Lokalizacja" style={styles.metaInput} /></View>
               <View style={styles.actions}>
+                <TextInput value={stockAmount} onChangeText={setStockAmount} keyboardType="decimal-pad" style={styles.amount} />
+                {(["g", "ml", "szt"] as Unit[]).map((unit) => <Pressable key={unit} onPress={() => setStockUnit(unit)} style={[styles.unitChoice, stockUnit === unit && styles.unitActive]}><Text style={stockUnit === unit ? styles.white : undefined}>{unit}</Text></Pressable>)}
                 <Pressable onPress={() => void update(1)} style={styles.button}><Text style={styles.white}>+ Dodaj</Text></Pressable>
                 <Pressable onPress={() => void update(-1)} style={styles.remove}><Text style={styles.white}>- Odejmij</Text></Pressable>
               </View>
+              {product.nutrientsPer100g.energyKcal === undefined && <Pressable onPress={() => setManualOpen(true)} style={styles.manual}><Text style={styles.white}>Uzupelnij kalorie recznie</Text></Pressable>}
             </View>
           )}
         </View>
@@ -104,6 +118,9 @@ const styles = StyleSheet.create({
   product: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 18, gap: 8 },
   name: { fontSize: 24, fontWeight: "800" },
   actions: { flexDirection: "row", gap: 12, marginTop: 12 },
+  amount: { width: 80, backgroundColor: colors.background, borderRadius: 10, padding: 12, textAlign: "center" },
+  metaInput: { flex: 1, backgroundColor: colors.background, borderRadius: 10, padding: 12 },
+  unitChoice: { backgroundColor: colors.background, padding: 12, borderRadius: 10 }, unitActive: { backgroundColor: colors.primary },
   remove: { backgroundColor: colors.danger, padding: 15, borderRadius: 12 },
   cameraBox: { flex: 1, borderRadius: 20, overflow: "hidden" },
   camera: { flex: 1 },
