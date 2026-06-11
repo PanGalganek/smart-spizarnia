@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { PantryItem, Product } from "@/domain/product";
-import { calculateNutrients, consumePantryItem, createMealIngredient, restorePantryItem } from "@/services/nutrition";
+import { calculateNutrients, consumePantryItem, createMealIngredient, createUntrackedMealIngredient, restorePantryItem } from "@/services/nutrition";
 
 function product(overrides: Partial<Product> = {}): Product {
   return {
@@ -65,5 +65,20 @@ describe("brak danych kalorycznych", () => {
       product: product({ defaultUnit: "szt", nutritionBasis: "per100" })
     });
     expect(() => createMealIngredient(item, 1)).toThrow("Uzupelnij mase jednej sztuki");
+  });
+});
+
+describe("produkt spozyty bez dodawania do spizarni", () => {
+  it("liczy wartosci i oznacza skladnik jako niepowiazany ze stanem", () => {
+    expect(createUntrackedMealIngredient(product({ name: "Baton" }), 50, "g")).toMatchObject({
+      productName: "Baton",
+      amount: 50,
+      tracksPantry: false,
+      nutrients: { energyKcal: 125, proteins: 5, carbohydrates: 2, fat: 10 }
+    });
+  });
+
+  it("nadal wymaga kalorii", () => {
+    expect(() => createUntrackedMealIngredient(product({ nutrientsPer100g: {} }), 1, "g")).toThrow("Uzupelnij kalorie produktu");
   });
 });

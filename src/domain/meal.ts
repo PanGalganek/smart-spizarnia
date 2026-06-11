@@ -9,6 +9,7 @@ export type MealIngredient = {
   unit: Unit;
   nutritionBasis: NutritionBasis;
   nutrients: Nutrients;
+  tracksPantry?: boolean;
 };
 
 export type Meal = {

@@ -25,7 +25,25 @@ export function createMealIngredient(item: PantryItem, amount: number): MealIngr
     amount: round(amount),
     unit: item.unit,
     nutritionBasis: item.product.nutritionBasis ?? "per100",
-    nutrients: calculateNutrients(item.product, amount, item.unit)
+    nutrients: calculateNutrients(item.product, amount, item.unit),
+    tracksPantry: true
+  };
+}
+
+export function createUntrackedMealIngredient(product: Product, amount: number, unit: Unit): MealIngredient {
+  if (!Number.isFinite(amount) || amount <= 0) throw new Error("Ilosc musi byc wieksza od zera.");
+  if (product.nutrientsPer100g.energyKcal === undefined) throw new Error(`Uzupelnij kalorie produktu: ${product.name}`);
+  if (unit === "szt" && (product.nutritionBasis ?? "per100") === "per100" && !product.netWeightGrams) {
+    throw new Error(`Uzupelnij mase jednej sztuki: ${product.name}`);
+  }
+  return {
+    barcode: product.barcode,
+    productName: product.name,
+    amount: round(amount),
+    unit,
+    nutritionBasis: product.nutritionBasis ?? "per100",
+    nutrients: calculateNutrients(product, amount, unit),
+    tracksPantry: false
   };
 }
 

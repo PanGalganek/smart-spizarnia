@@ -2,6 +2,8 @@ import { useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
+import { DatePickerField, formatPolishDate } from "@/core/components/DatePickerField";
+import { LocationPicker } from "@/core/components/LocationPicker";
 import { colors } from "@/core/theme";
 import { PantryItem, Unit } from "@/domain/product";
 import { listPantry, savePantryItem } from "@/services/inventoryRepository";
@@ -50,15 +52,15 @@ export function PantryScreen() {
               <View style={styles.row}>
                 <Field label="Ilosc" value={quantity} onChangeText={setQuantity} numeric />
                 <View style={styles.field}><Text style={styles.label}>Jednostka</Text><View style={styles.units}>{(["g", "ml", "szt"] as Unit[]).map((value) => <Pressable key={value} onPress={() => setUnit(value)} style={[styles.unit, unit === value && styles.unitActive]}><Text style={unit === value ? styles.white : undefined}>{value}</Text></Pressable>)}</View></View>
-                <Field label="Data waznosci" value={expiryDate} onChangeText={setExpiryDate} />
-                <Field label="Lokalizacja" value={location} onChangeText={setLocation} />
+                <DatePickerField value={expiryDate} onChange={setExpiryDate} />
+                <LocationPicker value={location} onChange={setLocation} />
               </View>
               <View style={styles.actions}><Pressable onPress={() => setEditing(null)} style={styles.cancel}><Text>Anuluj</Text></Pressable><Pressable onPress={() => void save()} style={styles.save}><Text style={styles.white}>Zapisz</Text></Pressable></View>
             </View>
           ) : (
             <>
               <View style={styles.header}><View style={{ flex: 1 }}><Text style={styles.name}>{item.product.name}</Text><Text style={styles.muted}>{item.barcode} | {item.location || "brak lokalizacji"}</Text></View><Text style={styles.qty}>{item.quantity} {item.unit}</Text></View>
-              <View style={styles.meta}><Text>{item.expiryDate ? `Wazne do: ${item.expiryDate}` : "Brak daty waznosci"}</Text><Text style={item.quantity === 0 ? styles.used : styles.active}>{item.quantity === 0 ? "ZUŻYTY" : "AKTYWNY"}</Text></View>
+              <View style={styles.meta}><Text>{item.expiryDate ? `Wazne do: ${formatPolishDate(item.expiryDate)}` : "Brak daty waznosci"}</Text><Text style={item.quantity === 0 ? styles.used : styles.active}>{item.quantity === 0 ? "ZUZYTY" : "AKTYWNY"}</Text></View>
               <Pressable onPress={() => startEdit(item)} style={styles.edit}><Text>Edytuj stan i dane</Text></Pressable>
             </>
           )}

@@ -2,12 +2,15 @@ import { useCameraPermissions } from "expo-camera";
 import { useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
+import { DatePickerField } from "@/core/components/DatePickerField";
+import { LocationPicker } from "@/core/components/LocationPicker";
 import { colors } from "@/core/theme";
 import { Product, Unit } from "@/domain/product";
 import { ManualProductForm } from "@/features/scanner/ManualProductForm";
 import { BarcodeCamera } from "@/features/scanner/BarcodeCamera";
 import { getProductByBarcode } from "@/services/openFoodFacts";
-import { changePantryQuantity } from "@/services/inventoryRepository";
+import { changePantryQuantity, createUntrackedMeal, saveProduct } from "@/services/inventoryRepository";
+import { createUntrackedMealIngredient } from "@/services/nutrition";
 
 export function ScannerScreen() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -68,8 +71,8 @@ export function ScannerScreen() {
     if (!Number.isFinite(amount) || amount <= 0) {
       setActionError(true); setActionMessage("Wpisz prawidlowa ilosc."); return;
     }
-    if (direction > 0 && (!expiryDate.trim() || !location.trim())) {
-      setActionError(true); setActionMessage("Przed dodaniem uzupelnij date waznosci i lokalizacje."); return;
+    if (direction > 0 && !location.trim()) {
+      setActionError(true); setActionMessage("Przed dodaniem wybierz lokalizacje. Data waznosci jest opcjonalna."); return;
     }
     try {
       setBusy(true);
@@ -80,6 +83,24 @@ export function ScannerScreen() {
     } catch (error) {
       setActionError(true);
       setActionMessage(error instanceof Error ? error.message : "Nie udalo sie zmienic stanu.");
+    } finally { setBusy(false); }
+  }
+
+  async function eatNow() {
+    if (!product) return;
+    const amount = Number(stockAmount.replace(",", "."));
+    setActionMessage("");
+    setActionError(false);
+    try {
+      setBusy(true);
+      const ingredient = createUntrackedMealIngredient(product, amount, stockUnit);
+      await saveProduct(product);
+      await createUntrackedMeal(`Przekaska: ${product.name}`, "snack", ingredient);
+      setActionMessage(`Dodano do dzisiejszego bilansu: ${amount} ${stockUnit}, ${ingredient.nutrients.energyKcal ?? 0} kcal. Stan spizarni nie zostal zmieniony.`);
+      setMessage("Produkt zapisany w dzisiejszym bilansie.");
+    } catch (error) {
+      setActionError(true);
+      setActionMessage(error instanceof Error ? error.message : "Nie udalo sie zapisac produktu w bilansie.");
     } finally { setBusy(false); }
   }
 
@@ -113,12 +134,13 @@ export function ScannerScreen() {
               <Text style={styles.package}>Gramatura opakowania: {product.packageAmount ? `${product.packageAmount} ${product.packageUnit}` : product.servingSize || "brak danych"}</Text>
               <Text>{product.nutrientsPer100g.energyKcal ?? "-"} kcal / 100 g</Text>
               <Text>B: {product.nutrientsPer100g.proteins ?? "-"} g  W: {product.nutrientsPer100g.carbohydrates ?? "-"} g  T: {product.nutrientsPer100g.fat ?? "-"} g</Text>
-              <View style={styles.row}><TextInput value={expiryDate} onChangeText={setExpiryDate} placeholder="Data waznosci RRRR-MM-DD *" style={styles.metaInput} /><TextInput value={location} onChangeText={setLocation} placeholder="Lokalizacja *" style={styles.metaInput} /></View>
+              <View style={styles.row}><DatePickerField value={expiryDate} onChange={setExpiryDate} /><LocationPicker value={location} onChange={setLocation} label="Lokalizacja w spizarni" /></View>
               <View style={styles.actions}>
                 <TextInput value={stockAmount} onChangeText={setStockAmount} keyboardType="decimal-pad" style={styles.amount} />
                 {(["g", "ml", "szt"] as Unit[]).map((unit) => <Pressable key={unit} onPress={() => setStockUnit(unit)} style={[styles.unitChoice, stockUnit === unit && styles.unitActive]}><Text style={stockUnit === unit ? styles.white : undefined}>{unit}</Text></Pressable>)}
                 <Pressable disabled={busy} onPress={() => void update(1)} style={[styles.button, busy && styles.disabled]}><Text style={styles.white}>{busy ? "Zapisywanie..." : "+ Dodaj"}</Text></Pressable>
                 <Pressable disabled={busy} onPress={() => void update(-1)} style={[styles.remove, busy && styles.disabled]}><Text style={styles.white}>- Odejmij</Text></Pressable>
+                <Pressable disabled={busy} onPress={() => void eatNow()} style={[styles.eat, busy && styles.disabled]}><Text style={styles.white}>Zjedz teraz - tylko do bilansu</Text></Pressable>
               </View>
               {!!actionMessage && <Text style={[styles.actionMessage, actionError ? styles.actionError : styles.actionSuccess]}>{actionMessage}</Text>}
               {product.nutrientsPer100g.energyKcal === undefined && <Pressable onPress={() => setManualOpen(true)} style={styles.manual}><Text style={styles.white}>Uzupelnij kalorie recznie</Text></Pressable>}
@@ -147,6 +169,7 @@ const styles = StyleSheet.create({
   metaInput: { flex: 1, backgroundColor: colors.background, borderRadius: 10, padding: 12 },
   unitChoice: { backgroundColor: colors.background, padding: 12, borderRadius: 10 }, unitActive: { backgroundColor: colors.primary },
   remove: { backgroundColor: colors.danger, padding: 15, borderRadius: 12 },
+  eat: { backgroundColor: "#EF6C00", padding: 15, borderRadius: 12 },
   actionMessage: { fontSize: 17, fontWeight: "800", padding: 14, borderRadius: 10 },
   actionSuccess: { color: "#1B5E20", backgroundColor: "#E8F5E9" },
   actionError: { color: colors.danger, backgroundColor: "#FFEBEE" },

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { colors } from "@/core/theme";
+import { DatePickerField } from "@/core/components/DatePickerField";
+import { LocationPicker } from "@/core/components/LocationPicker";
 import { Nutrients, NutritionBasis, Product, Unit } from "@/domain/product";
 import { savePantryItem, saveProduct } from "@/services/inventoryRepository";
 
@@ -36,7 +38,7 @@ export function ManualProductForm({ barcode, onCancel, onSaved }: Props) {
     if (kcal === undefined) return setError("Wpisz kalorie produktu. Bez nich produkt nie moze trafic do posilku.");
     if (basis === "perUnit" && unit !== "szt") return setError("Kalorie na sztuke wymagaja jednostki szt.");
     if (basis === "per100" && unit === "szt" && !numberValue("netWeightGrams")) return setError("Podaj mase jednej sztuki, aby poprawnie liczyc kalorie.");
-    if ((numberValue("quantity") ?? 0) > 0 && (!expiryDate.trim() || !location.trim())) return setError("Dla produktu w spizarni podaj date waznosci i lokalizacje.");
+    if ((numberValue("quantity") ?? 0) > 0 && !location.trim()) return setError("Dla produktu w spizarni wybierz lokalizacje. Data waznosci jest opcjonalna.");
 
     const product: Product = {
       barcode: barcode.trim(), name: name.trim(), ...(brand.trim() ? { brand: brand.trim() } : {}),
@@ -70,8 +72,8 @@ export function ManualProductForm({ barcode, onCancel, onSaved }: Props) {
       </View>
       <Text style={styles.section}>Jednostka stanu</Text><ChoiceRow values={["g", "ml", "szt"]} selected={unit} onSelect={(value) => { setUnit(value as Unit); if (value !== "szt") setBasis("per100"); }} />
       <View style={styles.row}>
-        <Field label="Data waznosci (RRRR-MM-DD)" value={expiryDate} onChangeText={setExpiryDate} />
-        <Field label="Lokalizacja" value={location} onChangeText={setLocation} />
+        <DatePickerField value={expiryDate} onChange={setExpiryDate} />
+        <LocationPicker value={location} onChange={setLocation} />
         {unit === "szt" && <Field label="Masa 1 sztuki (g)" value={numbers.netWeightGrams} onChangeText={(v) => setNumber("netWeightGrams", v)} numeric />}
       </View>
       <Text style={styles.section}>Sposob liczenia</Text><ChoiceRow values={["per100", "perUnit"]} labels={["na 100 g/ml", "na sztuke"]} selected={basis} onSelect={(value) => setBasis(value as NutritionBasis)} disabled={unit !== "szt"} />

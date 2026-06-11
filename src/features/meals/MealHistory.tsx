@@ -61,8 +61,9 @@ export function MealHistory({ meals, onChanged }: Props) {
         data={meals}
         keyExtractor={(item) => item.id}
         ListEmptyComponent={<Text style={styles.empty}>Nie zapisano jeszcze zadnego posilku.</Text>}
-        renderItem={({ item }) => (
-          <View style={styles.card}>
+        renderItem={({ item }) => {
+          const canRestore = item.ingredients.some((ingredient) => ingredient.tracksPantry !== false);
+          return <View style={styles.card}>
             {editing?.id === item.id ? (
               <View style={styles.editRow}>
                 <TextInput value={name} onChangeText={setName} style={styles.input} />
@@ -86,12 +87,12 @@ export function MealHistory({ meals, onChanged }: Props) {
             ) : (
               <View style={styles.actions}>
                 <Pressable onPress={() => startEditing(item)} style={styles.cancel}><Text>Edytuj nazwe</Text></Pressable>
-                <Pressable onPress={() => { setDeleting(item); setDeleteMode("restore"); setEditing(null); }} style={styles.restore}><Text style={styles.white}>Cofnij</Text></Pressable>
+                {canRestore && <Pressable onPress={() => { setDeleting(item); setDeleteMode("restore"); setEditing(null); }} style={styles.restore}><Text style={styles.white}>Cofnij</Text></Pressable>}
                 <Pressable onPress={() => { setDeleting(item); setDeleteMode("history"); setEditing(null); }} style={styles.delete}><Text style={styles.white}>Usun wpis</Text></Pressable>
               </View>
             )}
-          </View>
-        )}
+          </View>;
+        }}
       />
     </View>
   );

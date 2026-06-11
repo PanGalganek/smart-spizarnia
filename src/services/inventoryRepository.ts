@@ -31,7 +31,8 @@ function normalizeMeal(meal: Meal): Meal {
     ingredients: meal.ingredients.map((item) => ({
       ...item,
       unit: item.unit ?? "szt",
-      nutritionBasis: item.nutritionBasis ?? "per100"
+      nutritionBasis: item.nutritionBasis ?? "per100",
+      tracksPantry: item.tracksPantry ?? true
     }))
   };
 }
@@ -149,6 +150,41 @@ export async function createMeal(
   return meal;
 }
 
+export async function createUntrackedMeal(
+  name: string,
+  type: MealType,
+  ingredient: MealIngredient,
+  createdAt = Date.now()
+): Promise<Meal> {
+  const mealRef = doc(meals);
+  const day = dateKey(createdAt);
+  const summaryRef = doc(dailySummaries, day);
+  const meal: Meal = {
+    id: mealRef.id,
+    name,
+    type,
+    ingredients: [{ ...ingredient, tracksPantry: false }],
+    totals: ingredient.nutrients,
+    dateKey: day,
+    createdAt
+  };
+
+  await runTransaction(db, async (transaction) => {
+    const summarySnapshot = await transaction.get(summaryRef);
+    const current = summarySnapshot.exists()
+      ? summarySnapshot.data() as DailySummary
+      : { dateKey: day, totals: {}, mealCount: 0, updatedAt: createdAt };
+    transaction.set(summaryRef, withoutUndefined({
+      dateKey: day,
+      totals: addNutrients(current.totals ?? {}, meal.totals),
+      mealCount: (current.mealCount ?? 0) + 1,
+      updatedAt: Date.now()
+    }));
+    transaction.set(mealRef, withoutUndefined(meal));
+  });
+  return meal;
+}
+
 export async function listMeals(day?: string): Promise<Meal[]> {
   const snapshot = await getDocs(meals);
   return snapshot.docs
@@ -180,12 +216,13 @@ export async function deleteMeal(mealInput: Meal, restoreIngredients = true) {
   const summaryRef = doc(dailySummaries, meal.dateKey);
 
   await runTransaction(db, async (transaction) => {
-    const pantryRefs = restoreIngredients ? meal.ingredients.map((item) => doc(pantry, item.barcode)) : [];
+    const restorableIngredients = restoreIngredients ? meal.ingredients.filter((item) => item.tracksPantry !== false) : [];
+    const pantryRefs = restorableIngredients.map((item) => doc(pantry, item.barcode));
     const pantrySnapshots = await Promise.all(pantryRefs.map((ref) => transaction.get(ref)));
     const summarySnapshot = await transaction.get(summaryRef);
 
     pantrySnapshots.forEach((snapshot, index) => {
-      const ingredient = meal.ingredients[index];
+      const ingredient = restorableIngredients[index];
       const current = snapshot.exists() ? normalizePantryItem(snapshot.data() as PantryItem) : null;
       if (!current) throw new Error(`Nie mozna przywrocic produktu: ${ingredient.productName}`);
       if (current.unit !== ingredient.unit) throw new Error(`Jednostka produktu ulegla zmianie: ${ingredient.productName}`);
@@ -194,7 +231,7 @@ export async function deleteMeal(mealInput: Meal, restoreIngredients = true) {
     pantrySnapshots.forEach((snapshot, index) => {
       const current = normalizePantryItem(snapshot.data() as PantryItem);
       transaction.update(pantryRefs[index], {
-        quantity: Math.round((current.quantity + meal.ingredients[index].amount) * 100) / 100,
+        quantity: Math.round((current.quantity + restorableIngredients[index].amount) * 100) / 100,
         status: "active",
         updatedAt: Date.now()
       });
