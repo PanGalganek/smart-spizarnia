@@ -14,6 +14,8 @@ export function BarcodeCamera({ onCancel, onScanned }: Props) {
   const [status, setStatus] = useState("Uruchamianie tylnej kamery HD...");
   const [torch, setTorch] = useState(false);
   const [torchAvailable, setTorchAvailable] = useState(false);
+  const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
+  const [cameraIndex, setCameraIndex] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -21,13 +23,17 @@ export function BarcodeCamera({ onCancel, onScanned }: Props) {
 
     async function start() {
       try {
+        const devices = (await navigator.mediaDevices.enumerateDevices()).filter((device) => device.kind === "videoinput");
+        const ordered = orderCameras(devices);
+        if (active) setCameras(ordered);
+        const selected = ordered[cameraIndex];
         const controls = await reader.decodeFromConstraints(
           {
             audio: false,
             video: {
-              facingMode: { ideal: "environment" },
-              width: { ideal: 1920 },
-              height: { ideal: 1080 },
+              ...(selected?.deviceId && selected.label ? { deviceId: { exact: selected.deviceId } } : { facingMode: { ideal: "environment" } }),
+              width: { ideal: 2560 },
+              height: { ideal: 1440 },
               frameRate: { ideal: 30 }
             }
           },
@@ -42,9 +48,15 @@ export function BarcodeCamera({ onCancel, onScanned }: Props) {
         );
         if (!active) return controls.stop();
         controlsRef.current = controls;
-        const capabilities = controls.streamVideoCapabilitiesGet?.((track) => [track]);
+        const track = (videoRef.current?.srcObject as MediaStream | null)?.getVideoTracks()[0];
+        const capabilities = track?.getCapabilities() as ExtendedCapabilities | undefined;
+        if (track && capabilities) await improveCameraTrack(track, capabilities);
+        const refreshed = (await navigator.mediaDevices.enumerateDevices()).filter((device) => device.kind === "videoinput");
+        if (active) setCameras(orderCameras(refreshed));
         setTorchAvailable(Boolean(capabilities && "torch" in capabilities));
-        setStatus("Umiesc caly kod w ramce. Kod powinien zajmowac wiekszosc pola.");
+        const settings = track?.getSettings();
+        const resolution = settings?.width && settings?.height ? ` (${settings.width}x${settings.height})` : "";
+        setStatus(`Aparat gotowy${resolution}. Trzymaj kod 15-25 cm od obiektywu.`);
       } catch (error) {
         if (!active) return;
         const name = error instanceof Error ? error.name : "";
@@ -60,7 +72,7 @@ export function BarcodeCamera({ onCancel, onScanned }: Props) {
       controlsRef.current?.stop();
       controlsRef.current = null;
     };
-  }, [onScanned]);
+  }, [cameraIndex, onScanned]);
 
   async function toggleTorch() {
     if (!controlsRef.current?.switchTorch) return;
@@ -71,6 +83,16 @@ export function BarcodeCamera({ onCancel, onScanned }: Props) {
     } catch {
       setStatus("Latarka nie jest obslugiwana przez ten aparat.");
     }
+  }
+
+  function switchCamera() {
+    if (cameras.length < 2) return;
+    controlsRef.current?.stop();
+    controlsRef.current = null;
+    handledRef.current = false;
+    setTorch(false);
+    setStatus("Zmiana aparatu...");
+    setCameraIndex((current) => (current + 1) % cameras.length);
   }
 
   return (
@@ -87,6 +109,7 @@ export function BarcodeCamera({ onCancel, onScanned }: Props) {
         <View style={styles.target}><View style={styles.line} /></View>
       </View>
       <View style={styles.actions}>
+        {cameras.length > 1 && <Pressable onPress={switchCamera} style={styles.control}><Text style={styles.white}>Zmien aparat</Text></Pressable>}
         {torchAvailable && <Pressable onPress={() => void toggleTorch()} style={styles.control}><Text style={styles.white}>{torch ? "Wylacz latarke" : "Wlacz latarke"}</Text></Pressable>}
         <Pressable onPress={onCancel} style={styles.cancel}><Text style={styles.white}>Anuluj</Text></Pressable>
       </View>
@@ -96,7 +119,7 @@ export function BarcodeCamera({ onCancel, onScanned }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, minHeight: 420, borderRadius: 20, overflow: "hidden", backgroundColor: "#111" },
-  video: { position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" },
+  video: { position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" },
   overlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", padding: 24 },
   help: { position: "absolute", top: 24, color: "white", fontSize: 17, fontWeight: "700", backgroundColor: "rgba(0,0,0,0.7)", paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, textAlign: "center" },
   target: { width: "72%", maxWidth: 620, height: 190, borderWidth: 4, borderColor: "white", borderRadius: 18, justifyContent: "center" },
@@ -106,3 +129,36 @@ const styles = StyleSheet.create({
   cancel: { backgroundColor: "#C62828", padding: 14, borderRadius: 12 },
   white: { color: "white", fontWeight: "700" }
 });
+
+type ExtendedCapabilities = MediaTrackCapabilities & {
+  focusMode?: string[];
+  focusDistance?: { min: number; max: number };
+  torch?: boolean;
+  width?: { max: number };
+  height?: { max: number };
+};
+
+async function improveCameraTrack(track: MediaStreamTrack, capabilities: ExtendedCapabilities) {
+  const advanced: Record<string, unknown>[] = [];
+  if (capabilities.focusMode?.includes("continuous")) advanced.push({ focusMode: "continuous" });
+  const constraints: MediaTrackConstraints = {
+    width: capabilities.width?.max ? { ideal: Math.min(capabilities.width.max, 2560) } : { ideal: 1920 },
+    height: capabilities.height?.max ? { ideal: Math.min(capabilities.height.max, 1440) } : { ideal: 1080 },
+    ...(advanced.length ? { advanced: advanced as MediaTrackConstraintSet[] } : {})
+  };
+  try { await track.applyConstraints(constraints); } catch { /* Keep the best settings selected by Chrome. */ }
+}
+
+function orderCameras(devices: MediaDeviceInfo[]) {
+  return [...devices].sort((left, right) => cameraScore(right.label) - cameraScore(left.label));
+}
+
+function cameraScore(label: string) {
+  const value = label.toLowerCase();
+  let score = 0;
+  if (/back|rear|environment|tyl|camera2 0/.test(value)) score += 20;
+  if (/front|user|przed/.test(value)) score -= 30;
+  if (/ultra|wide|0\.5|macro|depth/.test(value)) score -= 15;
+  if (/main|primary|standard|1x/.test(value)) score += 10;
+  return score;
+}

@@ -25,8 +25,8 @@ export function BarcodeCamera({ onCancel, onScanned }: Props) {
         style={styles.camera}
         facing="back"
         autofocus="off"
-        zoom={0.08}
-        ratio="16:9"
+        zoom={0}
+        ratio="4:3"
         enableTorch={torch}
         barcodeScannerSettings={{ barcodeTypes: [...barcodeTypes] }}
         onCameraReady={() => setReady(true)}
@@ -34,7 +34,7 @@ export function BarcodeCamera({ onCancel, onScanned }: Props) {
         onBarcodeScanned={handleScan}
       />
       <View pointerEvents="none" style={styles.overlay}>
-        <Text style={styles.help}>{ready ? "Umiesc caly kod w ramce i zbliz tablet" : "Uruchamianie aparatu..."}</Text>
+        <Text style={styles.help}>{ready ? "Trzymaj kod 15-25 cm od aparatu i poczekaj na ostrosc" : "Uruchamianie aparatu..."}</Text>
         <View style={styles.target}><View style={styles.line} /></View>
       </View>
       <View style={styles.actions}>
