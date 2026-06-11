@@ -1,6 +1,6 @@
 import { useCameraPermissions } from "expo-camera";
 import { useState } from "react";
-import { Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
 import { DatePickerField } from "@/core/components/DatePickerField";
 import { LocationPicker } from "@/core/components/LocationPicker";
@@ -119,6 +119,12 @@ export function ScannerScreen() {
       ) : cameraOpen ? (
         <BarcodeCamera onCancel={() => setCameraOpen(false)} onScanned={scanned} />
       ) : (
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator
+        >
         <View style={styles.card}>
           <View style={styles.row}>
             <TextInput keyboardType="number-pad" value={barcode} onChangeText={setBarcode} placeholder="Kod kreskowy" style={styles.input} />
@@ -147,12 +153,15 @@ export function ScannerScreen() {
             </View>
           )}
         </View>
+        </ScrollView>
       )}
     </ModuleScreen>
   );
 }
 
 const styles = StyleSheet.create({
+  scroll: { flex: 1 },
+  scrollContent: { flexGrow: 1, paddingBottom: 36 },
   card: { backgroundColor: colors.surface, padding: 24, borderRadius: 20 },
   row: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   input: { flex: 1, backgroundColor: colors.background, padding: 16, borderRadius: 12, fontSize: 18 },
