@@ -1,6 +1,6 @@
 import { useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import { FlatList, GestureResponderEvent, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { FlatList, GestureResponderEvent, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
 import { colors } from "@/core/theme";
 import { DailySummary, Meal, MealIngredient, MealType } from "@/domain/meal";
@@ -20,6 +20,8 @@ const mealTypes: { value: MealType; label: string; description: string }[] = [
 type Step = "type" | "products" | "amount" | "review";
 
 export function MealsScreen() {
+  const { width, height } = useWindowDimensions();
+  const compact = width < 700;
   const [pantry, setPantry] = useState<PantryItem[]>([]);
   const [meals, setMeals] = useState<Meal[]>([]);
   const [dailySummary, setDailySummary] = useState<DailySummary>({ dateKey: dateKey(), totals: {}, mealCount: 0, updatedAt: Date.now() });
@@ -123,19 +125,21 @@ export function MealsScreen() {
 
   return (
     <ModuleScreen title="Posilki">
-      <View style={styles.pageHeader}>
-        <View><Text style={styles.pageTitle}>Posilki i dzienny bilans</Text><Text style={styles.muted}>{formatToday()} | Tworz posilki z produktow zapisanych w spizarni.</Text></View>
-        <Pressable onPress={openCreator} style={styles.newButton}><Text style={styles.white}>+ Nowy posilek</Text></Pressable>
-      </View>
-      <DailyNutritionSummary summary={dailySummary} />
-      {!!message && <Text style={styles.successBanner}>{message}</Text>}
-      <MealHistory meals={meals} onChanged={refresh} />
+      <ScrollView style={styles.pageScroll} contentContainerStyle={styles.pageContent} keyboardShouldPersistTaps="handled">
+        <View style={[styles.pageHeader, compact && styles.compactPageHeader]}>
+          <View style={styles.pageHeading}><Text style={styles.pageTitle}>Posilki i dzienny bilans</Text><Text style={styles.muted}>{formatToday()} | Tworz posilki z produktow zapisanych w spizarni.</Text></View>
+          <Pressable onPress={openCreator} style={[styles.newButton, compact && styles.compactNewButton]}><Text style={styles.white}>+ Nowy posilek</Text></Pressable>
+        </View>
+        <DailyNutritionSummary summary={dailySummary} />
+        {!!message && <Text style={styles.successBanner}>{message}</Text>}
+        <MealHistory meals={meals} onChanged={refresh} />
+      </ScrollView>
 
       <Modal visible={creatorOpen} transparent animationType="fade" onRequestClose={() => setCreatorOpen(false)}>
-        <View style={styles.backdrop}>
-          <View style={styles.modalCard}>
+        <View style={[styles.backdrop, compact && styles.compactBackdrop]}>
+          <View style={[styles.modalCard, compact && styles.compactModalCard, { maxHeight: Math.max(320, height - (compact ? 16 : 48)) }]}>
             <View style={styles.modalHeader}>
-              <View><Text style={styles.stepLabel}>{stepLabel(step)}</Text><Text style={styles.modalTitle}>{stepTitle(step, editedItem)}</Text></View>
+              <View style={styles.modalHeading}><Text style={styles.stepLabel}>{stepLabel(step)}</Text><Text style={[styles.modalTitle, compact && styles.compactModalTitle]}>{stepTitle(step, editedItem)}</Text></View>
               <Pressable onPress={() => setCreatorOpen(false)} style={styles.close}><Text style={styles.closeText}>Zamknij</Text></Pressable>
             </View>
 
@@ -145,7 +149,7 @@ export function MealsScreen() {
             {step === "review" && <ReviewStep name={mealName} ingredients={ingredientResult.ingredients} totals={totals} />}
 
             {!!modalMessage && <Text style={styles.errorBanner}>{modalMessage}</Text>}
-            {(step !== "type" || type === "custom") && <View style={styles.modalActions}>
+            {(step !== "type" || type === "custom") && <View style={[styles.modalActions, compact && styles.compactModalActions]}>
               {step !== "type" && <Pressable onPress={() => setStep(step === "amount" ? "products" : step === "review" ? "products" : "type")} style={styles.secondary}><Text>Wstecz</Text></Pressable>}
               <View style={styles.actionSpacer} />
               {step === "type" && type === "custom" && <PrimaryButton label="Dalej: wybierz produkty" onPress={continueFromType} />}
@@ -207,13 +211,13 @@ function stepTitle(step: Step, item: PantryItem | null) { if (step === "type") r
 function formatToday() { return new Date().toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long" }); }
 
 const styles = StyleSheet.create({
-  pageHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }, pageTitle: { fontSize: 22, fontWeight: "800" }, muted: { color: colors.muted, fontSize: 13 }, newButton: { backgroundColor: colors.primary, paddingHorizontal: 22, paddingVertical: 14, borderRadius: 12 }, white: { color: "white", fontWeight: "800" },
+  pageScroll: { flex: 1, minHeight: 0 }, pageContent: { paddingBottom: 36 }, pageHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 14, marginBottom: 14 }, compactPageHeader: { alignItems: "stretch", flexDirection: "column" }, pageHeading: { flex: 1, minWidth: 0 }, pageTitle: { fontSize: 22, fontWeight: "800" }, muted: { color: colors.muted, fontSize: 13, flexShrink: 1 }, newButton: { backgroundColor: colors.primary, paddingHorizontal: 22, paddingVertical: 14, borderRadius: 12 }, compactNewButton: { alignItems: "center", width: "100%" }, white: { color: "white", fontWeight: "800" },
   dailyPanel: { backgroundColor: colors.surface, borderRadius: 18, padding: 15, marginBottom: 12 }, dailyHeading: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 9 }, dailyTitle: { fontSize: 19, fontWeight: "900" }, dailyCount: { color: colors.muted, fontWeight: "700" }, dailyGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 }, dailyItem: { flexGrow: 1, flexBasis: 90, minWidth: 90, backgroundColor: colors.background, borderRadius: 11, padding: 10 }, dailyValue: { fontSize: 15, fontWeight: "900", color: colors.text }, dailyKcal: { color: colors.primary, fontSize: 19 }, dailyLabel: { color: colors.muted, fontSize: 12, marginTop: 2 },
-  successBanner: { color: "#1B5E20", backgroundColor: "#E8F5E9", borderRadius: 10, padding: 12, fontWeight: "700", marginBottom: 12 }, backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.48)", alignItems: "center", justifyContent: "center", padding: 24 }, modalCard: { width: "90%", maxWidth: 900, height: "86%", backgroundColor: colors.surface, borderRadius: 22, padding: 22 },
-  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: colors.border }, stepLabel: { color: colors.primary, fontWeight: "800", fontSize: 12 }, modalTitle: { fontSize: 25, fontWeight: "900", marginTop: 3 }, close: { padding: 10 }, closeText: { color: colors.muted, fontWeight: "700" }, stepScroll: { flex: 1 }, stepContent: { paddingVertical: 16, gap: 10 },
+  successBanner: { color: "#1B5E20", backgroundColor: "#E8F5E9", borderRadius: 10, padding: 12, fontWeight: "700", marginBottom: 12 }, backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.48)", alignItems: "center", justifyContent: "center", padding: 24 }, compactBackdrop: { padding: 8 }, modalCard: { width: "90%", maxWidth: 900, height: "86%", backgroundColor: colors.surface, borderRadius: 22, padding: 22 }, compactModalCard: { width: "100%", height: "100%", borderRadius: 16, padding: 14 },
+  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 8, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: colors.border }, modalHeading: { flex: 1, minWidth: 0 }, stepLabel: { color: colors.primary, fontWeight: "800", fontSize: 12 }, modalTitle: { fontSize: 25, fontWeight: "900", marginTop: 3 }, compactModalTitle: { fontSize: 21 }, close: { padding: 10 }, closeText: { color: colors.muted, fontWeight: "700" }, stepScroll: { flex: 1, minHeight: 0 }, stepContent: { paddingVertical: 16, gap: 10 },
   typeHint: { color: colors.primary, fontWeight: "800", marginBottom: 2 }, typeCard: { flexDirection: "row", alignItems: "center", gap: 14, borderWidth: 2, borderColor: colors.border, borderRadius: 14, padding: 15 }, selectedCard: { borderColor: colors.primary, backgroundColor: "#EDF7EE" }, radio: { width: 22, height: 22, borderWidth: 2, borderColor: colors.primary, borderRadius: 11, alignItems: "center", justifyContent: "center" }, radioDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: colors.primary }, typeName: { fontSize: 17, fontWeight: "800" }, customInput: { backgroundColor: colors.background, borderRadius: 12, padding: 14, fontSize: 17 },
   listContent: { paddingVertical: 14, gap: 9 }, productCard: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: colors.border, borderRadius: 13, padding: 15 }, selectedProduct: { borderColor: colors.primary, backgroundColor: "#EDF7EE" }, productText: { flex: 1 }, productName: { fontSize: 17, fontWeight: "800" }, addText: { color: colors.primary, fontWeight: "800" }, selectedAmount: { alignItems: "flex-end", gap: 4 }, selectedAmountText: { color: colors.primary, fontSize: 17, fontWeight: "900" }, removeText: { color: colors.danger, fontWeight: "700", fontSize: 12 }, empty: { color: colors.muted, textAlign: "center", marginTop: 70, lineHeight: 21 },
-  amountStep: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14 }, amountProduct: { fontSize: 26, fontWeight: "900" }, available: { color: colors.muted, fontSize: 17 }, amountEntry: { flexDirection: "row", alignItems: "center", gap: 12 }, amountInput: { width: 220, backgroundColor: colors.background, borderWidth: 2, borderColor: colors.primary, borderRadius: 14, padding: 18, fontSize: 30, fontWeight: "900", textAlign: "center" }, amountUnit: { fontSize: 25, fontWeight: "900" }, caloriePreview: { fontSize: 16, color: colors.muted },
-  reviewName: { fontSize: 23, fontWeight: "900" }, nutritionGrid: { flexDirection: "row", gap: 9 }, nutritionCard: { flex: 1, backgroundColor: colors.background, borderRadius: 12, padding: 13 }, nutritionValue: { fontSize: 21, fontWeight: "900", color: colors.primary }, sectionTitle: { fontSize: 18, fontWeight: "800", marginTop: 4 }, reviewRow: { flexDirection: "row", justifyContent: "space-between", gap: 12, borderBottomWidth: 1, borderBottomColor: colors.border, paddingVertical: 10 }, reviewProduct: { flex: 1, fontWeight: "700" },
-  errorBanner: { color: colors.danger, backgroundColor: "#FFEBEE", borderRadius: 10, padding: 12, fontWeight: "700", marginTop: 10 }, modalActions: { flexDirection: "row", alignItems: "center", borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 14, marginTop: 8 }, actionSpacer: { flex: 1 }, secondary: { backgroundColor: colors.background, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 14 }, primary: { backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 22, paddingVertical: 14 }, disabled: { opacity: 0.55 }
+  amountStep: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14, paddingHorizontal: 4 }, amountProduct: { fontSize: 26, fontWeight: "900", textAlign: "center" }, available: { color: colors.muted, fontSize: 17, textAlign: "center" }, amountEntry: { width: "100%", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12 }, amountInput: { width: "70%", maxWidth: 220, backgroundColor: colors.background, borderWidth: 2, borderColor: colors.primary, borderRadius: 14, padding: 18, fontSize: 30, fontWeight: "900", textAlign: "center" }, amountUnit: { fontSize: 25, fontWeight: "900" }, caloriePreview: { fontSize: 16, color: colors.muted, textAlign: "center" },
+  reviewName: { fontSize: 23, fontWeight: "900" }, nutritionGrid: { flexDirection: "row", flexWrap: "wrap", gap: 9 }, nutritionCard: { flexGrow: 1, flexBasis: 120, backgroundColor: colors.background, borderRadius: 12, padding: 13 }, nutritionValue: { fontSize: 21, fontWeight: "900", color: colors.primary }, sectionTitle: { fontSize: 18, fontWeight: "800", marginTop: 4 }, reviewRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 12, borderBottomWidth: 1, borderBottomColor: colors.border, paddingVertical: 10 }, reviewProduct: { flex: 1, minWidth: 120, fontWeight: "700" },
+  errorBanner: { color: colors.danger, backgroundColor: "#FFEBEE", borderRadius: 10, padding: 12, fontWeight: "700", marginTop: 10 }, modalActions: { flexDirection: "row", alignItems: "center", gap: 8, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 14, marginTop: 8 }, compactModalActions: { flexWrap: "wrap" }, actionSpacer: { flex: 1 }, secondary: { backgroundColor: colors.background, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 14 }, primary: { backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 22, paddingVertical: 14 }, disabled: { opacity: 0.55 }
 });

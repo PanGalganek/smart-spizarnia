@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { colors } from "@/core/theme";
 import { Meal } from "@/domain/meal";
 import { deleteMeal, renameMeal } from "@/services/inventoryRepository";
@@ -57,13 +57,9 @@ export function MealHistory({ meals, onChanged }: Props) {
     <View style={styles.panel}>
       <Text style={styles.title}>Historia posilkow</Text>
       {!!message && <Text style={styles.message}>{message}</Text>}
-      <FlatList
-        data={meals}
-        keyExtractor={(item) => item.id}
-        ListEmptyComponent={<Text style={styles.empty}>Nie zapisano jeszcze zadnego posilku.</Text>}
-        renderItem={({ item }) => {
+      {!meals.length ? <Text style={styles.empty}>Nie zapisano jeszcze zadnego posilku.</Text> : meals.map((item) => {
           const canRestore = item.ingredients.some((ingredient) => ingredient.tracksPantry !== false);
-          return <View style={styles.card}>
+          return <View key={item.id} style={styles.card}>
             {editing?.id === item.id ? (
               <View style={styles.editRow}>
                 <TextInput value={name} onChangeText={setName} style={styles.input} />
@@ -92,8 +88,7 @@ export function MealHistory({ meals, onChanged }: Props) {
               </View>
             )}
           </View>;
-        }}
-      />
+        })}
     </View>
   );
 }
@@ -103,14 +98,14 @@ function formatDate(timestamp: number) {
 }
 
 const styles = StyleSheet.create({
-  panel: { flex: 1, backgroundColor: colors.surface, borderRadius: 20, padding: 20 },
+  panel: { backgroundColor: colors.surface, borderRadius: 20, padding: 20 },
   title: { fontSize: 21, fontWeight: "800", marginBottom: 12 },
   message: { color: colors.primary, fontWeight: "600", marginBottom: 10 },
   card: { backgroundColor: colors.background, borderRadius: 14, padding: 16, marginBottom: 12, gap: 6 },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
+  header: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-start", gap: 8 },
   heading: { flex: 1 }, name: { fontSize: 18, fontWeight: "800" }, date: { color: colors.muted, fontSize: 12 },
   kcal: { color: colors.primary, fontSize: 18, fontWeight: "800" }, nutrients: { fontWeight: "600", marginTop: 4 }, ingredient: { color: colors.muted },
-  actions: { flexDirection: "row", justifyContent: "flex-end", gap: 8, marginTop: 8 }, editRow: { flexDirection: "row", gap: 8 },
+  actions: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 8, marginTop: 8 }, editRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   input: { flex: 1, backgroundColor: colors.surface, borderRadius: 9, padding: 10 },
   save: { backgroundColor: colors.primary, borderRadius: 9, paddingHorizontal: 14, justifyContent: "center" },
   cancel: { backgroundColor: colors.surface, borderRadius: 9, paddingHorizontal: 14, paddingVertical: 10, justifyContent: "center" },
