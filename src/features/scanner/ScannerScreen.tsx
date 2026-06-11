@@ -1,4 +1,3 @@
-import { useCameraPermissions } from "expo-camera";
 import { useState } from "react";
 import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
@@ -14,7 +13,6 @@ import { createUntrackedMealIngredient } from "@/services/nutrition";
 import { searchUsdaFoods, UsdaFoodResult } from "@/services/usdaFoodData";
 
 export function ScannerScreen() {
-  const [permission, requestPermission] = useCameraPermissions();
   const [barcode, setBarcode] = useState("");
   const [product, setProduct] = useState<Product | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -52,14 +50,8 @@ export function ScannerScreen() {
     }
   }
 
-  async function openCamera() {
-    if (Platform.OS === "web") {
-      setCameraOpen(true);
-      return;
-    }
-    const result = permission?.granted ? permission : await requestPermission();
-    if (result?.granted) setCameraOpen(true);
-    else setMessage("Aby skanowac, zezwol aplikacji na dostep do aparatu.");
+  function openCamera() {
+    setCameraOpen(true);
   }
 
   async function searchByName() {
@@ -150,8 +142,8 @@ export function ScannerScreen() {
         <ScrollView
           style={[styles.scroll, Platform.OS === "web" && styles.webScroll]}
           contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="always"
+          keyboardDismissMode="none"
           nestedScrollEnabled
           showsVerticalScrollIndicator
         >

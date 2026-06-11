@@ -1,5 +1,5 @@
-import { BarcodeScanningResult, CameraView } from "expo-camera";
-import { useState } from "react";
+import { BarcodeScanningResult, CameraView, useCameraPermissions } from "expo-camera";
+import { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 type Props = {
@@ -12,11 +12,33 @@ const barcodeTypes = [
 ] as const;
 
 export function BarcodeCamera({ onCancel, onScanned }: Props) {
+  const [permission, requestPermission] = useCameraPermissions();
+  const permissionRequested = useRef(false);
   const [torch, setTorch] = useState(false);
   const [ready, setReady] = useState(false);
 
+  useEffect(() => {
+    if (!permission || permission.granted || permissionRequested.current) return;
+    permissionRequested.current = true;
+    void requestPermission();
+  }, [permission, requestPermission]);
+
   function handleScan(result: BarcodeScanningResult) {
     if (result.data.trim()) onScanned(result.data.trim());
+  }
+
+  if (!permission) {
+    return <View style={styles.permission}><Text>Sprawdzanie dostepu do aparatu...</Text></View>;
+  }
+
+  if (!permission.granted) {
+    return (
+      <View style={styles.permission}>
+        <Text style={styles.permissionText}>Zezwol aplikacji na dostep do aparatu, aby skanowac kody.</Text>
+        <Pressable onPress={() => void requestPermission()} style={styles.control}><Text style={styles.white}>Zezwol na aparat</Text></Pressable>
+        <Pressable onPress={onCancel} style={styles.cancel}><Text style={styles.white}>Anuluj</Text></Pressable>
+      </View>
+    );
   }
 
   return (
@@ -48,6 +70,8 @@ export function BarcodeCamera({ onCancel, onScanned }: Props) {
 }
 
 const styles = StyleSheet.create({
+  permission: { flex: 1, minHeight: 320, alignItems: "center", justifyContent: "center", gap: 16, padding: 24 },
+  permissionText: { textAlign: "center", fontSize: 17 },
   container: { flex: 1, minHeight: 420, borderRadius: 20, overflow: "hidden", backgroundColor: "#111" },
   camera: { ...StyleSheet.absoluteFillObject },
   overlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", padding: 24 },
