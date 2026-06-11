@@ -40,8 +40,8 @@ export function ScannerScreen() {
         setStockAmount(String(result.packageAmount ?? 1));
       }
       setActionMessage("");
-      setManualOpen(!result);
-      setMessage(result ? "Produkt znaleziony." : "Brak produktu w Open Food Facts. Wymagany wpis reczny.");
+      setManualOpen(false);
+      setMessage(result ? "Produkt znaleziony." : "Nie znaleziono tego produktu w bazie Open Food Facts. Mozesz dodac go recznie.");
     } catch {
       setMessage("Nie udalo sie polaczyc z Open Food Facts.");
     }
@@ -120,9 +120,11 @@ export function ScannerScreen() {
         <BarcodeCamera onCancel={() => setCameraOpen(false)} onScanned={scanned} />
       ) : (
         <ScrollView
-          style={styles.scroll}
+          style={[styles.scroll, Platform.OS === "web" && styles.webScroll]}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          nestedScrollEnabled
           showsVerticalScrollIndicator
         >
         <View style={styles.card}>
@@ -160,7 +162,8 @@ export function ScannerScreen() {
 }
 
 const styles = StyleSheet.create({
-  scroll: { flex: 1 },
+  scroll: { flex: 1, minHeight: 0 },
+  webScroll: { overflow: "scroll" },
   scrollContent: { flexGrow: 1, paddingBottom: 36 },
   card: { backgroundColor: colors.surface, padding: 24, borderRadius: 20 },
   row: { flexDirection: "row", flexWrap: "wrap", gap: 12 },

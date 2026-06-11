@@ -34,6 +34,7 @@ function convertPackageSize(amount: number, unit: string): PackageSize | undefin
 
 export async function getProductByBarcode(barcode: string): Promise<Product | null> {
   const response = await fetch(`${API_URL}/${encodeURIComponent(barcode)}.json`);
+  if (response.status === 404) return null;
   if (!response.ok) throw new Error("Open Food Facts is unavailable");
 
   const data = await response.json();

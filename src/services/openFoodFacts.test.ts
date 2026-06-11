@@ -1,5 +1,7 @@
-import { describe, expect, it } from "vitest";
-import { parsePackageSize } from "@/services/openFoodFacts";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { getProductByBarcode, parsePackageSize } from "@/services/openFoodFacts";
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe("gramatura Open Food Facts", () => {
   it("odczytuje gramy z pola quantity", () => {
@@ -16,5 +18,17 @@ describe("gramatura Open Food Facts", () => {
 
   it("korzysta z pol strukturalnych API", () => {
     expect(parsePackageSize({ product_quantity: 750, product_quantity_unit: "ml" })).toEqual({ amount: 750, unit: "ml" });
+  });
+});
+
+describe("odpowiedzi Open Food Facts", () => {
+  it("traktuje kod nieobecny w bazie jako brak produktu", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 404 }));
+    await expect(getProductByBarcode("5901044033700")).resolves.toBeNull();
+  });
+
+  it("zglasza blad przy awarii serwera", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 503 }));
+    await expect(getProductByBarcode("123")).rejects.toThrow("Open Food Facts is unavailable");
   });
 });

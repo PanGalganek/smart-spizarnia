@@ -24,5 +24,5 @@ const styles = StyleSheet.create({
   back: { width: 76, paddingVertical: 10 },
   backText: { color: colors.primary, fontWeight: "700" },
   title: { fontSize: 28, fontWeight: "800", color: colors.text },
-  content: { flex: 1, paddingHorizontal: 24, paddingBottom: 24 }
+  content: { flex: 1, minHeight: 0, paddingHorizontal: 24, paddingBottom: 24 }
 });
