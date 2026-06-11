@@ -1,4 +1,4 @@
-import { collection, doc, getDocs, runTransaction, setDoc } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocs, runTransaction, setDoc } from "firebase/firestore";
 import { db } from "@/core/firebase";
 import { DailySummary, Meal, MealIngredient, MealType } from "@/domain/meal";
 import { PantryItem, Product, Unit } from "@/domain/product";
@@ -85,6 +85,15 @@ export async function listPantry(includeConsumed = false): Promise<PantryItem[]>
     .map((item) => normalizePantryItem(item.data() as PantryItem))
     .filter((item) => includeConsumed || item.quantity > 0)
     .sort((left, right) => left.product.name.localeCompare(right.product.name, "pl"));
+}
+
+export async function getPantryItem(barcode: string): Promise<PantryItem | null> {
+  const snapshot = await getDoc(doc(pantry, barcode));
+  return snapshot.exists() ? normalizePantryItem(snapshot.data() as PantryItem) : null;
+}
+
+export async function deletePantryItem(barcode: string) {
+  await deleteDoc(doc(pantry, barcode));
 }
 
 export async function listSavedProducts(): Promise<Product[]> {
