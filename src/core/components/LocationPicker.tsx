@@ -65,7 +65,7 @@ export function LocationPicker({ value, onChange, label = "Lokalizacja" }: Props
 }
 
 const styles = StyleSheet.create({
-  field: { minWidth: 240, flexGrow: 1, flexShrink: 1, flexBasis: 240, gap: 9, paddingBottom: 4 }, label: { fontWeight: "700", fontSize: 16 },
+  field: { width: "100%", gap: 9 }, label: { fontWeight: "700", fontSize: 16 },
   select: { minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.background, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12 }, value: { color: colors.text, fontSize: 16, fontWeight: "700" }, placeholder: { color: colors.muted, fontSize: 16 }, arrow: { color: colors.primary, fontSize: 13 },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 8 }, manage: { flexGrow: 1, alignItems: "center", backgroundColor: "#E8F5E9", borderWidth: 1, borderColor: colors.primary, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11 }, manageText: { color: colors.primary, fontWeight: "800" }, remove: { flexGrow: 1, alignItems: "center", backgroundColor: "#FFEBEE", borderWidth: 1, borderColor: colors.danger, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11 }, removeText: { color: colors.danger, fontWeight: "800" }, disabled: { opacity: 0.35 },
   addPanel: { flexDirection: "row", flexWrap: "wrap", backgroundColor: colors.background, borderRadius: 10, padding: 10, gap: 8 }, input: { minWidth: 160, flex: 1, backgroundColor: colors.surface, borderRadius: 9, padding: 11 }, add: { backgroundColor: colors.primary, borderRadius: 9, paddingHorizontal: 15, paddingVertical: 11, justifyContent: "center" }, white: { color: "white", fontWeight: "700" }, message: { color: colors.primary, fontWeight: "700" },

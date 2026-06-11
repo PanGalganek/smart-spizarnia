@@ -63,7 +63,7 @@ function calendarDays(date: Date) {
 }
 
 const styles = StyleSheet.create({
-  field: { minWidth: 210, flex: 1, gap: 6 }, label: { fontWeight: "600" }, inputRow: { flexDirection: "row", gap: 8 },
+  field: { width: "100%", gap: 6 }, label: { fontWeight: "600" }, inputRow: { flexDirection: "row", gap: 8 },
   input: { flex: 1, backgroundColor: colors.background, borderRadius: 10, padding: 12 }, value: { color: colors.text }, placeholder: { color: colors.muted },
   clear: { backgroundColor: colors.background, borderRadius: 10, paddingHorizontal: 12, justifyContent: "center" }, clearText: { color: colors.danger, fontWeight: "700" },
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center", padding: 20 }, calendar: { width: "100%", maxWidth: 420, backgroundColor: colors.surface, borderRadius: 18, padding: 18 },

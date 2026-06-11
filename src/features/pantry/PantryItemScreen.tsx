@@ -84,7 +84,7 @@ const styles = StyleSheet.create({
   nutrition: { flexDirection: "row", flexWrap: "wrap", gap: 18, backgroundColor: colors.background, borderRadius: 12, padding: 14 }, row: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   field: { minWidth: 150, flex: 1, gap: 6 }, label: { fontWeight: "700" }, input: { backgroundColor: colors.background, borderRadius: 10, padding: 13, fontSize: 17 }, units: { flexDirection: "row", gap: 7 },
   unit: { backgroundColor: colors.background, padding: 13, borderRadius: 10 }, unitActive: { backgroundColor: colors.primary }, white: { color: "white", fontWeight: "800" },
-  save: { alignItems: "center", backgroundColor: colors.primary, borderRadius: 11, padding: 15, marginTop: 8 }, disabled: { opacity: 0.55 }, success: { color: colors.primary, fontWeight: "700" }, error: { color: colors.danger, fontWeight: "700" },
+  save: { alignItems: "center", backgroundColor: colors.primary, borderRadius: 11, padding: 15 }, disabled: { opacity: 0.55 }, success: { color: colors.primary, fontWeight: "700" }, error: { color: colors.danger, fontWeight: "700" },
   dangerZone: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 18, gap: 10 }, dangerTitle: { color: colors.danger, fontSize: 18, fontWeight: "900" },
   deleteOutline: { alignSelf: "flex-start", borderWidth: 2, borderColor: colors.danger, borderRadius: 10, padding: 13 }, deleteText: { color: colors.danger, fontWeight: "800" },
   confirm: { flexDirection: "row", flexWrap: "wrap", gap: 10 }, delete: { backgroundColor: colors.danger, borderRadius: 10, padding: 13 }, cancel: { backgroundColor: colors.background, borderRadius: 10, padding: 13 }
