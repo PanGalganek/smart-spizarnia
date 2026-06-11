@@ -1,4 +1,5 @@
 import { BrowserMultiFormatReader, IScannerControls } from "@zxing/browser";
+import { BarcodeFormat, DecodeHintType } from "@zxing/library";
 import { createElement, useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
@@ -10,6 +11,7 @@ type Props = {
 export function BarcodeCamera({ onCancel, onScanned }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const controlsRef = useRef<IScannerControls | null>(null);
+  const detectorFrameRef = useRef<number | null>(null);
   const handledRef = useRef(false);
   const [status, setStatus] = useState("Uruchamianie tylnej kamery HD...");
   const [torch, setTorch] = useState(false);
@@ -19,7 +21,19 @@ export function BarcodeCamera({ onCancel, onScanned }: Props) {
 
   useEffect(() => {
     let active = true;
-    const reader = new BrowserMultiFormatReader(undefined, { delayBetweenScanAttempts: 120 });
+    const hints = new Map<DecodeHintType, unknown>();
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, productBarcodeFormats);
+    hints.set(DecodeHintType.TRY_HARDER, true);
+    const reader = new BrowserMultiFormatReader(hints, { delayBetweenScanAttempts: 60 });
+
+    function finish(value: string) {
+      const normalized = value.trim();
+      if (!normalized || handledRef.current) return;
+      handledRef.current = true;
+      controlsRef.current?.stop();
+      if (detectorFrameRef.current !== null) cancelAnimationFrame(detectorFrameRef.current);
+      onScanned(normalized);
+    }
 
     async function start() {
       try {
@@ -39,11 +53,7 @@ export function BarcodeCamera({ onCancel, onScanned }: Props) {
           },
           videoRef.current ?? undefined,
           (result) => {
-            const value = result?.getText().trim();
-            if (!value || handledRef.current) return;
-            handledRef.current = true;
-            controlsRef.current?.stop();
-            onScanned(value);
+            if (result) finish(result.getText());
           }
         );
         if (!active) return controls.stop();
@@ -56,7 +66,8 @@ export function BarcodeCamera({ onCancel, onScanned }: Props) {
         setTorchAvailable(Boolean(capabilities && "torch" in capabilities));
         const settings = track?.getSettings();
         const resolution = settings?.width && settings?.height ? ` (${settings.width}x${settings.height})` : "";
-        setStatus(`Aparat gotowy${resolution}. Trzymaj kod 15-25 cm od obiektywu.`);
+        const nativeDetector = await startNativeDetector(videoRef.current, finish, () => active, detectorFrameRef);
+        setStatus(`SKANOWANIE AKTYWNE${resolution}${nativeDetector ? " - podwojny odczyt" : ""}. Ustaw pionowe kreski kodu w ramce.`);
       } catch (error) {
         if (!active) return;
         const name = error instanceof Error ? error.name : "";
@@ -71,6 +82,8 @@ export function BarcodeCamera({ onCancel, onScanned }: Props) {
       active = false;
       controlsRef.current?.stop();
       controlsRef.current = null;
+      if (detectorFrameRef.current !== null) cancelAnimationFrame(detectorFrameRef.current);
+      detectorFrameRef.current = null;
     };
   }, [cameraIndex, onScanned]);
 
@@ -137,6 +150,57 @@ type ExtendedCapabilities = MediaTrackCapabilities & {
   width?: { max: number };
   height?: { max: number };
 };
+
+const productBarcodeFormats = [
+  BarcodeFormat.EAN_13,
+  BarcodeFormat.EAN_8,
+  BarcodeFormat.UPC_A,
+  BarcodeFormat.UPC_E,
+  BarcodeFormat.CODE_128,
+  BarcodeFormat.CODE_39,
+  BarcodeFormat.ITF,
+  BarcodeFormat.CODABAR
+];
+
+type NativeBarcode = { rawValue: string };
+type NativeBarcodeDetector = { detect: (source: HTMLVideoElement) => Promise<NativeBarcode[]> };
+type NativeBarcodeDetectorConstructor = {
+  new(options?: { formats?: string[] }): NativeBarcodeDetector;
+  getSupportedFormats?: () => Promise<string[]>;
+};
+
+async function startNativeDetector(
+  video: HTMLVideoElement | null,
+  onDetected: (value: string) => void,
+  isActive: () => boolean,
+  frameRef: { current: number | null }
+) {
+  const Detector = (window as typeof window & { BarcodeDetector?: NativeBarcodeDetectorConstructor }).BarcodeDetector;
+  if (!Detector || !video) return false;
+  try {
+    const requested = ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "itf", "codabar"];
+    const supported = Detector.getSupportedFormats ? await Detector.getSupportedFormats() : requested;
+    const formats = requested.filter((format) => supported.includes(format));
+    const detector = new Detector(formats.length ? { formats } : undefined);
+    let detecting = false;
+    const scan = async () => {
+      if (!isActive()) return;
+      if (!detecting && video.readyState >= 2) {
+        detecting = true;
+        try {
+          const results = await detector.detect(video);
+          if (results[0]?.rawValue) return onDetected(results[0].rawValue);
+        } catch { /* ZXing remains active as the fallback decoder. */ }
+        finally { detecting = false; }
+      }
+      frameRef.current = requestAnimationFrame(scan);
+    };
+    frameRef.current = requestAnimationFrame(scan);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 async function improveCameraTrack(track: MediaStreamTrack, capabilities: ExtendedCapabilities) {
   const advanced: Record<string, unknown>[] = [];
