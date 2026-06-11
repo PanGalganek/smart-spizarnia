@@ -17,7 +17,9 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Aplikacja potrzebuje aparatu do skanowania kodow kreskowych."
+          "cameraPermission": "Aplikacja potrzebuje aparatu do skanowania kodow kreskowych.",
+          "barcodeScannerEnabled": true,
+          "recordAudioAndroid": false
         }
       ],
       "expo-asset"

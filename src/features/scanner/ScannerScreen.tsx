@@ -1,10 +1,11 @@
-import { BarcodeScanningResult, CameraView, useCameraPermissions } from "expo-camera";
+import { useCameraPermissions } from "expo-camera";
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
 import { colors } from "@/core/theme";
 import { Product, Unit } from "@/domain/product";
 import { ManualProductForm } from "@/features/scanner/ManualProductForm";
+import { BarcodeCamera } from "@/features/scanner/BarcodeCamera";
 import { getProductByBarcode } from "@/services/openFoodFacts";
 import { changePantryQuantity } from "@/services/inventoryRepository";
 
@@ -37,14 +38,19 @@ export function ScannerScreen() {
   }
 
   async function openCamera() {
+    if (Platform.OS === "web") {
+      setCameraOpen(true);
+      return;
+    }
     const result = permission?.granted ? permission : await requestPermission();
     if (result?.granted) setCameraOpen(true);
     else setMessage("Aby skanowac, zezwol aplikacji na dostep do aparatu.");
   }
 
-  function scanned(result: BarcodeScanningResult) {
+  function scanned(value: string) {
     setCameraOpen(false);
-    void search(result.data);
+    setMessage(`Odczytano kod: ${value}`);
+    void search(value);
   }
 
   async function update(direction: 1 | -1) {
@@ -71,10 +77,7 @@ export function ScannerScreen() {
           }}
         />
       ) : cameraOpen ? (
-        <View style={styles.cameraBox}>
-          <CameraView style={styles.camera} facing="back" barcodeScannerSettings={{ barcodeTypes: ["ean13", "ean8", "upc_a", "upc_e"] }} onBarcodeScanned={scanned} />
-          <Pressable onPress={() => setCameraOpen(false)} style={styles.close}><Text style={styles.white}>Anuluj</Text></Pressable>
-        </View>
+        <BarcodeCamera onCancel={() => setCameraOpen(false)} onScanned={scanned} />
       ) : (
         <View style={styles.card}>
           <View style={styles.row}>
@@ -122,7 +125,4 @@ const styles = StyleSheet.create({
   metaInput: { flex: 1, backgroundColor: colors.background, borderRadius: 10, padding: 12 },
   unitChoice: { backgroundColor: colors.background, padding: 12, borderRadius: 10 }, unitActive: { backgroundColor: colors.primary },
   remove: { backgroundColor: colors.danger, padding: 15, borderRadius: 12 },
-  cameraBox: { flex: 1, borderRadius: 20, overflow: "hidden" },
-  camera: { flex: 1 },
-  close: { position: "absolute", right: 20, top: 20, backgroundColor: colors.danger, padding: 14, borderRadius: 12 }
 });
