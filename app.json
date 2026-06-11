@@ -2,12 +2,13 @@
   "expo": {
     "name": "Smart Spizarnia",
     "slug": "smart-spizarnia",
-    "version": "0.6.1",
+    "version": "0.7.0",
     "orientation": "default",
     "scheme": "smartspizarnia",
     "userInterfaceStyle": "light",
     "web": {
-      "output": "static"
+      "output": "static",
+      "favicon": "./assets/favicon.png"
     },
     "experiments": {
       "baseUrl": "/smart-spizarnia"
@@ -28,14 +29,20 @@
       "package": "pl.smartspizarnia.app",
       "permissions": [
         "CAMERA"
-      ]
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#F7F0DE"
+      }
     },
     "ios": {
       "bundleIdentifier": "pl.smartspizarnia.app",
       "supportsTablet": true,
       "infoPlist": {
         "NSCameraUsageDescription": "Aplikacja potrzebuje aparatu do skanowania kodow kreskowych."
-      }
-    }
+      },
+      "icon": "./assets/icon.png"
+    },
+    "icon": "./assets/icon.png"
   }
 }

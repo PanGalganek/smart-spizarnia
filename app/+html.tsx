@@ -10,6 +10,12 @@ export default function Root({ children }: PropsWithChildren) {
         <meta httpEquiv="Pragma" content="no-cache" />
         <meta httpEquiv="Expires" content="0" />
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+        <meta name="theme-color" content="#2E7D32" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="Spizarnia" />
+        <link rel="manifest" href="/smart-spizarnia/manifest.json" />
+        <link rel="apple-touch-icon" href="/smart-spizarnia/icon-192.png" />
         <ScrollViewStyleReset />
         <style dangerouslySetInnerHTML={{ __html: `
           html, body, #root { width: 100%; height: var(--app-height, 100dvh); min-height: 0; }
