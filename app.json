@@ -6,6 +6,12 @@
     "orientation": "landscape",
     "scheme": "smartspizarnia",
     "userInterfaceStyle": "light",
+    "web": {
+      "output": "static"
+    },
+    "experiments": {
+      "baseUrl": "/smart-spizarnia"
+    },
     "plugins": [
       "expo-router",
       [
