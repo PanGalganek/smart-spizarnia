@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useLocalSearchParams } from "expo-router";
 import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
 import { DatePickerField } from "@/core/components/DatePickerField";
@@ -7,12 +8,14 @@ import { colors } from "@/core/theme";
 import { Product, Unit } from "@/domain/product";
 import { ManualProductForm } from "@/features/scanner/ManualProductForm";
 import { BarcodeCamera } from "@/features/scanner/BarcodeCamera";
+import { AddDepletedPrompt } from "@/features/shopping/AddDepletedPrompt";
 import { getProductByBarcode } from "@/services/openFoodFacts";
 import { changePantryQuantity, createUntrackedMeal, saveProduct } from "@/services/inventoryRepository";
 import { createUntrackedMealIngredient } from "@/services/nutrition";
 import { searchUsdaFoods, UsdaFoodResult } from "@/services/usdaFoodData";
 
 export function ScannerScreen() {
+  const params = useLocalSearchParams<{ autoScan?: string }>();
   const [barcode, setBarcode] = useState("");
   const [product, setProduct] = useState<Product | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -29,6 +32,11 @@ export function ScannerScreen() {
   const [usdaResults, setUsdaResults] = useState<UsdaFoodResult[]>([]);
   const [usdaBusy, setUsdaBusy] = useState(false);
   const [usdaMessage, setUsdaMessage] = useState("");
+  const [depletedProducts, setDepletedProducts] = useState<Product[]>([]);
+
+  useEffect(() => {
+    if (params.autoScan === "1") setCameraOpen(true);
+  }, [params.autoScan]);
 
   async function search(value = barcode) {
     const normalized = value.trim();
@@ -100,6 +108,7 @@ export function ScannerScreen() {
       const operation = direction > 0 ? "Dodano" : "Odjęto";
       setActionMessage(`${operation} ${amount} ${updated.unit}. Stan: ${updated.quantity} ${updated.unit}.`);
       setMessage(direction > 0 ? "Produkt dodany do spiżarni." : "Produkt odjęty ze spiżarni.");
+      if (direction < 0 && updated.quantity === 0) setDepletedProducts([product]);
     } catch (error) {
       setActionError(true);
       setActionMessage(error instanceof Error ? error.message : "Nie udało się zmienić stanu.");
@@ -126,6 +135,7 @@ export function ScannerScreen() {
 
   return (
     <ModuleScreen title="Skaner">
+      <AddDepletedPrompt products={depletedProducts} onClose={() => setDepletedProducts([])} onAdded={() => setActionMessage("Produkt zużyty i dodany do listy zakupów.")} />
       {manualOpen ? (
         <ManualProductForm
           barcode={barcode}

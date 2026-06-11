@@ -6,6 +6,7 @@ import { colors } from "@/core/theme";
 import { DailySummary, Meal, MealIngredient, MealType } from "@/domain/meal";
 import { Nutrients, PantryItem } from "@/domain/product";
 import { MealHistory } from "@/features/meals/MealHistory";
+import { AddDepletedPrompt } from "@/features/shopping/AddDepletedPrompt";
 import { createMeal, getDailySummary, listMeals, listPantry } from "@/services/inventoryRepository";
 import { createMealIngredient, dateKey, scaleNutrients, sumNutrients } from "@/services/nutrition";
 
@@ -34,6 +35,7 @@ export function MealsScreen() {
   const [amountDraft, setAmountDraft] = useState("");
   const [servings, setServings] = useState("1");
   const [message, setMessage] = useState("");
+  const [depletedProducts, setDepletedProducts] = useState<PantryItem["product"][]>([]);
   const [modalMessage, setModalMessage] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -120,9 +122,11 @@ export function MealsScreen() {
       setBusy(true);
       setModalMessage("");
       await createMeal(mealName, type, ingredientResult.ingredients, servingCount);
+      const depleted = pantry.filter((item) => parseAmount(amounts[item.barcode]) === item.quantity).map((item) => item.product);
       await refresh();
       setCreatorOpen(false);
       setMessage(`Zapisano 1 z ${servingCount} porcji: ${mealName}. Pełne zużycie produktów zostało odjęte ze spiżarni.`);
+      setDepletedProducts(depleted);
     } catch (error) {
       setModalMessage(error instanceof Error ? error.message : "Nie udało się zapisać posiłku.");
     } finally { setBusy(false); }
@@ -130,6 +134,7 @@ export function MealsScreen() {
 
   return (
     <ModuleScreen title="Posiłki">
+      <AddDepletedPrompt products={depletedProducts} onClose={() => setDepletedProducts([])} onAdded={() => setMessage("Zużyte produkty dodano do listy zakupów.")} />
       <ScrollView style={styles.pageScroll} contentContainerStyle={styles.pageContent} keyboardShouldPersistTaps="handled">
         <View style={[styles.pageHeader, compact && styles.compactPageHeader]}>
           <View style={styles.pageHeading}><Text style={styles.pageTitle}>Posiłki i dzienny bilans</Text><Text style={styles.muted}>{formatToday()} | Twórz posiłki z produktów zapisanych w spiżarni.</Text></View>

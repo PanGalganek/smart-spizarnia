@@ -8,7 +8,8 @@ const tiles = [
   { title: "Skaner", subtitle: "Dodaj lub odejmij produkt", icon: "barcode-scan", route: "/scanner", color: "#2E7D32" },
   { title: "Spiżarnia", subtitle: "Aktualny stan produktów", icon: "fridge-outline", route: "/pantry", color: "#1565C0" },
   { title: "Posiłki", subtitle: "Kcal, makro i składniki", icon: "silverware-fork-knife", route: "/meals", color: "#EF6C00" },
-  { title: "Zapisane", subtitle: "Baza kodów kreskowych", icon: "bookmark-multiple-outline", route: "/saved", color: "#6A1B9A" }
+  { title: "Zapisane", subtitle: "Baza kodów kreskowych", icon: "bookmark-multiple-outline", route: "/saved", color: "#6A1B9A" },
+  { title: "Lista zakupów", subtitle: "Produkty do kupienia", icon: "cart-outline", route: "/shopping", color: "#AD5A00" }
 ] as const;
 
 export default function HomeScreen() {
@@ -20,7 +21,7 @@ export default function HomeScreen() {
   return (
     <ScrollView style={styles.page} contentContainerStyle={[styles.content, compact && styles.compactContent]}>
       <View style={styles.header}>
-        <View style={styles.heading}><Text style={[styles.title, compact && styles.compactTitle]}>Smart Spiżarnia</Text><Text style={styles.subtitle}>Co chcesz dziś zrobić? · wersja 0.7.1</Text></View>
+        <View style={styles.heading}><Text style={[styles.title, compact && styles.compactTitle]}>Smart Spiżarnia</Text><Text style={styles.subtitle}>Co chcesz dziś zrobić? · wersja 0.8.0</Text></View>
         <Pressable onPress={signOut} style={styles.logout}><Text>Wyloguj</Text></Pressable>
       </View>
       <View style={styles.grid}>

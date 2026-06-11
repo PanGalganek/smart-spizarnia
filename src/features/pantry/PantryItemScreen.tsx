@@ -6,6 +6,7 @@ import { LocationPicker } from "@/core/components/LocationPicker";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
 import { colors } from "@/core/theme";
 import { PantryItem, Unit } from "@/domain/product";
+import { AddDepletedPrompt } from "@/features/shopping/AddDepletedPrompt";
 import { getExpiryWarning } from "@/services/expiry";
 import { deletePantryItem, getPantryItem, savePantryItem } from "@/services/inventoryRepository";
 
@@ -20,6 +21,7 @@ export function PantryItemScreen() {
   const [message, setMessage] = useState("Ladowanie produktu...");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [depleted, setDepleted] = useState(false);
   const expiryWarning = getExpiryWarning(expiryDate);
 
   useEffect(() => {
@@ -39,6 +41,7 @@ export function PantryItemScreen() {
       setBusy(true); setMessage("");
       const next = { ...item, quantity: nextQuantity, unit, expiryDate: expiryDate.trim() || undefined, location: location.trim() || undefined, status: nextQuantity === 0 ? "consumed" as const : "active" as const };
       await savePantryItem(next); setItem(next); setMessage("Zmiany zostały zapisane.");
+      if (item.quantity > 0 && nextQuantity === 0) setDepleted(true);
     } catch { setMessage("Nie udało się zapisać produktu."); }
     finally { setBusy(false); }
   }
@@ -53,6 +56,7 @@ export function PantryItemScreen() {
   }
 
   return <ModuleScreen title="Produkt">
+    <AddDepletedPrompt products={depleted && item ? [item.product] : []} onClose={() => setDepleted(false)} onAdded={() => setMessage("Produkt dodano do listy zakupów.")} />
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
       {!item ? <Text style={styles.loading}>{message}</Text> : <View style={styles.card}>
         <Text style={styles.name}>{item.product.name}</Text>
