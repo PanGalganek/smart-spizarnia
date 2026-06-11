@@ -18,13 +18,17 @@ export function PantryScreen() {
   }, []);
   useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
 
-  const expiringCount = useMemo(() => items.filter((item) => item.quantity > 0 && getExpiryWarning(item.expiryDate)).length, [items]);
+  const urgentExpiryCount = useMemo(() => items.filter((item) => {
+    if (item.quantity <= 0) return false;
+    const warning = getExpiryWarning(item.expiryDate);
+    return warning !== null && warning.days <= 1;
+  }).length, [items]);
   const sortedItems = useMemo(() => [...items].sort((left, right) => expiryPriority(left.expiryDate) - expiryPriority(right.expiryDate) || left.product.name.localeCompare(right.product.name, "pl")), [items]);
 
   return (
     <ModuleScreen title="Spizarnia">
       {!!message && <Text style={styles.message}>{message}</Text>}
-      {expiringCount > 0 && <Text style={styles.expirySummary}>Uwaga: {expiringCount} produktow ma termin w ciagu 7 dni lub jest po terminie.</Text>}
+      {urgentExpiryCount > 0 && <Text style={styles.expirySummary}>Uwaga: {urgentExpiryCount} produktow ma termin najpozniej jutro lub jest po terminie.</Text>}
       <FlatList
         data={sortedItems}
         keyExtractor={(item) => item.barcode}
