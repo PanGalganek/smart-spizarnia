@@ -51,15 +51,17 @@ export async function changePantryQuantity(
   delta: number,
   selectedUnit?: Unit,
   metadata?: { expiryDate?: string; location?: string }
-) {
+): Promise<PantryItem> {
   const ref = doc(pantry, product.barcode);
   const unit = selectedUnit ?? product.defaultUnit ?? "szt";
-  await runTransaction(db, async (transaction) => {
+  const updated = await runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(ref);
     const current = snapshot.exists() ? normalizePantryItem(snapshot.data() as PantryItem) : null;
     if (current && current.quantity > 0 && current.unit !== unit) throw new Error(`Produkt jest zapisany w jednostce ${current.unit}.`);
-    const quantity = Math.max(0, Math.round(((current?.quantity ?? 0) + delta) * 100) / 100);
-    transaction.set(ref, withoutUndefined({
+    const previousQuantity = current?.quantity ?? 0;
+    if (delta < 0 && Math.abs(delta) > previousQuantity) throw new Error(`W spizarni jest tylko ${previousQuantity} ${current?.unit ?? unit}.`);
+    const quantity = Math.round((previousQuantity + delta) * 100) / 100;
+    const next: PantryItem = {
       barcode: product.barcode,
       product,
       quantity,
@@ -68,9 +70,12 @@ export async function changePantryQuantity(
       location: metadata?.location ?? current?.location,
       status: quantity === 0 ? "consumed" : "active",
       updatedAt: Date.now()
-    }), { merge: true });
+    };
+    transaction.set(ref, withoutUndefined(next), { merge: true });
+    return next;
   });
   await saveProduct(product);
+  return updated;
 }
 
 export async function listPantry(includeConsumed = false): Promise<PantryItem[]> {

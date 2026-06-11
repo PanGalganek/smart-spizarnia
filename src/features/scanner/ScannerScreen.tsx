@@ -20,6 +20,9 @@ export function ScannerScreen() {
   const [stockUnit, setStockUnit] = useState<Unit>("szt");
   const [expiryDate, setExpiryDate] = useState("");
   const [location, setLocation] = useState("");
+  const [actionMessage, setActionMessage] = useState("");
+  const [actionError, setActionError] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   async function search(value = barcode) {
     const normalized = value.trim();
@@ -29,7 +32,11 @@ export function ScannerScreen() {
     try {
       const result = await getProductByBarcode(normalized);
       setProduct(result);
-      if (result) setStockUnit(result.defaultUnit ?? "szt");
+      if (result) {
+        setStockUnit(result.packageUnit ?? result.defaultUnit ?? "szt");
+        setStockAmount(String(result.packageAmount ?? 1));
+      }
+      setActionMessage("");
       setManualOpen(!result);
       setMessage(result ? "Produkt znaleziony." : "Brak produktu w Open Food Facts. Wymagany wpis reczny.");
     } catch {
@@ -56,12 +63,24 @@ export function ScannerScreen() {
   async function update(direction: 1 | -1) {
     if (!product) return;
     const amount = Number(stockAmount.replace(",", "."));
-    if (!Number.isFinite(amount) || amount <= 0) return setMessage("Wpisz prawidlowa ilosc.");
-    if (direction > 0 && (!expiryDate.trim() || !location.trim())) return setMessage("Podaj date waznosci i lokalizacje produktu.");
+    setActionMessage("");
+    setActionError(false);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setActionError(true); setActionMessage("Wpisz prawidlowa ilosc."); return;
+    }
+    if (direction > 0 && (!expiryDate.trim() || !location.trim())) {
+      setActionError(true); setActionMessage("Przed dodaniem uzupelnij date waznosci i lokalizacje."); return;
+    }
     try {
-      await changePantryQuantity(product, amount * direction, stockUnit, { expiryDate: expiryDate.trim() || undefined, location: location.trim() || undefined });
-      setMessage(direction > 0 ? "Dodano produkt do spizarni." : "Odjeto produkt ze spizarni.");
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Nie udalo sie zmienic stanu."); }
+      setBusy(true);
+      const updated = await changePantryQuantity(product, amount * direction, stockUnit, { expiryDate: expiryDate.trim() || undefined, location: location.trim() || undefined });
+      const operation = direction > 0 ? "Dodano" : "Odjeto";
+      setActionMessage(`${operation} ${amount} ${updated.unit}. Stan: ${updated.quantity} ${updated.unit}.`);
+      setMessage(direction > 0 ? "Produkt dodany do spizarni." : "Produkt odjety ze spizarni.");
+    } catch (error) {
+      setActionError(true);
+      setActionMessage(error instanceof Error ? error.message : "Nie udalo sie zmienic stanu.");
+    } finally { setBusy(false); }
   }
 
   return (
@@ -91,15 +110,17 @@ export function ScannerScreen() {
             <View style={styles.product}>
               <Text style={styles.name}>{product.name}</Text>
               <Text>{product.brand}</Text>
+              <Text style={styles.package}>Gramatura opakowania: {product.packageAmount ? `${product.packageAmount} ${product.packageUnit}` : product.servingSize || "brak danych"}</Text>
               <Text>{product.nutrientsPer100g.energyKcal ?? "-"} kcal / 100 g</Text>
               <Text>B: {product.nutrientsPer100g.proteins ?? "-"} g  W: {product.nutrientsPer100g.carbohydrates ?? "-"} g  T: {product.nutrientsPer100g.fat ?? "-"} g</Text>
-              <View style={styles.row}><TextInput value={expiryDate} onChangeText={setExpiryDate} placeholder="Data waznosci RRRR-MM-DD" style={styles.metaInput} /><TextInput value={location} onChangeText={setLocation} placeholder="Lokalizacja" style={styles.metaInput} /></View>
+              <View style={styles.row}><TextInput value={expiryDate} onChangeText={setExpiryDate} placeholder="Data waznosci RRRR-MM-DD *" style={styles.metaInput} /><TextInput value={location} onChangeText={setLocation} placeholder="Lokalizacja *" style={styles.metaInput} /></View>
               <View style={styles.actions}>
                 <TextInput value={stockAmount} onChangeText={setStockAmount} keyboardType="decimal-pad" style={styles.amount} />
                 {(["g", "ml", "szt"] as Unit[]).map((unit) => <Pressable key={unit} onPress={() => setStockUnit(unit)} style={[styles.unitChoice, stockUnit === unit && styles.unitActive]}><Text style={stockUnit === unit ? styles.white : undefined}>{unit}</Text></Pressable>)}
-                <Pressable onPress={() => void update(1)} style={styles.button}><Text style={styles.white}>+ Dodaj</Text></Pressable>
-                <Pressable onPress={() => void update(-1)} style={styles.remove}><Text style={styles.white}>- Odejmij</Text></Pressable>
+                <Pressable disabled={busy} onPress={() => void update(1)} style={[styles.button, busy && styles.disabled]}><Text style={styles.white}>{busy ? "Zapisywanie..." : "+ Dodaj"}</Text></Pressable>
+                <Pressable disabled={busy} onPress={() => void update(-1)} style={[styles.remove, busy && styles.disabled]}><Text style={styles.white}>- Odejmij</Text></Pressable>
               </View>
+              {!!actionMessage && <Text style={[styles.actionMessage, actionError ? styles.actionError : styles.actionSuccess]}>{actionMessage}</Text>}
               {product.nutrientsPer100g.energyKcal === undefined && <Pressable onPress={() => setManualOpen(true)} style={styles.manual}><Text style={styles.white}>Uzupelnij kalorie recznie</Text></Pressable>}
             </View>
           )}
@@ -120,9 +141,14 @@ const styles = StyleSheet.create({
   message: { color: colors.muted, marginVertical: 18 },
   product: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 18, gap: 8 },
   name: { fontSize: 24, fontWeight: "800" },
+  package: { fontSize: 18, fontWeight: "800", color: colors.primary },
   actions: { flexDirection: "row", gap: 12, marginTop: 12 },
   amount: { width: 80, backgroundColor: colors.background, borderRadius: 10, padding: 12, textAlign: "center" },
   metaInput: { flex: 1, backgroundColor: colors.background, borderRadius: 10, padding: 12 },
   unitChoice: { backgroundColor: colors.background, padding: 12, borderRadius: 10 }, unitActive: { backgroundColor: colors.primary },
   remove: { backgroundColor: colors.danger, padding: 15, borderRadius: 12 },
+  actionMessage: { fontSize: 17, fontWeight: "800", padding: 14, borderRadius: 10 },
+  actionSuccess: { color: "#1B5E20", backgroundColor: "#E8F5E9" },
+  actionError: { color: colors.danger, backgroundColor: "#FFEBEE" },
+  disabled: { opacity: 0.55 }
 });

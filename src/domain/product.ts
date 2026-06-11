@@ -18,6 +18,8 @@ export type Product = {
   imageUrl?: string;
   servingSize?: string;
   netWeightGrams?: number;
+  packageAmount?: number;
+  packageUnit?: Unit;
   defaultUnit?: Unit;
   nutritionBasis?: NutritionBasis;
   nutrientsPer100g: Nutrients;
