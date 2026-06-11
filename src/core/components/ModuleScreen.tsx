@@ -3,11 +3,11 @@ import { PropsWithChildren } from "react";
 import { Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
 import { colors } from "@/core/theme";
 
-export function ModuleScreen({ title, children }: PropsWithChildren<{ title: string }>) {
+export function ModuleScreen({ title, children, onBack }: PropsWithChildren<{ title: string; onBack?: () => void }>) {
   return (
     <SafeAreaView style={styles.page}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.back}>
+        <Pressable onPress={onBack ?? (() => router.back())} style={styles.back}>
           <Text style={styles.backText}>Wstecz</Text>
         </Pressable>
         <Text style={styles.title}>{title}</Text>
