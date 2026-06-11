@@ -3,11 +3,11 @@ import { useCallback, useMemo, useState } from "react";
 import { FlatList, GestureResponderEvent, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
 import { colors } from "@/core/theme";
-import { Meal, MealIngredient, MealType } from "@/domain/meal";
+import { DailySummary, Meal, MealIngredient, MealType } from "@/domain/meal";
 import { Nutrients, PantryItem } from "@/domain/product";
 import { MealHistory } from "@/features/meals/MealHistory";
-import { createMeal, listMeals, listPantry } from "@/services/inventoryRepository";
-import { createMealIngredient, sumNutrients } from "@/services/nutrition";
+import { createMeal, getDailySummary, listMeals, listPantry } from "@/services/inventoryRepository";
+import { createMealIngredient, dateKey, sumNutrients } from "@/services/nutrition";
 
 const mealTypes: { value: MealType; label: string; description: string }[] = [
   { value: "breakfast", label: "Sniadanie", description: "Pierwszy posilek dnia" },
@@ -22,6 +22,7 @@ type Step = "type" | "products" | "amount" | "review";
 export function MealsScreen() {
   const [pantry, setPantry] = useState<PantryItem[]>([]);
   const [meals, setMeals] = useState<Meal[]>([]);
+  const [dailySummary, setDailySummary] = useState<DailySummary>({ dateKey: dateKey(), totals: {}, mealCount: 0, updatedAt: Date.now() });
   const [creatorOpen, setCreatorOpen] = useState(false);
   const [step, setStep] = useState<Step>("type");
   const [type, setType] = useState<MealType | null>(null);
@@ -35,9 +36,10 @@ export function MealsScreen() {
 
   const refresh = useCallback(async () => {
     try {
-      const [nextPantry, nextMeals] = await Promise.all([listPantry(), listMeals()]);
+      const [nextPantry, nextMeals, nextSummary] = await Promise.all([listPantry(), listMeals(), getDailySummary(dateKey())]);
       setPantry(nextPantry);
       setMeals(nextMeals);
+      setDailySummary(nextSummary);
     } catch { setMessage("Nie udalo sie pobrac danych."); }
   }, []);
   useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
@@ -112,7 +114,7 @@ export function MealsScreen() {
       await createMeal(mealName, type, ingredientResult.ingredients);
       await refresh();
       setCreatorOpen(false);
-      setMessage(`Zapisano posilek „${mealName}”. Produkty zostaly odjete ze spizarni.`);
+      setMessage(`Zapisano posilek: ${mealName}. Produkty zostaly odjete ze spizarni.`);
     } catch (error) {
       setModalMessage(error instanceof Error ? error.message : "Nie udalo sie zapisac posilku.");
     } finally { setBusy(false); }
@@ -121,9 +123,10 @@ export function MealsScreen() {
   return (
     <ModuleScreen title="Posilki">
       <View style={styles.pageHeader}>
-        <View><Text style={styles.pageTitle}>Dziennik posilkow</Text><Text style={styles.muted}>Tworz posilki z produktow zapisanych w spizarni.</Text></View>
+        <View><Text style={styles.pageTitle}>Posilki i dzienny bilans</Text><Text style={styles.muted}>{formatToday()} | Tworz posilki z produktow zapisanych w spizarni.</Text></View>
         <Pressable onPress={openCreator} style={styles.newButton}><Text style={styles.white}>+ Nowy posilek</Text></Pressable>
       </View>
+      <DailyNutritionSummary summary={dailySummary} />
       {!!message && <Text style={styles.successBanner}>{message}</Text>}
       <MealHistory meals={meals} onChanged={refresh} />
 
@@ -183,14 +186,28 @@ function NutritionSummary({ totals }: { totals: Nutrients }) {
   return <View style={styles.nutritionGrid}>{entries.map(([label, value, unit]) => <View key={String(label)} style={styles.nutritionCard}><Text style={styles.nutritionValue}>{value ?? 0}</Text><Text style={styles.muted}>{label} ({unit})</Text></View>)}</View>;
 }
 
+function DailyNutritionSummary({ summary }: { summary: DailySummary }) {
+  const entries = [
+    ["Kalorie", summary.totals.energyKcal, "kcal", true],
+    ["Bialko", summary.totals.proteins, "g", false],
+    ["Weglowodany", summary.totals.carbohydrates, "g", false],
+    ["Tluszcz", summary.totals.fat, "g", false],
+    ["Blonnik", summary.totals.fiber, "g", false],
+    ["Sol", summary.totals.salt, "g", false]
+  ] as const;
+  return <View style={styles.dailyPanel}><View style={styles.dailyHeading}><Text style={styles.dailyTitle}>Spozycie dzisiaj</Text><Text style={styles.dailyCount}>{summary.mealCount} posilkow</Text></View><View style={styles.dailyGrid}>{entries.map(([label, value, unit, highlighted]) => <View key={label} style={styles.dailyItem}><Text style={[styles.dailyValue, highlighted && styles.dailyKcal]}>{value ?? 0} {unit}</Text><Text style={styles.dailyLabel}>{label}</Text></View>)}</View></View>;
+}
+
 function PrimaryButton({ label, onPress, disabled }: { label: string; onPress: () => void; disabled?: boolean }) { return <Pressable disabled={disabled} onPress={onPress} style={[styles.primary, disabled && styles.disabled]}><Text style={styles.white}>{label}</Text></Pressable>; }
 function buildIngredients(pantry: PantryItem[], amounts: Record<string, string>) { const ingredients: MealIngredient[] = []; let error = ""; for (const item of pantry) { const amount = parseAmount(amounts[item.barcode]); if (amount <= 0) continue; try { ingredients.push(createMealIngredient(item, amount)); } catch (cause) { error = cause instanceof Error ? cause.message : "Nieprawidlowa ilosc."; } } return { ingredients, error }; }
 function parseAmount(value?: string) { const number = Number((value ?? "").replace(",", ".")); return Number.isFinite(number) && number > 0 ? Math.round(number * 100) / 100 : 0; }
 function stepLabel(step: Step) { return step === "type" ? "KROK 1 Z 3" : step === "review" ? "KROK 3 Z 3" : "KROK 2 Z 3"; }
 function stepTitle(step: Step, item: PantryItem | null) { if (step === "type") return "Jaki to posilek?"; if (step === "products") return "Wybierz produkty"; if (step === "amount") return `Podaj ilosc: ${item?.product.name ?? "produkt"}`; return "Sprawdz posilek"; }
+function formatToday() { return new Date().toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long" }); }
 
 const styles = StyleSheet.create({
   pageHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }, pageTitle: { fontSize: 22, fontWeight: "800" }, muted: { color: colors.muted, fontSize: 13 }, newButton: { backgroundColor: colors.primary, paddingHorizontal: 22, paddingVertical: 14, borderRadius: 12 }, white: { color: "white", fontWeight: "800" },
+  dailyPanel: { backgroundColor: colors.surface, borderRadius: 18, padding: 15, marginBottom: 12 }, dailyHeading: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 9 }, dailyTitle: { fontSize: 19, fontWeight: "900" }, dailyCount: { color: colors.muted, fontWeight: "700" }, dailyGrid: { flexDirection: "row", gap: 8 }, dailyItem: { flex: 1, minWidth: 90, backgroundColor: colors.background, borderRadius: 11, padding: 10 }, dailyValue: { fontSize: 15, fontWeight: "900", color: colors.text }, dailyKcal: { color: colors.primary, fontSize: 19 }, dailyLabel: { color: colors.muted, fontSize: 12, marginTop: 2 },
   successBanner: { color: "#1B5E20", backgroundColor: "#E8F5E9", borderRadius: 10, padding: 12, fontWeight: "700", marginBottom: 12 }, backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.48)", alignItems: "center", justifyContent: "center", padding: 24 }, modalCard: { width: "90%", maxWidth: 900, height: "86%", backgroundColor: colors.surface, borderRadius: 22, padding: 22 },
   modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: colors.border }, stepLabel: { color: colors.primary, fontWeight: "800", fontSize: 12 }, modalTitle: { fontSize: 25, fontWeight: "900", marginTop: 3 }, close: { padding: 10 }, closeText: { color: colors.muted, fontWeight: "700" }, stepScroll: { flex: 1 }, stepContent: { paddingVertical: 16, gap: 10 },
   typeCard: { flexDirection: "row", alignItems: "center", gap: 14, borderWidth: 2, borderColor: colors.border, borderRadius: 14, padding: 15 }, selectedCard: { borderColor: colors.primary, backgroundColor: "#EDF7EE" }, radio: { width: 22, height: 22, borderWidth: 2, borderColor: colors.primary, borderRadius: 11, alignItems: "center", justifyContent: "center" }, radioDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: colors.primary }, typeName: { fontSize: 17, fontWeight: "800" }, customInput: { backgroundColor: colors.background, borderRadius: 12, padding: 14, fontSize: 17 },

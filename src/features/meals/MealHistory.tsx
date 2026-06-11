@@ -5,11 +5,13 @@ import { Meal } from "@/domain/meal";
 import { deleteMeal, renameMeal } from "@/services/inventoryRepository";
 
 type Props = { meals: Meal[]; onChanged: () => Promise<void> };
+type DeleteMode = "restore" | "history";
 
 export function MealHistory({ meals, onChanged }: Props) {
   const [editing, setEditing] = useState<Meal | null>(null);
   const [name, setName] = useState("");
   const [deleting, setDeleting] = useState<Meal | null>(null);
+  const [deleteMode, setDeleteMode] = useState<DeleteMode>("restore");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -39,10 +41,11 @@ export function MealHistory({ meals, onChanged }: Props) {
     if (!deleting) return;
     try {
       setBusy(true);
-      await deleteMeal(deleting, true);
+      const restore = deleteMode === "restore";
+      await deleteMeal(deleting, restore);
       setDeleting(null);
       await onChanged();
-      setMessage("Cofnieto posilek i zwrocono produkty do spizarni.");
+      setMessage(restore ? "Cofnieto posilek i zwrocono produkty do spizarni." : "Usunieto wpis z historii. Stan spizarni nie zostal zmieniony.");
     } catch {
       setMessage("Nie udalo sie usunac posilku.");
     } finally {
@@ -76,14 +79,15 @@ export function MealHistory({ meals, onChanged }: Props) {
             {item.ingredients.map((ingredient) => <Text key={ingredient.barcode} style={styles.ingredient}>- {ingredient.productName}: {ingredient.amount} {ingredient.unit} | {ingredient.nutrients.energyKcal ?? 0} kcal</Text>)}
             {deleting?.id === item.id ? (
               <View style={styles.confirmBox}>
-                <Text style={styles.confirmText}>Cofnac posilek i zwrocic wszystkie skladniki?</Text>
-                <Pressable disabled={busy} onPress={() => void remove()} style={styles.restore}><Text style={styles.white}>Cofnij posilek</Text></Pressable>
+                <Text style={styles.confirmText}>{deleteMode === "restore" ? "Cofnac posilek i zwrocic wszystkie skladniki?" : "Trwale usunac wpis? Produkty nie wroca do spizarni."}</Text>
+                <Pressable disabled={busy} onPress={() => void remove()} style={deleteMode === "restore" ? styles.restore : styles.delete}><Text style={styles.white}>{deleteMode === "restore" ? "Cofnij posilek" : "Usun wpis"}</Text></Pressable>
                 <Pressable onPress={() => setDeleting(null)} style={styles.cancel}><Text>Anuluj</Text></Pressable>
               </View>
             ) : (
               <View style={styles.actions}>
                 <Pressable onPress={() => startEditing(item)} style={styles.cancel}><Text>Edytuj nazwe</Text></Pressable>
-                <Pressable onPress={() => { setDeleting(item); setEditing(null); }} style={styles.delete}><Text style={styles.white}>Cofnij</Text></Pressable>
+                <Pressable onPress={() => { setDeleting(item); setDeleteMode("restore"); setEditing(null); }} style={styles.restore}><Text style={styles.white}>Cofnij</Text></Pressable>
+                <Pressable onPress={() => { setDeleting(item); setDeleteMode("history"); setEditing(null); }} style={styles.delete}><Text style={styles.white}>Usun wpis</Text></Pressable>
               </View>
             )}
           </View>

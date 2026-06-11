@@ -202,12 +202,14 @@ export async function deleteMeal(mealInput: Meal, restoreIngredients = true) {
 
     if (summarySnapshot.exists()) {
       const current = summarySnapshot.data() as DailySummary;
-      transaction.set(summaryRef, withoutUndefined({
-        ...current,
-        totals: addNutrients(current.totals ?? {}, meal.totals, -1),
-        mealCount: Math.max(0, (current.mealCount ?? 1) - 1),
-        updatedAt: Date.now()
-      }));
+      const mealCount = Math.max(0, (current.mealCount ?? 1) - 1);
+      if (mealCount === 0) transaction.delete(summaryRef);
+      else transaction.set(summaryRef, withoutUndefined({
+          ...current,
+          totals: addNutrients(current.totals ?? {}, meal.totals, -1),
+          mealCount,
+          updatedAt: Date.now()
+        }));
     }
     transaction.delete(mealRef);
   });

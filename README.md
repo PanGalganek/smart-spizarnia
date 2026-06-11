@@ -1,6 +1,6 @@
 # Smart Spizarnia
 
-Tabletowa aplikacja mobilna do zarzadzania domowa spizarnia. Projekt jest podzielony na niezalezne moduly: Skaner, Spizarnia, Posilki, Dzisiaj i Zapisane.
+Tabletowa aplikacja mobilna do zarzadzania domowa spizarnia. Projekt jest podzielony na niezalezne moduly: Skaner, Spizarnia, Posilki i Zapisane.
 
 ## Technologia
 
@@ -23,7 +23,6 @@ Tabletowa aplikacja mobilna do zarzadzania domowa spizarnia. Projekt jest podzie
 - `src/features/scanner/` - aparat, kody kreskowe i Open Food Facts
 - `src/features/pantry/` - aktualny stan produktow
 - `src/features/meals/` - kreator i historia posilkow
-- `src/features/today/` - dziennik i podsumowanie odzywcze dnia
 - `src/features/saved/` - katalog zapisanych produktow
 - `src/services/` - komunikacja z Firebase i zewnetrznym API
 - `src/domain/` - wspolne modele danych
@@ -46,7 +45,7 @@ Produkty moga byc przechowywane w gramach, mililitrach albo sztukach. Kazdy wpis
 
 Kreator posilkow wybiera produkty bezposrednio ze spizarni, blokuje ilosc wieksza od dostepnej i na zywo sumuje kcal, bialko, tluszcz oraz weglowodany. Dla produktu liczonego na 100 g uzycie jednostki `szt` wymaga podania rzeczywistej masy jednej sztuki.
 
-Ekran Dzisiaj pokazuje posilki, ich skladniki, kalorie oraz dzienna sume. Cofniecie posilku przywraca dokladnie wykorzystane ilosci do spizarni.
+Ekran Posilki pokazuje dzienna sume kalorii, makro i pozostale skladniki odzywcze oraz historie posilkow. Cofniecie posilku przywraca wykorzystane ilosci do spizarni, a usuniecie wpisu porzadkuje historie bez zmiany stanu spizarni.
 
 ## Weryfikacja
 
