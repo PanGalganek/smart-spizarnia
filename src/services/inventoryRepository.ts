@@ -4,6 +4,7 @@ import { Consumer, DailySummary, Meal, MealIngredient, MealType } from "@/domain
 import { PantryItem, Product, Unit } from "@/domain/product";
 import { addNutrients, dateKey, scaleNutrients, sumNutrients } from "@/services/nutrition";
 import { convertPantryAmount, preferredPantryUnit } from "@/services/pantryUnits";
+import { capacityAfterStockChange, stockCapacity } from "@/services/stockLevel";
 
 const products = collection(db, "products");
 const pantry = collection(db, "pantry");
@@ -19,7 +20,7 @@ function normalizePantryItem(item: PantryItem): PantryItem {
   return {
     ...item,
     quantity,
-    capacity: Math.max(Number(item.capacity) || 0, quantity),
+    capacity: stockCapacity({ ...item, quantity }),
     unit: item.unit ?? item.product.defaultUnit ?? "szt",
     status: item.status ?? (quantity > 0 ? "active" : "consumed")
   };
@@ -74,7 +75,9 @@ export async function changePantryQuantity(
       barcode: product.barcode,
       product,
       quantity,
-      capacity: convertedDelta > 0 ? Math.max(current?.capacity ?? 0, quantity) : Math.max(current?.capacity ?? previousQuantity, previousQuantity),
+      capacity: convertedDelta > 0
+        ? capacityAfterStockChange(current, quantity, convertedDelta, product, current?.unit ?? unit)
+        : current ? stockCapacity(current) : Math.max(previousQuantity, 1),
       unit: current?.unit ?? unit,
       expiryDate: metadata?.expiryDate ?? current?.expiryDate,
       location: metadata?.location ?? current?.location,

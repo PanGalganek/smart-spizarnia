@@ -21,7 +21,7 @@ export default function HomeScreen() {
   return (
     <ScrollView style={styles.page} contentContainerStyle={[styles.content, compact && styles.compactContent]}>
       <View style={styles.header}>
-        <View style={styles.heading}><Text style={[styles.title, compact && styles.compactTitle]}>Smart Spiżarnia</Text><Text style={styles.subtitle}>Co chcesz dziś zrobić? · wersja 0.9.0</Text></View>
+        <View style={styles.heading}><Text style={[styles.title, compact && styles.compactTitle]}>Smart Spiżarnia</Text><Text style={styles.subtitle}>Co chcesz dziś zrobić? · wersja 0.9.1</Text></View>
         <Pressable onPress={signOut} style={styles.logout}><Text>Wyloguj</Text></Pressable>
       </View>
       <View style={styles.grid}>
