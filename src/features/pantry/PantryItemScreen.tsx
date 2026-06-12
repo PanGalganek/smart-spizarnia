@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { DatePickerField } from "@/core/components/DatePickerField";
 import { LocationPicker } from "@/core/components/LocationPicker";
@@ -22,25 +22,41 @@ export function PantryItemScreen() {
   const [depleted, setDepleted] = useState(false);
   const [consumeOpen, setConsumeOpen] = useState(false);
   const [consumeAmount, setConsumeAmount] = useState("1");
+  const itemRef = useRef<PantryItem | null>(null);
+  const metadataQueue = useRef(Promise.resolve());
   const expiryWarning = getExpiryWarning(expiryDate);
 
   useEffect(() => {
     if (!barcode) return setMessage("Brak kodu produktu.");
     void getPantryItem(barcode).then((found) => {
       if (!found) return setMessage("Tego produktu nie ma już w spiżarni.");
+      itemRef.current = found;
       setItem(found);
       setExpiryDate(found.expiryDate ?? ""); setLocation(found.location ?? ""); setMessage("");
     }).catch(() => setMessage("Nie udało się pobrać produktu."));
   }, [barcode]);
 
-  async function save() {
-    if (!item) return;
-    try {
-      setBusy(true); setMessage("");
-      const next = { ...item, expiryDate: expiryDate.trim() || undefined, location: location.trim() || undefined };
-      await savePantryItem(next); setItem(next); setMessage("Zmiany zostały zapisane.");
-    } catch { setMessage("Nie udało się zapisać produktu."); }
-    finally { setBusy(false); }
+  function saveMetadata(patch: Pick<PantryItem, "expiryDate"> | Pick<PantryItem, "location">, successMessage: string) {
+    const current = itemRef.current;
+    if (!current) return;
+    const next = { ...current, ...patch };
+    itemRef.current = next;
+    setItem(next);
+    setMessage("Zapisywanie...");
+    metadataQueue.current = metadataQueue.current
+      .then(() => savePantryItem(next))
+      .then(() => setMessage(successMessage))
+      .catch(() => setMessage("Nie udało się zapisać zmiany."));
+  }
+
+  function changeExpiryDate(value: string) {
+    setExpiryDate(value);
+    saveMetadata({ expiryDate: value.trim() || undefined }, value ? "Data ważności została zapisana." : "Data ważności została usunięta.");
+  }
+
+  function changeLocation(value: string) {
+    setLocation(value);
+    saveMetadata({ location: value.trim() || undefined }, value ? "Lokalizacja została zapisana." : "Usunięto przypisanie lokalizacji.");
   }
 
   async function remove() {
@@ -67,7 +83,7 @@ export function PantryItemScreen() {
       if (amount > item.quantity) throw new Error(`W spiżarni jest tylko ${item.quantity} ${item.unit}.`);
       await changePantryQuantity(item.product, -amount, item.unit);
       const refreshed = await getPantryItem(item.barcode);
-      if (refreshed) { setItem(refreshed); if (refreshed.quantity === 0) setDepleted(true); }
+      if (refreshed) { itemRef.current = refreshed; setItem(refreshed); if (refreshed.quantity === 0) setDepleted(true); }
       setConsumeOpen(false);
       setMessage(`Zużyto ${amount} ${item.unit}. Pozostało: ${refreshed?.quantity ?? 0} ${item.unit}.`);
     } catch (cause) { setMessage(cause instanceof Error ? cause.message : "Nie udało się zużyć produktu."); }
@@ -83,11 +99,10 @@ export function PantryItemScreen() {
         <View style={styles.nutrition}><Text>{item.product.nutrientsPer100g.energyKcal ?? "-"} kcal</Text><Text>B: {item.product.nutrientsPer100g.proteins ?? "-"} g</Text><Text>W: {item.product.nutrientsPer100g.carbohydrates ?? "-"} g</Text><Text>T: {item.product.nutrientsPer100g.fat ?? "-"} g</Text></View>
         <View style={styles.micronutrients}><Text style={styles.sectionLabel}>Mikroelementy na 100 g/ml</Text><Text style={styles.muted}>Potas: {item.product.nutrientsPer100g.potassium ?? "-"} mg | Wapń: {item.product.nutrientsPer100g.calcium ?? "-"} mg | Żelazo: {item.product.nutrientsPer100g.iron ?? "-"} mg | Magnez: {item.product.nutrientsPer100g.magnesium ?? "-"} mg | Wit. C: {item.product.nutrientsPer100g.vitaminC ?? "-"} mg</Text></View>
         <View style={styles.stockInfo}><Text style={styles.stockLabel}>Stan w spiżarni</Text><Text style={styles.stockValue}>{item.quantity} {item.unit}</Text></View>
-        <DatePickerField value={expiryDate} onChange={setExpiryDate} />
+        <DatePickerField value={expiryDate} onChange={changeExpiryDate} />
         {expiryWarning && <Text style={[styles.expiryWarning, expiryWarning.level === "soon" ? styles.expirySoon : styles.expiryUrgent]}>{expiryWarning.label}</Text>}
-        <LocationPicker value={location} onChange={setLocation} />
-        {!!message && <Text style={message.includes("zapisane") ? styles.success : styles.error}>{message}</Text>}
-        <Pressable disabled={busy} onPress={() => void save()} style={[styles.save, busy && styles.disabled]}><Text style={styles.white}>{busy ? "Zapisywanie..." : "Zapisz zmiany"}</Text></Pressable>
+        <LocationPicker value={location} onChange={changeLocation} />
+        {!!message && <Text style={message.startsWith("Nie") ? styles.error : styles.success}>{message}</Text>}
         {item.quantity > 0 && <Pressable disabled={busy} onPress={openConsumption} style={styles.consumeButton}><Text style={styles.white}>Zużyj produkt</Text></Pressable>}
         <View style={styles.dangerZone}>
           <Text style={styles.dangerTitle}>Usunięcie ze spiżarni</Text>
@@ -110,7 +125,7 @@ const styles = StyleSheet.create({
   card: { backgroundColor: colors.surface, borderRadius: 18, padding: 22, gap: 16 }, name: { fontSize: 27, fontWeight: "900" }, muted: { color: colors.muted, lineHeight: 20 },
   nutrition: { flexDirection: "row", flexWrap: "wrap", gap: 18, backgroundColor: colors.background, borderRadius: 12, padding: 14 }, micronutrients: { backgroundColor: colors.background, borderRadius: 12, padding: 14, gap: 5 }, sectionLabel: { fontWeight: "800" },
   stockInfo: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, backgroundColor: colors.background, borderRadius: 12, padding: 15 }, stockLabel: { fontWeight: "800" }, stockValue: { color: colors.primary, fontSize: 22, fontWeight: "900" }, white: { color: "white", fontWeight: "800" },
-  save: { alignItems: "center", backgroundColor: colors.primary, borderRadius: 11, padding: 15 }, consumeButton: { alignItems: "center", backgroundColor: "#EF6C00", borderRadius: 11, padding: 15 }, disabled: { opacity: 0.55 }, success: { color: colors.primary, fontWeight: "700" }, error: { color: colors.danger, fontWeight: "700" },
+  consumeButton: { alignItems: "center", backgroundColor: "#EF6C00", borderRadius: 11, padding: 15 }, disabled: { opacity: 0.55 }, success: { color: colors.primary, fontWeight: "700" }, error: { color: colors.danger, fontWeight: "700" },
   expiryWarning: { alignSelf: "flex-start", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, fontWeight: "900" }, expiryUrgent: { color: colors.danger, backgroundColor: "#FFEBEE" }, expirySoon: { color: "#8A4B00", backgroundColor: "#FFF3E0" },
   dangerZone: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 18, gap: 10 }, dangerTitle: { color: colors.danger, fontSize: 18, fontWeight: "900" },
   deleteOutline: { alignSelf: "flex-start", borderWidth: 2, borderColor: colors.danger, borderRadius: 10, padding: 13 }, deleteText: { color: colors.danger, fontWeight: "800" },
