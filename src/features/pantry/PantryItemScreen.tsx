@@ -13,7 +13,6 @@ import { getExpiryWarning } from "@/services/expiry";
 import { changePantryQuantity, createMeal, deletePantryItem, getPantryItem, savePantryItem } from "@/services/inventoryRepository";
 import { createMealIngredient } from "@/services/nutrition";
 import { canUseWholePackage, convertPantryAmount } from "@/services/pantryUnits";
-import { capacityForPackage } from "@/services/stockLevel";
 
 export function PantryItemScreen() {
   const params = useLocalSearchParams<{ barcode: string | string[] }>();
@@ -23,8 +22,6 @@ export function PantryItemScreen() {
   const [unit, setUnit] = useState<Unit>("g");
   const [expiryDate, setExpiryDate] = useState("");
   const [location, setLocation] = useState("");
-  const [packageAmount, setPackageAmount] = useState("");
-  const [packageUnit, setPackageUnit] = useState<Unit>("g");
   const [message, setMessage] = useState("Ladowanie produktu...");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -40,8 +37,6 @@ export function PantryItemScreen() {
     void getPantryItem(barcode).then((found) => {
       if (!found) return setMessage("Tego produktu nie ma już w spiżarni.");
       setItem(found); setQuantity(String(found.quantity)); setUnit(found.unit);
-      setPackageAmount(found.product.packageAmount ? String(found.product.packageAmount) : "");
-      setPackageUnit(found.product.packageUnit ?? found.unit);
       setExpiryDate(found.expiryDate ?? ""); setLocation(found.location ?? ""); setMessage("");
     }).catch(() => setMessage("Nie udało się pobrać produktu."));
   }, [barcode]);
@@ -49,14 +44,10 @@ export function PantryItemScreen() {
   async function save() {
     if (!item) return;
     const nextQuantity = Number(quantity.replace(",", "."));
-    const nextPackageAmount = packageAmount.trim() ? Number(packageAmount.replace(",", ".")) : undefined;
     if (!Number.isFinite(nextQuantity) || nextQuantity < 0) return setMessage("Ilość musi byc liczba nie mniejsza od zera.");
-    if (nextPackageAmount !== undefined && (!Number.isFinite(nextPackageAmount) || nextPackageAmount <= 0)) return setMessage("Pojemność opakowania musi być większa od zera.");
     try {
       setBusy(true); setMessage("");
-      const product = { ...item.product, packageAmount: nextPackageAmount, packageUnit: nextPackageAmount ? packageUnit : undefined, netWeightGrams: packageUnit === "g" ? nextPackageAmount : item.product.netWeightGrams, updatedAt: Date.now() };
-      const draft = { ...item, product, quantity: nextQuantity, unit, expiryDate: expiryDate.trim() || undefined, location: location.trim() || undefined, status: nextQuantity === 0 ? "consumed" as const : "active" as const };
-      const next = { ...draft, capacity: capacityForPackage(draft, nextPackageAmount, nextPackageAmount ? packageUnit : undefined) };
+      const next = { ...item, quantity: nextQuantity, unit, expiryDate: expiryDate.trim() || undefined, location: location.trim() || undefined, status: nextQuantity === 0 ? "consumed" as const : "active" as const };
       await savePantryItem(next); setItem(next); setMessage("Zmiany zostały zapisane.");
       if (item.quantity > 0 && nextQuantity === 0) setDepleted(true);
     } catch { setMessage("Nie udało się zapisać produktu."); }
@@ -118,11 +109,6 @@ export function PantryItemScreen() {
           <Field label="Ilość" value={quantity} onChangeText={setQuantity} numeric />
           <View style={styles.field}><Text style={styles.label}>Jednostka</Text><View style={styles.units}>{(["g", "ml", "szt"] as Unit[]).map((value) => <Pressable key={value} onPress={() => setUnit(value)} style={[styles.unit, unit === value && styles.unitActive]}><Text style={unit === value ? styles.white : undefined}>{value}</Text></Pressable>)}</View></View>
         </View>
-        <View style={styles.packageBox}>
-          <Text style={styles.sectionLabel}>Pojemność jednego pełnego opakowania</Text>
-          <Text style={styles.muted}>Na tej podstawie aplikacja wylicza procent zapasu. Przykład: mleko 1000 ml.</Text>
-          <View style={styles.row}><Field label="Gramatura / objętość" value={packageAmount} onChangeText={setPackageAmount} numeric /><View style={styles.field}><Text style={styles.label}>Jednostka opakowania</Text><View style={styles.units}>{(["g", "ml", "szt"] as Unit[]).map((value) => <Pressable key={value} onPress={() => setPackageUnit(value)} style={[styles.unit, packageUnit === value && styles.unitActive]}><Text style={packageUnit === value ? styles.white : undefined}>{value}</Text></Pressable>)}</View></View></View>
-        </View>
         <DatePickerField value={expiryDate} onChange={setExpiryDate} />
         {expiryWarning && <Text style={[styles.expiryWarning, expiryWarning.level === "soon" ? styles.expirySoon : styles.expiryUrgent]}>{expiryWarning.label}</Text>}
         <LocationPicker value={location} onChange={setLocation} />
@@ -155,7 +141,7 @@ function Field({ label, numeric, ...props }: { label: string; numeric?: boolean;
 const styles = StyleSheet.create({
   scroll: { flex: 1, minHeight: 0 }, content: { flexGrow: 1, paddingBottom: 36 }, loading: { textAlign: "center", color: colors.muted, marginTop: 70 },
   card: { backgroundColor: colors.surface, borderRadius: 18, padding: 22, gap: 16 }, name: { fontSize: 27, fontWeight: "900" }, muted: { color: colors.muted, lineHeight: 20 },
-  nutrition: { flexDirection: "row", flexWrap: "wrap", gap: 18, backgroundColor: colors.background, borderRadius: 12, padding: 14 }, micronutrients: { backgroundColor: colors.background, borderRadius: 12, padding: 14, gap: 5 }, packageBox: { backgroundColor: colors.background, borderRadius: 12, padding: 14, gap: 10 }, sectionLabel: { fontWeight: "800" }, row: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
+  nutrition: { flexDirection: "row", flexWrap: "wrap", gap: 18, backgroundColor: colors.background, borderRadius: 12, padding: 14 }, micronutrients: { backgroundColor: colors.background, borderRadius: 12, padding: 14, gap: 5 }, sectionLabel: { fontWeight: "800" }, row: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   field: { minWidth: 150, flex: 1, gap: 6 }, label: { fontWeight: "700" }, input: { backgroundColor: colors.background, borderRadius: 10, padding: 13, fontSize: 17 }, units: { flexDirection: "row", gap: 7 },
   unit: { backgroundColor: colors.background, padding: 13, borderRadius: 10 }, unitActive: { backgroundColor: colors.primary }, white: { color: "white", fontWeight: "800" },
   save: { alignItems: "center", backgroundColor: colors.primary, borderRadius: 11, padding: 15 }, consumeButton: { alignItems: "center", backgroundColor: "#EF6C00", borderRadius: 11, padding: 15 }, disabled: { opacity: 0.55 }, success: { color: colors.primary, fontWeight: "700" }, error: { color: colors.danger, fontWeight: "700" },
