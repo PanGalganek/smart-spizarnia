@@ -1,18 +1,14 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { ConsumerPicker } from "@/core/components/ConsumerPicker";
 import { DatePickerField } from "@/core/components/DatePickerField";
 import { LocationPicker } from "@/core/components/LocationPicker";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
 import { colors } from "@/core/theme";
 import { PantryItem, Unit } from "@/domain/product";
-import { Consumer } from "@/domain/meal";
 import { AddDepletedPrompt } from "@/features/shopping/AddDepletedPrompt";
 import { getExpiryWarning } from "@/services/expiry";
-import { changePantryQuantity, createMeal, deletePantryItem, getPantryItem, savePantryItem } from "@/services/inventoryRepository";
-import { createMealIngredient } from "@/services/nutrition";
-import { canUseWholePackage, convertPantryAmount } from "@/services/pantryUnits";
+import { changePantryQuantity, deletePantryItem, getPantryItem, savePantryItem } from "@/services/inventoryRepository";
 
 export function PantryItemScreen() {
   const params = useLocalSearchParams<{ barcode: string | string[] }>();
@@ -28,8 +24,6 @@ export function PantryItemScreen() {
   const [depleted, setDepleted] = useState(false);
   const [consumeOpen, setConsumeOpen] = useState(false);
   const [consumeAmount, setConsumeAmount] = useState("1");
-  const [consumeUnit, setConsumeUnit] = useState<Unit>("szt");
-  const [consumer, setConsumer] = useState<Consumer>({ id: "bartek", name: "Bartek" });
   const expiryWarning = getExpiryWarning(expiryDate);
 
   useEffect(() => {
@@ -45,6 +39,7 @@ export function PantryItemScreen() {
     if (!item) return;
     const nextQuantity = Number(quantity.replace(",", "."));
     if (!Number.isFinite(nextQuantity) || nextQuantity < 0) return setMessage("Ilość musi byc liczba nie mniejsza od zera.");
+    if (nextQuantity < item.quantity) return setMessage("Aby zmniejszyć stan, użyj przycisku „Zużyj produkt”.");
     try {
       setBusy(true); setMessage("");
       const next = { ...item, quantity: nextQuantity, unit, expiryDate: expiryDate.trim() || undefined, location: location.trim() || undefined, status: nextQuantity === 0 ? "consumed" as const : "active" as const };
@@ -65,34 +60,22 @@ export function PantryItemScreen() {
 
   function openConsumption() {
     if (!item) return;
-    setConsumeUnit(canUseWholePackage(item.product) ? "szt" : item.unit);
-    setConsumeAmount(canUseWholePackage(item.product) ? "1" : String(item.quantity));
+    setConsumeAmount("");
     setMessage(""); setConsumeOpen(true);
   }
 
-  function pantryAmount() {
-    if (!item) return 0;
-    const value = Number(consumeAmount.replace(",", "."));
-    if (!Number.isFinite(value) || value <= 0) throw new Error("Wpisz prawidłową ilość.");
-    return convertPantryAmount(item.product, value, consumeUnit, item.unit);
-  }
-
-  async function consume(withCalories: boolean) {
+  async function consume() {
     if (!item) return;
     try {
       setBusy(true); setMessage("");
-      const amount = pantryAmount();
+      const amount = Number(consumeAmount.replace(",", "."));
+      if (!Number.isFinite(amount) || amount <= 0) throw new Error("Wpisz prawidłową ilość.");
       if (amount > item.quantity) throw new Error(`W spiżarni jest tylko ${item.quantity} ${item.unit}.`);
-      if (withCalories) {
-        const ingredient = createMealIngredient(item, amount);
-        await createMeal(`Zużycie: ${item.product.name}`, "snack", [ingredient], 1, Date.now(), consumer);
-      } else {
-        await changePantryQuantity(item.product, -Number(consumeAmount.replace(",", ".")), consumeUnit);
-      }
+      await changePantryQuantity(item.product, -amount, item.unit);
       const refreshed = await getPantryItem(item.barcode);
       if (refreshed) { setItem(refreshed); setQuantity(String(refreshed.quantity)); if (refreshed.quantity === 0) setDepleted(true); }
       setConsumeOpen(false);
-      setMessage(withCalories ? `Odjęto produkt i doliczono kalorie osobie ${consumer.name}.` : "Odjęto produkt ze stanu bez naliczania kalorii.");
+      setMessage(`Zużyto ${amount} ${item.unit}. Pozostało: ${refreshed?.quantity ?? 0} ${item.unit}.`);
     } catch (cause) { setMessage(cause instanceof Error ? cause.message : "Nie udało się zużyć produktu."); }
     finally { setBusy(false); }
   }
@@ -124,12 +107,9 @@ export function PantryItemScreen() {
     </ScrollView>
     <Modal visible={consumeOpen} transparent animationType="fade" onRequestClose={() => setConsumeOpen(false)}><View style={styles.backdrop}><View style={styles.consumeCard}>
       <View style={styles.consumeHeader}><Text style={styles.consumeTitle}>Zużyj: {item?.product.name}</Text><Pressable onPress={() => setConsumeOpen(false)}><Text style={styles.muted}>Zamknij</Text></Pressable></View>
-      {item && canUseWholePackage(item.product) && <Pressable onPress={() => { setConsumeAmount("1"); setConsumeUnit("szt"); }} style={styles.wholePackage}><Text style={styles.wholePackageText}>Całe opakowanie: 1 szt. ({item.product.packageAmount} {item.product.packageUnit})</Text></Pressable>}
-      <View style={styles.consumeAmountRow}><TextInput value={consumeAmount} onChangeText={setConsumeAmount} keyboardType="decimal-pad" style={styles.consumeInput} />{(["g", "ml", "szt"] as Unit[]).map((value) => <Pressable key={value} onPress={() => setConsumeUnit(value)} style={[styles.unit, consumeUnit === value && styles.unitActive]}><Text style={consumeUnit === value ? styles.white : undefined}>{value}</Text></Pressable>)}</View>
-      <ConsumerPicker value={consumer} onChange={setConsumer} label="Jeśli to jedzenie, dolicz dla" />
-      <Pressable disabled={busy} onPress={() => void consume(true)} style={styles.eatButton}><Text style={styles.white}>Zjedz i dolicz kalorie</Text></Pressable>
-      <Pressable disabled={busy} onPress={() => void consume(false)} style={styles.useButton}><Text style={styles.white}>Zużyj bez kalorii</Text></Pressable>
-      <Text style={styles.muted}>Tryb bez kalorii służy także do artykułów domowych i chemii gospodarczej.</Text>
+      <Text style={styles.muted}>Dostępne: {item?.quantity ?? 0} {item?.unit}</Text>
+      <View style={styles.consumeAmountRow}><TextInput autoFocus value={consumeAmount} onChangeText={setConsumeAmount} keyboardType="decimal-pad" placeholder="Wpisz zużytą ilość" style={styles.consumeInput} /><Text style={styles.consumeUnit}>{item?.unit}</Text></View>
+      <Pressable disabled={busy} onPress={() => void consume()} style={[styles.useButton, busy && styles.disabled]}><Text style={styles.white}>{busy ? "Zapisywanie..." : "Potwierdź zużycie"}</Text></Pressable>
     </View></View></Modal>
   </ModuleScreen>;
 }
@@ -149,5 +129,5 @@ const styles = StyleSheet.create({
   dangerZone: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 18, gap: 10 }, dangerTitle: { color: colors.danger, fontSize: 18, fontWeight: "900" },
   deleteOutline: { alignSelf: "flex-start", borderWidth: 2, borderColor: colors.danger, borderRadius: 10, padding: 13 }, deleteText: { color: colors.danger, fontWeight: "800" },
   confirm: { flexDirection: "row", flexWrap: "wrap", gap: 10 }, delete: { backgroundColor: colors.danger, borderRadius: 10, padding: 13 }, cancel: { backgroundColor: colors.background, borderRadius: 10, padding: 13 },
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.48)", alignItems: "center", justifyContent: "center", padding: 16 }, consumeCard: { width: "100%", maxWidth: 560, backgroundColor: colors.surface, borderRadius: 20, padding: 20, gap: 14 }, consumeHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }, consumeTitle: { flex: 1, fontSize: 22, fontWeight: "900" }, wholePackage: { backgroundColor: "#E8F5E9", borderWidth: 1, borderColor: colors.primary, borderRadius: 11, padding: 12 }, wholePackageText: { color: colors.primary, fontWeight: "800" }, consumeAmountRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 }, consumeInput: { flex: 1, minWidth: 100, backgroundColor: colors.background, borderRadius: 10, padding: 13, fontSize: 18 }, eatButton: { backgroundColor: colors.primary, borderRadius: 11, padding: 14, alignItems: "center" }, useButton: { backgroundColor: "#1565C0", borderRadius: 11, padding: 14, alignItems: "center" }
+  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.48)", alignItems: "center", justifyContent: "center", padding: 16 }, consumeCard: { width: "100%", maxWidth: 560, backgroundColor: colors.surface, borderRadius: 20, padding: 20, gap: 14 }, consumeHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }, consumeTitle: { flex: 1, fontSize: 22, fontWeight: "900" }, consumeAmountRow: { flexDirection: "row", alignItems: "center", gap: 10 }, consumeInput: { flex: 1, minWidth: 100, backgroundColor: colors.background, borderRadius: 10, padding: 13, fontSize: 18 }, consumeUnit: { fontSize: 18, fontWeight: "900" }, useButton: { backgroundColor: "#1565C0", borderRadius: 11, padding: 14, alignItems: "center" }
 });
