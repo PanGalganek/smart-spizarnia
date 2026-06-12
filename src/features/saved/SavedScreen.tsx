@@ -8,7 +8,7 @@ import { LocationPicker } from "@/core/components/LocationPicker";
 import { colors } from "@/core/theme";
 import { Consumer } from "@/domain/meal";
 import { Product, Unit } from "@/domain/product";
-import { changePantryQuantity, createUntrackedMeal, listSavedProducts } from "@/services/inventoryRepository";
+import { changePantryQuantity, createUntrackedMeal, listSavedProducts, updateProductPackage } from "@/services/inventoryRepository";
 import { createUntrackedMealIngredient } from "@/services/nutrition";
 import { canUseWholePackage, convertPantryAmount, preferredPantryUnit } from "@/services/pantryUnits";
 import { addProductToShoppingList } from "@/services/shoppingRepository";
@@ -25,6 +25,8 @@ export function SavedScreen() {
   const [location, setLocation] = useState("");
   const [expiryDate, setExpiryDate] = useState("");
   const [consumer, setConsumer] = useState<Consumer>({ id: "bartek", name: "Bartek" });
+  const [packageAmount, setPackageAmount] = useState("");
+  const [packageUnit, setPackageUnit] = useState<Unit>("g");
 
   useFocusEffect(useCallback(() => {
     setError("");
@@ -54,7 +56,23 @@ export function SavedScreen() {
     setSelected(product); setMessage(""); setError("");
     setAmount(canUseWholePackage(product) ? "1" : "100");
     setUnit(canUseWholePackage(product) ? "szt" : product.defaultUnit ?? "g");
+    setPackageAmount(product.packageAmount ? String(product.packageAmount) : "");
+    setPackageUnit(product.packageUnit ?? product.defaultUnit ?? "g");
     setLocation(""); setExpiryDate("");
+  }
+
+  async function savePackage() {
+    if (!selected) return;
+    const value = parseAmount(packageAmount);
+    if (!value) return setError("Wpisz pojemność jednego pełnego opakowania.");
+    try {
+      setBusy(true); setError("");
+      const updated = await updateProductPackage(selected, value, packageUnit);
+      setSelected(updated);
+      setProducts((current) => current.map((product) => product.barcode === updated.barcode ? updated : product));
+      setMessage(`Zapisano pojemność opakowania: ${value} ${packageUnit}.`);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Nie udało się zapisać pojemności opakowania."); }
+    finally { setBusy(false); }
   }
 
   async function addToPantry() {
@@ -114,7 +132,12 @@ export function SavedScreen() {
             <Detail label="Kalorie" value={`${selected?.nutrientsPer100g.energyKcal ?? "brak"} kcal / ${selected?.nutritionBasis === "perUnit" ? "szt." : "100 g/ml"}`} />
             <Detail label="Makroskładniki" value={`B: ${selected?.nutrientsPer100g.proteins ?? "-"} g  W: ${selected?.nutrientsPer100g.carbohydrates ?? "-"} g  T: ${selected?.nutrientsPer100g.fat ?? "-"} g`} />
             <Detail label="Mikroelementy" value={`Potas: ${selected?.nutrientsPer100g.potassium ?? "-"} mg  Wapń: ${selected?.nutrientsPer100g.calcium ?? "-"} mg  Żelazo: ${selected?.nutrientsPer100g.iron ?? "-"} mg  Magnez: ${selected?.nutrientsPer100g.magnesium ?? "-"} mg`} />
-            {selected?.packageAmount && <Detail label="Opakowanie" value={`${selected.packageAmount} ${selected.packageUnit}`} />}
+            <View style={styles.packageEditor}>
+              <Text style={styles.actionTitle}>Jedno pełne opakowanie</Text>
+              <Text style={styles.hint}>Ta wartość określa 100% zapasu i umożliwia użycie przycisku „całe opakowanie”.</Text>
+              <View style={styles.amountRow}><TextInput value={packageAmount} onChangeText={setPackageAmount} keyboardType="decimal-pad" placeholder="Np. 1000" style={styles.amountInput} />{(["g", "ml", "szt"] as Unit[]).map((value) => <Pressable key={value} onPress={() => setPackageUnit(value)} style={[styles.unit, packageUnit === value && styles.unitActive]}><Text style={packageUnit === value ? styles.white : undefined}>{value}</Text></Pressable>)}</View>
+              <Pressable disabled={busy} onPress={() => void savePackage()} style={[styles.savePackageButton, busy && styles.disabled]}><Text style={styles.white}>Zapisz pojemność opakowania</Text></Pressable>
+            </View>
             <View style={styles.actionForm}>
               <Text style={styles.actionTitle}>Ilość</Text>
               {selected && canUseWholePackage(selected) && <Pressable onPress={() => { setAmount("1"); setUnit("szt"); }} style={styles.packageButton}><Text style={styles.packageText}>Całe opakowanie: 1 szt. ({selected.packageAmount} {selected.packageUnit})</Text></Pressable>}
@@ -148,6 +171,6 @@ const styles = StyleSheet.create({
   message: { color: "#1B5E20", backgroundColor: "#E8F5E9", borderRadius: 10, padding: 12, marginBottom: 12, fontWeight: "700" }, error: { color: colors.danger, backgroundColor: "#FFEBEE", borderRadius: 10, padding: 12, marginBottom: 12, fontWeight: "700" }, empty: { textAlign: "center", color: colors.muted, marginTop: 70 },
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.48)", alignItems: "center", justifyContent: "center", padding: 18 }, modalCard: { width: "100%", maxWidth: 580, maxHeight: "92%", backgroundColor: colors.surface, borderRadius: 20, padding: 22 }, modalHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }, modalTitle: { flex: 1, fontSize: 24, fontWeight: "900" }, close: { padding: 6 }, closeText: { color: colors.muted, fontWeight: "700" }, brand: { color: colors.muted, fontSize: 16, marginTop: 5 },
   detailsScroll: { flexShrink: 1, minHeight: 0, marginTop: 18 }, details: { gap: 10, paddingBottom: 8 }, detail: { backgroundColor: colors.background, borderRadius: 11, padding: 13 }, detailLabel: { color: colors.muted, fontSize: 12, fontWeight: "800", marginBottom: 4, textTransform: "uppercase" }, detailValue: { color: colors.text, fontSize: 16, lineHeight: 22 },
-  actionForm: { borderTopWidth: 1, borderTopColor: colors.border, marginTop: 4, paddingTop: 14, gap: 10 }, actionTitle: { fontSize: 18, fontWeight: "900" }, packageButton: { backgroundColor: "#E8F5E9", borderWidth: 1, borderColor: colors.primary, borderRadius: 10, padding: 11 }, packageText: { color: colors.primary, fontWeight: "800" }, amountRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 }, amountInput: { flex: 1, minWidth: 100, backgroundColor: colors.background, borderRadius: 10, padding: 12, fontSize: 17 }, unit: { backgroundColor: colors.background, borderRadius: 10, padding: 12 }, unitActive: { backgroundColor: colors.primary },
+  packageEditor: { backgroundColor: "#F5F9F5", borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 14, gap: 10 }, hint: { color: colors.muted, lineHeight: 19 }, savePackageButton: { backgroundColor: colors.primary, borderRadius: 10, padding: 13, alignItems: "center" }, actionForm: { borderTopWidth: 1, borderTopColor: colors.border, marginTop: 4, paddingTop: 14, gap: 10 }, actionTitle: { fontSize: 18, fontWeight: "900" }, packageButton: { backgroundColor: "#E8F5E9", borderWidth: 1, borderColor: colors.primary, borderRadius: 10, padding: 11 }, packageText: { color: colors.primary, fontWeight: "800" }, amountRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 }, amountInput: { flex: 1, minWidth: 100, backgroundColor: colors.background, borderRadius: 10, padding: 12, fontSize: 17 }, unit: { backgroundColor: colors.background, borderRadius: 10, padding: 12 }, unitActive: { backgroundColor: colors.primary },
   actions: { gap: 8, marginTop: 14 }, addButton: { backgroundColor: colors.primary, borderRadius: 12, padding: 14, alignItems: "center" }, todayButton: { backgroundColor: "#EF6C00", borderRadius: 12, padding: 14, alignItems: "center" }, shoppingButton: { backgroundColor: "#1565C0", borderRadius: 12, padding: 14, alignItems: "center" }, white: { color: "white", fontWeight: "800" }, disabled: { opacity: 0.55 }
 });

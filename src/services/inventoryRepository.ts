@@ -4,7 +4,7 @@ import { Consumer, DailySummary, Meal, MealIngredient, MealType } from "@/domain
 import { PantryItem, Product, Unit } from "@/domain/product";
 import { addNutrients, dateKey, scaleNutrients, sumNutrients } from "@/services/nutrition";
 import { convertPantryAmount, preferredPantryUnit } from "@/services/pantryUnits";
-import { capacityAfterStockChange, stockCapacity } from "@/services/stockLevel";
+import { capacityAfterStockChange, capacityForPackage, stockCapacity } from "@/services/stockLevel";
 
 const products = collection(db, "products");
 const pantry = collection(db, "pantry");
@@ -47,6 +47,27 @@ function normalizeMeal(meal: Meal): Meal {
 
 export async function saveProduct(product: Product) {
   await setDoc(doc(products, product.barcode), withoutUndefined(product), { merge: true });
+}
+
+export async function updateProductPackage(product: Product, packageAmount: number, packageUnit: Unit): Promise<Product> {
+  if (!Number.isFinite(packageAmount) || packageAmount <= 0) throw new Error("Pojemność opakowania musi być większa od zera.");
+  const updated: Product = {
+    ...product,
+    packageAmount,
+    packageUnit,
+    netWeightGrams: packageUnit === "g" ? packageAmount : product.netWeightGrams,
+    updatedAt: Date.now()
+  };
+  await saveProduct(updated);
+  const pantryItem = await getPantryItem(product.barcode);
+  if (pantryItem) {
+    await savePantryItem({
+      ...pantryItem,
+      product: updated,
+      capacity: capacityForPackage(pantryItem, packageAmount, packageUnit)
+    });
+  }
+  return updated;
 }
 
 export async function savePantryItem(item: PantryItem) {
