@@ -3,9 +3,11 @@ import { useLocalSearchParams } from "expo-router";
 import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
 import { DatePickerField } from "@/core/components/DatePickerField";
+import { ConsumerPicker } from "@/core/components/ConsumerPicker";
 import { LocationPicker } from "@/core/components/LocationPicker";
 import { colors } from "@/core/theme";
 import { Product, Unit } from "@/domain/product";
+import { Consumer } from "@/domain/meal";
 import { ManualProductForm } from "@/features/scanner/ManualProductForm";
 import { BarcodeCamera } from "@/features/scanner/BarcodeCamera";
 import { AddDepletedPrompt } from "@/features/shopping/AddDepletedPrompt";
@@ -34,6 +36,7 @@ export function ScannerScreen() {
   const [usdaBusy, setUsdaBusy] = useState(false);
   const [usdaMessage, setUsdaMessage] = useState("");
   const [depletedProducts, setDepletedProducts] = useState<Product[]>([]);
+  const [consumer, setConsumer] = useState<Consumer>({ id: "bartek", name: "Bartek" });
 
   useEffect(() => {
     if (params.autoScan === "1") setCameraOpen(true);
@@ -129,8 +132,8 @@ export function ScannerScreen() {
       const nutritionAmount = nutritionUnit === stockUnit ? amount : convertPantryAmount(product, amount, stockUnit, nutritionUnit);
       const ingredient = createUntrackedMealIngredient(product, nutritionAmount, nutritionUnit);
       await saveProduct(product);
-      await createUntrackedMeal(`Przekąska: ${product.name}`, "snack", ingredient);
-      setActionMessage(`Dodano do dzisiejszego bilansu: ${amount} ${stockUnit}, ${ingredient.nutrients.energyKcal ?? 0} kcal. Stan spiżarni nie został zmieniony.`);
+      await createUntrackedMeal(`Przekąska: ${product.name}`, "snack", ingredient, Date.now(), consumer);
+      setActionMessage(`Dodano do bilansu osoby ${consumer.name}: ${amount} ${stockUnit}, ${ingredient.nutrients.energyKcal ?? 0} kcal. Stan spiżarni nie został zmieniony.`);
       setMessage("Produkt zapisany w dzisiejszym bilansie.");
     } catch (error) {
       setActionError(true);
@@ -193,6 +196,7 @@ export function ScannerScreen() {
               <Text style={styles.micro}>Potas: {product.nutrientsPer100g.potassium ?? "-"} mg  Wapń: {product.nutrientsPer100g.calcium ?? "-"} mg  Żelazo: {product.nutrientsPer100g.iron ?? "-"} mg  Magnez: {product.nutrientsPer100g.magnesium ?? "-"} mg</Text>
               <View style={styles.row}><DatePickerField value={expiryDate} onChange={setExpiryDate} /><LocationPicker value={location} onChange={setLocation} label="Lokalizacja w spiżarni" /></View>
               {canUseWholePackage(product) && <Pressable onPress={() => { setStockAmount("1"); setStockUnit("szt"); }} style={styles.wholePackage}><Text style={styles.wholePackageText}>Całe opakowanie: 1 szt. ({product.packageAmount} {product.packageUnit})</Text></Pressable>}
+              <ConsumerPicker value={consumer} onChange={setConsumer} label="Dla kogo liczyć po wybraniu „Zjedz teraz”?" />
               <View style={styles.actions}>
                 <TextInput value={stockAmount} onChangeText={setStockAmount} keyboardType="decimal-pad" style={styles.amount} />
                 {(["g", "ml", "szt"] as Unit[]).map((unit) => <Pressable key={unit} onPress={() => setStockUnit(unit)} style={[styles.unitChoice, stockUnit === unit && styles.unitActive]}><Text style={stockUnit === unit ? styles.white : undefined}>{unit}</Text></Pressable>)}

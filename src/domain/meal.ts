@@ -22,6 +22,8 @@ export type Meal = {
   totals: Nutrients;
   dateKey: string;
   createdAt: number;
+  consumerId?: string;
+  consumerName?: string;
 };
 
 export type DailySummary = {
@@ -29,4 +31,12 @@ export type DailySummary = {
   totals: Nutrients;
   mealCount: number;
   updatedAt: number;
+  consumerId?: string;
+  consumerName?: string;
+};
+
+export type Consumer = {
+  id: string;
+  name: string;
+  protected?: boolean;
 };

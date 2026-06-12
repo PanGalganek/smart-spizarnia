@@ -3,12 +3,14 @@ import { useCallback, useMemo, useState } from "react";
 import { FlatList, GestureResponderEvent, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
 import { colors } from "@/core/theme";
-import { DailySummary, Meal, MealIngredient, MealType } from "@/domain/meal";
+import { Consumer, DailySummary, Meal, MealIngredient, MealType } from "@/domain/meal";
 import { Nutrients, PantryItem } from "@/domain/product";
 import { MealHistory } from "@/features/meals/MealHistory";
 import { AddDepletedPrompt } from "@/features/shopping/AddDepletedPrompt";
 import { createMeal, getDailySummary, listMeals, listPantry } from "@/services/inventoryRepository";
+import { addConsumer, defaultConsumers, listConsumers } from "@/services/consumerRepository";
 import { createMealIngredient, dateKey, scaleNutrients, sumNutrients } from "@/services/nutrition";
+import { canUseWholePackage, convertPantryAmount } from "@/services/pantryUnits";
 
 const mealTypes: { value: MealType; label: string; description: string }[] = [
   { value: "breakfast", label: "Śniadanie", description: "Pierwszy posiłek dnia" },
@@ -38,15 +40,19 @@ export function MealsScreen() {
   const [depletedProducts, setDepletedProducts] = useState<PantryItem["product"][]>([]);
   const [modalMessage, setModalMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [consumers, setConsumers] = useState<Consumer[]>(defaultConsumers);
+  const [consumer, setConsumer] = useState<Consumer>(defaultConsumers[0]);
+  const [newConsumer, setNewConsumer] = useState("");
 
   const refresh = useCallback(async () => {
     try {
-      const [nextPantry, nextMeals, nextSummary] = await Promise.all([listPantry(), listMeals(), getDailySummary(dateKey())]);
+      const [nextPantry, nextMeals, nextSummary, nextConsumers] = await Promise.all([listPantry(), listMeals(), getDailySummary(dateKey(), consumer), listConsumers()]);
       setPantry(nextPantry);
       setMeals(nextMeals);
       setDailySummary(nextSummary);
+      setConsumers(nextConsumers);
     } catch { setMessage("Nie udało się pobrać danych."); }
-  }, []);
+  }, [consumer]);
   useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
 
   const ingredientResult = useMemo(() => buildIngredients(pantry, amounts), [amounts, pantry]);
@@ -121,15 +127,23 @@ export function MealsScreen() {
     try {
       setBusy(true);
       setModalMessage("");
-      await createMeal(mealName, type, ingredientResult.ingredients, servingCount);
+      await createMeal(mealName, type, ingredientResult.ingredients, servingCount, Date.now(), consumer);
       const depleted = pantry.filter((item) => parseAmount(amounts[item.barcode]) === item.quantity).map((item) => item.product);
       await refresh();
       setCreatorOpen(false);
-      setMessage(`Zapisano 1 z ${servingCount} porcji: ${mealName}. Pełne zużycie produktów zostało odjęte ze spiżarni.`);
+      setMessage(`Zapisano dla: ${consumer.name}, 1 z ${servingCount} porcji: ${mealName}. Produkty zostały odjęte ze spiżarni.`);
       setDepletedProducts(depleted);
     } catch (error) {
       setModalMessage(error instanceof Error ? error.message : "Nie udało się zapisać posiłku.");
     } finally { setBusy(false); }
+  }
+
+  async function createConsumer() {
+    try {
+      const created = await addConsumer(newConsumer);
+      setNewConsumer(""); setConsumers(await listConsumers()); setConsumer(created);
+      setMessage(`Dodano osobę: ${created.name}.`);
+    } catch (cause) { setMessage(cause instanceof Error ? cause.message : "Nie udało się dodać osoby."); }
   }
 
   return (
@@ -140,9 +154,14 @@ export function MealsScreen() {
           <View style={styles.pageHeading}><Text style={styles.pageTitle}>Posiłki i dzienny bilans</Text><Text style={styles.muted}>{formatToday()} | Twórz posiłki z produktów zapisanych w spiżarni.</Text></View>
           <Pressable onPress={openCreator} style={[styles.newButton, compact && styles.compactNewButton]}><Text style={styles.white}>+ Nowy posiłek</Text></Pressable>
         </View>
+        <View style={styles.consumerPanel}>
+          <Text style={styles.consumerTitle}>Czyj bilans pokazujemy?</Text>
+          <View style={styles.consumerRow}>{consumers.map((item) => <Pressable key={item.id} onPress={() => setConsumer(item)} style={[styles.consumerChip, consumer.id === item.id && styles.consumerChipActive]}><Text style={consumer.id === item.id ? styles.white : styles.consumerChipText}>{item.name}</Text></Pressable>)}</View>
+          <View style={styles.addConsumerRow}><TextInput value={newConsumer} onChangeText={setNewConsumer} placeholder="Dodaj kolejną osobę" style={styles.addConsumerInput} /><Pressable onPress={() => void createConsumer()} style={styles.addConsumerButton}><Text style={styles.white}>+ Dodaj</Text></Pressable></View>
+        </View>
         <DailyNutritionSummary summary={dailySummary} />
         {!!message && <Text style={styles.successBanner}>{message}</Text>}
-        <MealHistory meals={meals} onChanged={refresh} />
+        <MealHistory meals={meals.filter((meal) => (meal.consumerId ?? "bartek") === consumer.id)} onChanged={refresh} />
       </ScrollView>
 
       <Modal visible={creatorOpen} transparent animationType="fade" onRequestClose={() => setCreatorOpen(false)}>
@@ -156,7 +175,7 @@ export function MealsScreen() {
             {step === "type" && <TypeStep type={type} customName={customName} onType={chooseType} onCustomName={setCustomName} />}
             {step === "products" && <ProductsStep pantry={pantry} amounts={amounts} onEdit={editAmount} onRemove={removeIngredient} />}
             {step === "amount" && editedItem && <AmountStep item={editedItem} value={amountDraft} onChange={setAmountDraft} />}
-            {step === "review" && <ReviewStep name={mealName} ingredients={ingredientResult.ingredients} totals={totals} portionTotals={portionTotals} servings={servings} onServings={setServings} />}
+            {step === "review" && <ReviewStep name={`${mealName} - ${consumer.name}`} ingredients={ingredientResult.ingredients} totals={totals} portionTotals={portionTotals} servings={servings} onServings={setServings} />}
 
             {!!modalMessage && <Text style={styles.errorBanner}>{modalMessage}</Text>}
             {(step !== "type" || type === "custom") && <View style={[styles.modalActions, compact && styles.compactModalActions]}>
@@ -189,8 +208,8 @@ function AmountStep({ item, value, onChange }: { item: PantryItem; value: string
   const amount = parseAmount(value);
   let kcal = 0;
   try { if (amount > 0) kcal = createMealIngredient(item, Math.min(amount, item.quantity)).nutrients.energyKcal ?? 0; } catch { /* Validation message is shown after confirmation. */ }
-  const packageAmount = item.product.packageUnit === item.unit ? item.product.packageAmount : undefined;
-  return <View style={styles.amountStep}><Text style={styles.amountProduct}>{item.product.name}</Text><Text style={styles.available}>Dostępne w spiżarni: {item.quantity} {item.unit}</Text>{packageAmount && packageAmount <= item.quantity && <Pressable onPress={() => onChange(String(packageAmount))} style={styles.wholePackage}><Text style={styles.wholePackageText}>Zużyj całe opakowanie: 1 szt. ({packageAmount} {item.unit})</Text></Pressable>}<View style={styles.amountEntry}><TextInput autoFocus selectTextOnFocus value={value} onChangeText={onChange} keyboardType="decimal-pad" placeholder="0" style={styles.amountInput} /><Text style={styles.amountUnit}>{item.unit}</Text></View><Text style={styles.caloriePreview}>Wybrana ilość: {amount || 0} {item.unit} | ok. {kcal} kcal</Text></View>;
+  const packageAmount = canUseWholePackage(item.product) ? convertPantryAmount(item.product, 1, "szt", item.unit) : undefined;
+  return <View style={styles.amountStep}><Text style={styles.amountProduct}>{item.product.name}</Text><Text style={styles.available}>Dostępne w spiżarni: {item.quantity} {item.unit}</Text>{packageAmount && packageAmount <= item.quantity && <Pressable onPress={() => onChange(String(packageAmount))} style={styles.wholePackage}><Text style={styles.wholePackageText}>Zużyj całe opakowanie: 1 szt. ({item.product.packageAmount} {item.product.packageUnit})</Text></Pressable>}<View style={styles.amountEntry}><TextInput autoFocus selectTextOnFocus value={value} onChangeText={onChange} keyboardType="decimal-pad" placeholder="0" style={styles.amountInput} /><Text style={styles.amountUnit}>{item.unit}</Text></View><Text style={styles.caloriePreview}>Wybrana ilość: {amount || 0} {item.unit} | ok. {kcal} kcal</Text></View>;
 }
 
 function ReviewStep({ name, ingredients, totals, portionTotals, servings, onServings }: { name: string; ingredients: MealIngredient[]; totals: Nutrients; portionTotals: Nutrients; servings: string; onServings: (value: string) => void }) {
@@ -229,6 +248,7 @@ function formatToday() { return new Date().toLocaleDateString("pl-PL", { weekday
 
 const styles = StyleSheet.create({
   pageScroll: { flex: 1, minHeight: 0 }, pageContent: { paddingBottom: 36 }, pageHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 14, marginBottom: 14 }, compactPageHeader: { alignItems: "stretch", flexDirection: "column" }, pageHeading: { flex: 1, minWidth: 0 }, pageTitle: { fontSize: 22, fontWeight: "800" }, muted: { color: colors.muted, fontSize: 13, flexShrink: 1 }, newButton: { backgroundColor: colors.primary, paddingHorizontal: 22, paddingVertical: 14, borderRadius: 12 }, compactNewButton: { alignItems: "center", width: "100%" }, white: { color: "white", fontWeight: "800" },
+  consumerPanel: { backgroundColor: colors.surface, borderRadius: 16, padding: 14, gap: 10, marginBottom: 12 }, consumerTitle: { fontSize: 17, fontWeight: "900" }, consumerRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 }, consumerChip: { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 }, consumerChipActive: { backgroundColor: colors.primary, borderColor: colors.primary }, consumerChipText: { fontWeight: "800" }, addConsumerRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 }, addConsumerInput: { flex: 1, minWidth: 170, backgroundColor: colors.background, borderRadius: 10, padding: 11 }, addConsumerButton: { backgroundColor: "#1565C0", borderRadius: 10, paddingHorizontal: 16, justifyContent: "center" },
   dailyPanel: { backgroundColor: colors.surface, borderRadius: 18, padding: 15, marginBottom: 12 }, dailyHeading: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 9 }, dailyTitle: { fontSize: 19, fontWeight: "900" }, dailyCount: { color: colors.muted, fontWeight: "700" }, dailyGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 }, dailyItem: { flexGrow: 1, flexBasis: 90, minWidth: 90, backgroundColor: colors.background, borderRadius: 11, padding: 10 }, dailyValue: { fontSize: 15, fontWeight: "900", color: colors.text }, dailyKcal: { color: colors.primary, fontSize: 19 }, dailyLabel: { color: colors.muted, fontSize: 12, marginTop: 2 },
   successBanner: { color: "#1B5E20", backgroundColor: "#E8F5E9", borderRadius: 10, padding: 12, fontWeight: "700", marginBottom: 12 }, backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.48)", alignItems: "center", justifyContent: "center", padding: 24 }, compactBackdrop: { padding: 8 }, modalCard: { width: "90%", maxWidth: 900, height: "86%", backgroundColor: colors.surface, borderRadius: 22, padding: 22 }, compactModalCard: { width: "100%", height: "100%", borderRadius: 16, padding: 14 },
   modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 8, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: colors.border }, modalHeading: { flex: 1, minWidth: 0 }, stepLabel: { color: colors.primary, fontWeight: "800", fontSize: 12 }, modalTitle: { fontSize: 25, fontWeight: "900", marginTop: 3 }, compactModalTitle: { fontSize: 21 }, close: { padding: 10 }, closeText: { color: colors.muted, fontWeight: "700" }, stepScroll: { flex: 1, minHeight: 0 }, stepContent: { paddingVertical: 16, gap: 10 },

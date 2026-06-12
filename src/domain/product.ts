@@ -38,6 +38,7 @@ export type PantryItem = {
   barcode: string;
   product: Product;
   quantity: number;
+  capacity?: number;
   unit: Unit;
   expiryDate?: string;
   location?: string;
