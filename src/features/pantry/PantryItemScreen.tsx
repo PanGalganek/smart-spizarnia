@@ -22,6 +22,7 @@ export function PantryItemScreen() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
   const [shoppingPromptItems, setShoppingPromptItems] = useState<PantryItem["product"][]>([]);
+  const [depletedPromptBarcodes, setDepletedPromptBarcodes] = useState<string[]>([]);
   const [consumeOpen, setConsumeOpen] = useState(false);
   const [consumeAmount, setConsumeAmount] = useState("1");
   const itemRef = useRef<PantryItem | null>(null);
@@ -96,7 +97,10 @@ export function PantryItemScreen() {
       if (refreshed) {
         itemRef.current = refreshed;
         setItem(refreshed);
-        if (shouldAskToBuyAgain(item, refreshed)) setShoppingPromptItems([refreshed.product]);
+        if (shouldAskToBuyAgain(item, refreshed)) {
+          setShoppingPromptItems([refreshed.product]);
+          setDepletedPromptBarcodes(refreshed.quantity <= 0 ? [refreshed.barcode] : []);
+        }
       }
       setConsumeOpen(false);
       setMessage(`Zużyto ${amount} ${unit}. Pozostało: ${refreshed?.quantity ?? 0} ${refreshed?.unit ?? item.unit}.`);
@@ -111,8 +115,17 @@ export function PantryItemScreen() {
     await consumeSelected(Number(consumeAmount.replace(",", ".")), item?.unit ?? "szt");
   }
 
+  async function declineShoppingPrompt() {
+    if (!depletedPromptBarcodes.length) return;
+    await Promise.all(depletedPromptBarcodes.map((value) => deletePantryItem(value)));
+    setDepletedPromptBarcodes([]);
+    setItem(null);
+    setMessage("Zużyty produkt usunięto ze spiżarni.");
+    router.replace("/pantry");
+  }
+
   return <ModuleScreen title="Produkt">
-    <AddDepletedPrompt products={shoppingPromptItems} onClose={() => setShoppingPromptItems([])} onAdded={() => setMessage("Produkt dodano do listy zakupów.")} />
+    <AddDepletedPrompt products={shoppingPromptItems} onClose={() => { setShoppingPromptItems([]); setDepletedPromptBarcodes([]); }} onDeclined={declineShoppingPrompt} onAdded={() => setMessage("Produkt dodano do listy zakupów.")} />
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
       {!item ? <Text style={styles.loading}>{message}</Text> : <View style={styles.card}>
         <Text style={styles.name}>{item.product.name}</Text>

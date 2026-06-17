@@ -28,6 +28,7 @@ export function ScannerScreen() {
   const [stockAmount, setStockAmount] = useState("1");
   const [stockUnit, setStockUnit] = useState<Unit>("szt");
   const [expiryDate, setExpiryDate] = useState("");
+  const [packageDates, setPackageDates] = useState<string[]>([]);
   const [location, setLocation] = useState("");
   const [actionMessage, setActionMessage] = useState("");
   const [actionError, setActionError] = useState(false);
@@ -54,17 +55,19 @@ export function ScannerScreen() {
         setProduct(saved);
         setStockUnit(canUseWholePackage(saved) ? "szt" : saved.defaultUnit ?? "szt");
         setStockAmount("1");
+        setPackageDates([]);
         setActionMessage("");
         setManualOpen(false);
         setMessage("Produkt znaleziony w Twojej bazie Zapisane.");
         return;
       }
       const result = await getProductByBarcode(normalized);
-      setProduct(result);
-      if (result) {
-        setStockUnit(canUseWholePackage(result) ? "szt" : result.defaultUnit ?? "szt");
-        setStockAmount("1");
-      }
+        setProduct(result);
+        if (result) {
+          setStockUnit(canUseWholePackage(result) ? "szt" : result.defaultUnit ?? "szt");
+          setStockAmount("1");
+          setPackageDates([]);
+        }
       setActionMessage("");
       setManualOpen(false);
       setMessage(result ? "Produkt znaleziony." : "Nie znaleziono tego produktu w bazie Open Food Facts. Możesz dodać go ręcznie.");
@@ -94,6 +97,7 @@ export function ScannerScreen() {
     setBarcode(result.product.barcode);
     setStockAmount("100");
     setStockUnit("g");
+    setPackageDates([]);
     setUsdaResults([]);
     setUsdaMessage(`Wybrano: ${result.description}. Podaj ilość i dodaj produkt do spiżarni.`);
     setMessage("Produkt bez kodu pobrany z USDA.");
@@ -120,7 +124,8 @@ export function ScannerScreen() {
     try {
       setBusy(true);
       const before = direction < 0 ? await getPantryItem(product.barcode) : null;
-      const updated = await changePantryQuantity(product, amount * direction, stockUnit, { expiryDate: expiryDate.trim() || undefined, location: location.trim() || undefined });
+      const packageExpiryDates = direction > 0 ? buildPackageDates(product, amount, stockUnit, expiryDate, packageDates) : undefined;
+      const updated = await changePantryQuantity(product, amount * direction, stockUnit, { expiryDate: expiryDate.trim() || undefined, location: location.trim() || undefined, packageExpiryDates });
       const operation = direction > 0 ? "Dodano" : "Odjęto";
       setActionMessage(`${operation} ${amount} ${stockUnit}. Stan: ${updated.quantity} ${updated.unit}.`);
       setMessage(direction > 0 ? "Produkt dodany do spiżarni." : "Produkt odjęty ze spiżarni.");
@@ -129,6 +134,14 @@ export function ScannerScreen() {
       setActionError(true);
       setActionMessage(error instanceof Error ? error.message : "Nie udało się zmienić stanu.");
     } finally { setBusy(false); }
+  }
+
+  function changePackageDate(index: number, value: string) {
+    setPackageDates((current) => {
+      const next = [...current];
+      next[index] = value;
+      return next;
+    });
   }
 
   async function eatNow() {
@@ -207,6 +220,7 @@ export function ScannerScreen() {
               <Text>B: {product.nutrientsPer100g.proteins ?? "-"} g  W: {product.nutrientsPer100g.carbohydrates ?? "-"} g  T: {product.nutrientsPer100g.fat ?? "-"} g</Text>
               <Text style={styles.micro}>Potas: {product.nutrientsPer100g.potassium ?? "-"} mg  Wapń: {product.nutrientsPer100g.calcium ?? "-"} mg  Żelazo: {product.nutrientsPer100g.iron ?? "-"} mg  Magnez: {product.nutrientsPer100g.magnesium ?? "-"} mg</Text>
               <View style={styles.row}><DatePickerField value={expiryDate} onChange={setExpiryDate} /><LocationPicker value={location} onChange={setLocation} label="Lokalizacja w spiżarni" /></View>
+              <PackageDateFields product={product} amount={stockAmount} unit={stockUnit} packageDates={packageDates} fallbackDate={expiryDate} onChange={changePackageDate} />
               {canUseWholePackage(product) && <View style={styles.packageHint}><Text style={styles.packageHintTitle}>Jedno opakowanie: {product.packageAmount} {product.packageUnit}</Text><Text style={styles.muted}>Przy dodawaniu wpisz liczbę opakowań, np. 4 szt. Możesz też odejmować później gramy, ml albo 1 sztukę.</Text></View>}
               <ConsumerPicker value={consumer} onChange={setConsumer} label="Dla kogo liczyć po wybraniu „Zjedz teraz”?" />
               <View style={styles.actions}>
@@ -225,6 +239,28 @@ export function ScannerScreen() {
       )}
     </ModuleScreen>
   );
+}
+
+function packageDateCount(product: Product | null, amount: string, unit: Unit) {
+  if (!product || unit !== "szt" || !canUseWholePackage(product)) return 0;
+  const count = Math.floor(Number(amount.replace(",", ".")));
+  return Number.isFinite(count) && count > 1 ? count : 0;
+}
+
+function buildPackageDates(product: Product, amount: number, unit: Unit, fallbackDate: string, packageDates: string[]) {
+  const count = packageDateCount(product, String(amount), unit);
+  if (!count) return undefined;
+  return Array.from({ length: count }, (_, index) => packageDates[index]?.trim() || fallbackDate.trim() || undefined);
+}
+
+function PackageDateFields({ product, amount, unit, packageDates, fallbackDate, onChange }: { product: Product; amount: string; unit: Unit; packageDates: string[]; fallbackDate: string; onChange: (index: number, value: string) => void }) {
+  const count = packageDateCount(product, amount, unit);
+  if (!count) return null;
+  return <View style={styles.packageDates}>
+    <Text style={styles.packageDatesTitle}>Daty dla poszczególnych opakowań (opcjonalne)</Text>
+    <Text style={styles.muted}>Puste pola użyją daty ogólnej albo zostaną bez daty.</Text>
+    {Array.from({ length: count }, (_, index) => <DatePickerField key={index} label={`Opakowanie ${index + 1}`} value={packageDates[index] ?? fallbackDate} onChange={(value) => onChange(index, value)} />)}
+  </View>;
 }
 
 const styles = StyleSheet.create({
@@ -248,6 +284,8 @@ const styles = StyleSheet.create({
   package: { fontSize: 18, fontWeight: "800", color: colors.primary },
   packageHint: { backgroundColor: "#E8F5E9", borderWidth: 1, borderColor: colors.primary, borderRadius: 11, padding: 12, gap: 4 },
   packageHintTitle: { color: colors.primary, fontWeight: "900", fontSize: 16 },
+  packageDates: { backgroundColor: colors.background, borderRadius: 12, padding: 12, gap: 8 },
+  packageDatesTitle: { fontWeight: "900", fontSize: 16 },
   micro: { color: colors.muted, lineHeight: 20 },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 12 },
   amount: { width: 80, backgroundColor: colors.background, borderRadius: 10, padding: 12, textAlign: "center" },

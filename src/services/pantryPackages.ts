@@ -23,7 +23,7 @@ export function normalizePackages(item: PantryItem): PantryPackage[] {
   return packagesFromQuantity(item.product, Number(item.quantity) || 0, unit, Number(item.capacity) || 0);
 }
 
-export function addPackages(current: PantryItem | null, product: Product, amount: number, inputUnit: Unit, now = Date.now(), expiryDate?: string) {
+export function addPackages(current: PantryItem | null, product: Product, amount: number, inputUnit: Unit, now = Date.now(), expiryDate?: string, expiryDates?: (string | undefined)[]) {
   const unit = packageUnit(product, inputUnit, current?.unit);
   const packages = current ? normalizePackages(current) : [];
   const packageAmount = packageAmountFor(product, unit);
@@ -32,7 +32,7 @@ export function addPackages(current: PantryItem | null, product: Product, amount
   if (inputUnit === "szt" && packageAmount && product.packageUnit === unit) {
     const count = Math.floor(amount);
     for (let index = 0; index < count; index += 1) {
-      packages.push(fullPackage(packageAmount, unit, now + index, expiryDate));
+      packages.push(fullPackage(packageAmount, unit, now + index, expiryDates?.[index] || expiryDate));
     }
     const remainder = round(amount - count);
     if (remainder > 0) {
@@ -41,7 +41,7 @@ export function addPackages(current: PantryItem | null, product: Product, amount
         amount: round(remainder * packageAmount),
         capacity: packageAmount,
         unit,
-        expiryDate,
+        expiryDate: expiryDates?.[count] || expiryDate,
         opened: true,
         createdAt: now + count
       });
@@ -52,7 +52,7 @@ export function addPackages(current: PantryItem | null, product: Product, amount
       amount: converted,
       capacity: packageAmount ? Math.max(packageAmount, converted) : converted,
       unit,
-      expiryDate,
+      expiryDate: expiryDates?.[0] || expiryDate,
       opened: packageAmount ? converted < packageAmount : true,
       createdAt: now
     });

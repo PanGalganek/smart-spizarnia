@@ -9,7 +9,7 @@ import { PantryItem, PantryPackage } from "@/domain/product";
 import { AddDepletedPrompt } from "@/features/shopping/AddDepletedPrompt";
 import { getExpiryWarning } from "@/services/expiry";
 import { addLocation, displayLocationName, listLocations, removeLocation } from "@/services/locationRepository";
-import { changePantryQuantity, listPantry } from "@/services/inventoryRepository";
+import { changePantryQuantity, deletePantryItem, listPantry } from "@/services/inventoryRepository";
 import { packageSummary } from "@/services/pantryPackages";
 import { shouldAskToBuyAgain } from "@/services/shoppingPrompt";
 import { stockPercentage } from "@/services/stockLevel";
@@ -27,6 +27,7 @@ export function PantryScreen() {
   const [newLocation, setNewLocation] = useState("");
   const [managerMessage, setManagerMessage] = useState("");
   const [shoppingPromptItems, setShoppingPromptItems] = useState<PantryItem["product"][]>([]);
+  const [depletedPromptBarcodes, setDepletedPromptBarcodes] = useState<string[]>([]);
   const [packagePickerItem, setPackagePickerItem] = useState<PantryItem | null>(null);
   const [quickMessage, setQuickMessage] = useState("");
 
@@ -113,7 +114,10 @@ export function PantryScreen() {
       setItems((current) => current.map((entry) => entry.barcode === updated.barcode ? updated : entry));
       setPackagePickerItem(null);
       setQuickMessage(`Zużyto ${amount} ${unit}: ${item.product.name}.`);
-      if (shouldAskToBuyAgain(item, updated)) setShoppingPromptItems([updated.product]);
+      if (shouldAskToBuyAgain(item, updated)) {
+        setShoppingPromptItems([updated.product]);
+        setDepletedPromptBarcodes(updated.quantity <= 0 ? [updated.barcode] : []);
+      }
     } catch (cause) {
       setQuickMessage(cause instanceof Error ? cause.message : "Nie udało się zużyć produktu.");
     }
@@ -125,9 +129,17 @@ export function PantryScreen() {
     void quickConsume(item, summary.fullPackages[0]?.id);
   }
 
+  async function declineShoppingPrompt() {
+    if (!depletedPromptBarcodes.length) return;
+    await Promise.all(depletedPromptBarcodes.map((barcode) => deletePantryItem(barcode)));
+    setItems((current) => current.filter((item) => !depletedPromptBarcodes.includes(item.barcode)));
+    setDepletedPromptBarcodes([]);
+    setQuickMessage("Zużyty produkt usunięto ze spiżarni.");
+  }
+
   return (
     <ModuleScreen title="Spiżarnia" onBack={goBack}>
-      <AddDepletedPrompt products={shoppingPromptItems} onClose={() => setShoppingPromptItems([])} onAdded={() => setQuickMessage("Produkt dodano do listy zakupów.")} />
+      <AddDepletedPrompt products={shoppingPromptItems} onClose={() => { setShoppingPromptItems([]); setDepletedPromptBarcodes([]); }} onDeclined={declineShoppingPrompt} onAdded={() => setQuickMessage("Produkt dodano do listy zakupów.")} />
       {!!message && <Text style={styles.message}>{message}</Text>}
       {!!quickMessage && <Text style={styles.quickMessage}>{quickMessage}</Text>}
       {!selectedLocation ? <>

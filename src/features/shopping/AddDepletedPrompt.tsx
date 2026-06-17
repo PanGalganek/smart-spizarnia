@@ -4,7 +4,7 @@ import { colors } from "@/core/theme";
 import { Product } from "@/domain/product";
 import { addProductToShoppingList } from "@/services/shoppingRepository";
 
-export function AddDepletedPrompt({ products, onClose, onAdded }: { products: Product[]; onClose: () => void; onAdded?: () => void }) {
+export function AddDepletedPrompt({ products, onClose, onAdded, onDeclined }: { products: Product[]; onClose: () => void; onAdded?: () => void; onDeclined?: () => void | Promise<void> }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   if (!products.length) return null;
@@ -24,6 +24,19 @@ export function AddDepletedPrompt({ products, onClose, onAdded }: { products: Pr
     }
   }
 
+  async function decline() {
+    try {
+      setBusy(true);
+      setError("");
+      await onDeclined?.();
+      onClose();
+    } catch {
+      setError("Nie udało się zamknąć powiadomienia. Spróbuj ponownie.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
@@ -33,7 +46,7 @@ export function AddDepletedPrompt({ products, onClose, onAdded }: { products: Pr
           <Text style={styles.question}>Dodać {products.length > 1 ? "te produkty" : "ten produkt"} do listy zakupów?</Text>
           {!!error && <Text style={styles.error}>{error}</Text>}
           <View style={styles.actions}>
-            <Pressable onPress={onClose} style={styles.secondary}><Text>Nie teraz</Text></Pressable>
+            <Pressable disabled={busy} onPress={() => void decline()} style={[styles.secondary, busy && styles.disabled]}><Text>Nie teraz</Text></Pressable>
             <Pressable disabled={busy} onPress={() => void addAll()} style={[styles.primary, busy && styles.disabled]}><Text style={styles.white}>{busy ? "Dodawanie..." : "Dodaj do listy"}</Text></Pressable>
           </View>
         </View>

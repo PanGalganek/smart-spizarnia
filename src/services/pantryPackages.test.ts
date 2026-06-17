@@ -62,4 +62,10 @@ describe("pantry packages", () => {
     expect(consumed.packages.find((pack) => pack.id === secondPackage.id)?.amount).toBe(800);
     expect(packageSummary({ ...item(milk), ...consumed }).activeExpiryDate).toBe("2026-06-20");
   });
+
+  it("stores optional expiry dates for each added package", () => {
+    const added = addPackages(null, milk, 3, "szt", 1, undefined, [undefined, "2026-06-18", "2026-06-25"]);
+
+    expect(added.packages.map((pack) => pack.expiryDate)).toEqual([undefined, "2026-06-18", "2026-06-25"]);
+  });
 });

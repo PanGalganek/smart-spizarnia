@@ -28,6 +28,7 @@ export function SavedScreen() {
   const [unit, setUnit] = useState<Unit>("szt");
   const [location, setLocation] = useState("");
   const [expiryDate, setExpiryDate] = useState("");
+  const [packageDates, setPackageDates] = useState<string[]>([]);
   const [consumer, setConsumer] = useState<Consumer>({ id: "bartek", name: "Bartek" });
   const [actionMode, setActionMode] = useState<ActionMode>("details");
   const [editName, setEditName] = useState("");
@@ -68,6 +69,7 @@ export function SavedScreen() {
     setUnit(canUseWholePackage(product) ? "szt" : product.defaultUnit ?? "g");
     setLocation("");
     setExpiryDate("");
+    setPackageDates([]);
     fillEditForm(product);
   }
 
@@ -95,6 +97,7 @@ export function SavedScreen() {
     if (mode !== "edit") {
       setAmount(canUseWholePackage(selected) ? "1" : "100");
       setUnit(canUseWholePackage(selected) ? "szt" : selected.defaultUnit ?? "g");
+      setPackageDates([]);
     }
     if (mode === "edit") fillEditForm(selected);
     setActionMode(mode);
@@ -102,6 +105,14 @@ export function SavedScreen() {
 
   function setEditNumber(key: EditKey, value: string) {
     setEditNumbers((current) => ({ ...current, [key]: value }));
+  }
+
+  function changePackageDate(index: number, value: string) {
+    setPackageDates((current) => {
+      const next = [...current];
+      next[index] = value;
+      return next;
+    });
   }
 
   async function saveEditedProduct() {
@@ -178,7 +189,8 @@ export function SavedScreen() {
     if (!location.trim()) return setError("Wybierz lokalizację w spiżarni.");
     try {
       setBusy(true); setError("");
-      const updated = await changePantryQuantity(selected, value, unit, { location, expiryDate: expiryDate || undefined });
+      const packageExpiryDates = buildPackageDates(selected, value, unit, expiryDate, packageDates);
+      const updated = await changePantryQuantity(selected, value, unit, { location, expiryDate: expiryDate || undefined, packageExpiryDates });
       setMessage(`Dodano ${selected.name}. Stan: ${updated.quantity} ${updated.unit}.`);
       setSelected(null);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Nie udało się dodać produktu do spiżarni."); }
@@ -249,7 +261,7 @@ export function SavedScreen() {
               unit={unit}
               onAmount={setAmount}
               onUnit={setUnit}
-              footer={<><LocationPicker value={location} onChange={setLocation} label="Lokalizacja przy dodawaniu do spiżarni" /><DatePickerField value={expiryDate} onChange={setExpiryDate} /><Pressable disabled={busy} onPress={() => void addToPantry()} style={[styles.addButton, busy && styles.disabled]}><Text style={styles.white}>{busy ? "Dodawanie..." : "Potwierdź dodanie do spiżarni"}</Text></Pressable></>}
+              footer={<><LocationPicker value={location} onChange={setLocation} label="Lokalizacja przy dodawaniu do spiżarni" /><DatePickerField value={expiryDate} onChange={setExpiryDate} /><PackageDateFields product={selected} amount={amount} unit={unit} packageDates={packageDates} fallbackDate={expiryDate} onChange={changePackageDate} /><Pressable disabled={busy} onPress={() => void addToPantry()} style={[styles.addButton, busy && styles.disabled]}><Text style={styles.white}>{busy ? "Dodawanie..." : "Potwierdź dodanie do spiżarni"}</Text></Pressable></>}
             />}
             {actionMode === "today" && selected && <ActionForm
               title="Dodaj do dzisiejszego bilansu"
@@ -330,6 +342,28 @@ function Detail({ label, value }: { label: string; value?: string }) {
   return <View style={styles.detail}><Text style={styles.detailLabel}>{label}</Text><Text style={styles.detailValue}>{value || "brak danych"}</Text></View>;
 }
 
+function packageDateCount(product: Product | null, amount: string, unit: Unit) {
+  if (!product || unit !== "szt" || !canUseWholePackage(product)) return 0;
+  const count = Math.floor(Number(amount.replace(",", ".")));
+  return Number.isFinite(count) && count > 1 ? count : 0;
+}
+
+function buildPackageDates(product: Product, amount: number, unit: Unit, fallbackDate: string, packageDates: string[]) {
+  const count = packageDateCount(product, String(amount), unit);
+  if (!count) return undefined;
+  return Array.from({ length: count }, (_, index) => packageDates[index]?.trim() || fallbackDate.trim() || undefined);
+}
+
+function PackageDateFields({ product, amount, unit, packageDates, fallbackDate, onChange }: { product: Product; amount: string; unit: Unit; packageDates: string[]; fallbackDate: string; onChange: (index: number, value: string) => void }) {
+  const count = packageDateCount(product, amount, unit);
+  if (!count) return null;
+  return <View style={styles.packageDates}>
+    <Text style={styles.packageDatesTitle}>Daty dla poszczególnych opakowań (opcjonalne)</Text>
+    <Text style={styles.hint}>Puste pola użyją daty ogólnej albo zostaną bez daty.</Text>
+    {Array.from({ length: count }, (_, index) => <DatePickerField key={index} label={`Opakowanie ${index + 1}`} value={packageDates[index] ?? fallbackDate} onChange={(value) => onChange(index, value)} />)}
+  </View>;
+}
+
 function parseAmount(value: string) { const number = Number(value.replace(",", ".")); return Number.isFinite(number) && number > 0 ? number : 0; }
 function parseOptionalNumber(value: string) { const number = Number(value.replace(",", ".")); return Number.isFinite(number) && number >= 0 ? number : undefined; }
 function textNumber(value?: number) { return value === undefined ? "" : String(value); }
@@ -342,6 +376,7 @@ const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.48)", alignItems: "center", justifyContent: "center", padding: 18 }, modalCard: { width: "100%", maxWidth: 580, maxHeight: "92%", backgroundColor: colors.surface, borderRadius: 20, padding: 22 }, modalHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }, modalHeading: { flex: 1, gap: 3 }, modalTitle: { fontSize: 24, fontWeight: "900" }, backAction: { alignSelf: "flex-start", paddingVertical: 3 }, backActionText: { color: colors.primary, fontWeight: "800" }, close: { padding: 6 }, closeText: { color: colors.muted, fontWeight: "700" }, brand: { color: colors.muted, fontSize: 16, marginTop: 5 },
   detailsScroll: { flexShrink: 1, minHeight: 0, marginTop: 18 }, details: { gap: 10, paddingBottom: 8 }, detail: { backgroundColor: colors.background, borderRadius: 11, padding: 13 }, detailLabel: { color: colors.muted, fontSize: 12, fontWeight: "800", marginBottom: 4, textTransform: "uppercase" }, detailValue: { color: colors.text, fontSize: 16, lineHeight: 22 },
   actionForm: { borderTopWidth: 1, borderTopColor: colors.border, marginTop: 4, paddingTop: 14, gap: 10 }, actionTitle: { fontSize: 18, fontWeight: "900" }, hint: { color: colors.muted, lineHeight: 19 }, packageButton: { backgroundColor: "#E8F5E9", borderWidth: 1, borderColor: colors.primary, borderRadius: 10, padding: 11, gap: 4 }, packageText: { color: colors.primary, fontWeight: "800" }, amountRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 }, amountInput: { flex: 1, minWidth: 100, backgroundColor: colors.background, borderRadius: 10, padding: 12, fontSize: 17 }, unit: { backgroundColor: colors.background, borderRadius: 10, padding: 12 }, unitActive: { backgroundColor: colors.primary },
+  packageDates: { backgroundColor: colors.background, borderRadius: 12, padding: 12, gap: 8 }, packageDatesTitle: { fontWeight: "900", fontSize: 16 },
   field: { gap: 5 }, fieldLabel: { fontWeight: "800" }, input: { backgroundColor: colors.background, borderRadius: 10, padding: 12, fontSize: 16 }, threeColumns: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   actions: { gap: 8, marginTop: 14 }, editButton: { backgroundColor: "#6A1B9A", borderRadius: 12, padding: 14, alignItems: "center" }, addButton: { backgroundColor: colors.primary, borderRadius: 12, padding: 14, alignItems: "center" }, todayButton: { backgroundColor: "#EF6C00", borderRadius: 12, padding: 14, alignItems: "center" }, shoppingButton: { backgroundColor: "#1565C0", borderRadius: 12, padding: 14, alignItems: "center" }, deleteButton: { borderWidth: 2, borderColor: colors.danger, borderRadius: 12, padding: 14, alignItems: "center" }, deleteText: { color: colors.danger, fontWeight: "900" }, white: { color: "white", fontWeight: "800" }, disabled: { opacity: 0.55 }
 });
