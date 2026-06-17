@@ -12,9 +12,10 @@ import { ManualProductForm } from "@/features/scanner/ManualProductForm";
 import { BarcodeCamera } from "@/features/scanner/BarcodeCamera";
 import { AddDepletedPrompt } from "@/features/shopping/AddDepletedPrompt";
 import { getProductByBarcode } from "@/services/openFoodFacts";
-import { changePantryQuantity, createUntrackedMeal, saveProduct } from "@/services/inventoryRepository";
+import { changePantryQuantity, createUntrackedMeal, getPantryItem, getSavedProduct, saveProduct } from "@/services/inventoryRepository";
 import { createUntrackedMealIngredient } from "@/services/nutrition";
 import { canUseWholePackage, convertPantryAmount, preferredPantryUnit } from "@/services/pantryUnits";
+import { shouldAskToBuyAgain } from "@/services/shoppingPrompt";
 import { searchUsdaFoods, UsdaFoodResult } from "@/services/usdaFoodData";
 
 export function ScannerScreen() {
@@ -48,11 +49,21 @@ export function ScannerScreen() {
     setBarcode(normalized);
     setMessage("Pobieranie informacji...");
     try {
+      const saved = await getSavedProduct(normalized);
+      if (saved) {
+        setProduct(saved);
+        setStockUnit(canUseWholePackage(saved) ? "szt" : saved.defaultUnit ?? "szt");
+        setStockAmount("1");
+        setActionMessage("");
+        setManualOpen(false);
+        setMessage("Produkt znaleziony w Twojej bazie Zapisane.");
+        return;
+      }
       const result = await getProductByBarcode(normalized);
       setProduct(result);
       if (result) {
-        setStockUnit(result.packageUnit ?? result.defaultUnit ?? "szt");
-        setStockAmount(String(result.packageAmount ?? 1));
+        setStockUnit(canUseWholePackage(result) ? "szt" : result.defaultUnit ?? "szt");
+        setStockAmount("1");
       }
       setActionMessage("");
       setManualOpen(false);
@@ -108,11 +119,12 @@ export function ScannerScreen() {
     }
     try {
       setBusy(true);
+      const before = direction < 0 ? await getPantryItem(product.barcode) : null;
       const updated = await changePantryQuantity(product, amount * direction, stockUnit, { expiryDate: expiryDate.trim() || undefined, location: location.trim() || undefined });
       const operation = direction > 0 ? "Dodano" : "Odjęto";
       setActionMessage(`${operation} ${amount} ${stockUnit}. Stan: ${updated.quantity} ${updated.unit}.`);
       setMessage(direction > 0 ? "Produkt dodany do spiżarni." : "Produkt odjęty ze spiżarni.");
-      if (direction < 0 && updated.quantity === 0) setDepletedProducts([product]);
+      if (direction < 0 && before && shouldAskToBuyAgain(before, updated)) setDepletedProducts([product]);
     } catch (error) {
       setActionError(true);
       setActionMessage(error instanceof Error ? error.message : "Nie udało się zmienić stanu.");
@@ -185,7 +197,7 @@ export function ScannerScreen() {
               <View style={styles.usdaNutrition}><Text style={styles.usdaKcal}>{result.product.nutrientsPer100g.energyKcal ?? 0} kcal</Text><Text style={styles.muted}>B {result.product.nutrientsPer100g.proteins ?? 0} | W {result.product.nutrientsPer100g.carbohydrates ?? 0} | T {result.product.nutrientsPer100g.fat ?? 0}</Text></View>
             </Pressable>)}
           </View>
-          {!product && !!barcode && <Pressable onPress={() => setManualOpen(true)} style={styles.manual}><Text style={styles.white}>Dodaj produkt ręcznie</Text></Pressable>}
+          {!product && <Pressable onPress={() => setManualOpen(true)} style={styles.manual}><Text style={styles.white}>Dodaj produkt ręcznie</Text></Pressable>}
           {product && (
             <View style={styles.product}>
               <Text style={styles.name}>{product.name}</Text>
@@ -195,7 +207,7 @@ export function ScannerScreen() {
               <Text>B: {product.nutrientsPer100g.proteins ?? "-"} g  W: {product.nutrientsPer100g.carbohydrates ?? "-"} g  T: {product.nutrientsPer100g.fat ?? "-"} g</Text>
               <Text style={styles.micro}>Potas: {product.nutrientsPer100g.potassium ?? "-"} mg  Wapń: {product.nutrientsPer100g.calcium ?? "-"} mg  Żelazo: {product.nutrientsPer100g.iron ?? "-"} mg  Magnez: {product.nutrientsPer100g.magnesium ?? "-"} mg</Text>
               <View style={styles.row}><DatePickerField value={expiryDate} onChange={setExpiryDate} /><LocationPicker value={location} onChange={setLocation} label="Lokalizacja w spiżarni" /></View>
-              {canUseWholePackage(product) && <Pressable onPress={() => { setStockAmount("1"); setStockUnit("szt"); }} style={styles.wholePackage}><Text style={styles.wholePackageText}>Całe opakowanie: 1 szt. ({product.packageAmount} {product.packageUnit})</Text></Pressable>}
+              {canUseWholePackage(product) && <View style={styles.packageHint}><Text style={styles.packageHintTitle}>Jedno opakowanie: {product.packageAmount} {product.packageUnit}</Text><Text style={styles.muted}>Przy dodawaniu wpisz liczbę opakowań, np. 4 szt. Możesz też odejmować później gramy, ml albo 1 sztukę.</Text></View>}
               <ConsumerPicker value={consumer} onChange={setConsumer} label="Dla kogo liczyć po wybraniu „Zjedz teraz”?" />
               <View style={styles.actions}>
                 <TextInput value={stockAmount} onChangeText={setStockAmount} keyboardType="decimal-pad" style={styles.amount} />
@@ -233,7 +245,9 @@ const styles = StyleSheet.create({
   usdaResult: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10, backgroundColor: colors.background, borderRadius: 11, padding: 13 }, usdaResultText: { flex: 1, minWidth: 180 }, usdaName: { fontSize: 16, fontWeight: "800" }, usdaNutrition: { alignItems: "flex-end" }, usdaKcal: { color: colors.primary, fontWeight: "900" },
   product: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 18, gap: 8 },
   name: { fontSize: 24, fontWeight: "800" },
-  package: { fontSize: 18, fontWeight: "800", color: colors.primary }, wholePackage: { alignSelf: "flex-start", backgroundColor: "#E8F5E9", borderWidth: 1, borderColor: colors.primary, borderRadius: 11, paddingHorizontal: 14, paddingVertical: 11, marginTop: 10 }, wholePackageText: { color: colors.primary, fontWeight: "800" },
+  package: { fontSize: 18, fontWeight: "800", color: colors.primary },
+  packageHint: { backgroundColor: "#E8F5E9", borderWidth: 1, borderColor: colors.primary, borderRadius: 11, padding: 12, gap: 4 },
+  packageHintTitle: { color: colors.primary, fontWeight: "900", fontSize: 16 },
   micro: { color: colors.muted, lineHeight: 20 },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 12 },
   amount: { width: 80, backgroundColor: colors.background, borderRadius: 10, padding: 12, textAlign: "center" },

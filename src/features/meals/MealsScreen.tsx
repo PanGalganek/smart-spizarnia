@@ -11,6 +11,7 @@ import { createMeal, getDailySummary, listMeals, listPantry } from "@/services/i
 import { addConsumer, defaultConsumers, listConsumers } from "@/services/consumerRepository";
 import { createMealIngredient, dateKey, scaleNutrients, sumNutrients } from "@/services/nutrition";
 import { canUseWholePackage, convertPantryAmount } from "@/services/pantryUnits";
+import { shouldAskToBuyAgain } from "@/services/shoppingPrompt";
 
 const mealTypes: { value: MealType; label: string; description: string }[] = [
   { value: "breakfast", label: "Śniadanie", description: "Pierwszy posiłek dnia" },
@@ -128,7 +129,13 @@ export function MealsScreen() {
       setBusy(true);
       setModalMessage("");
       await createMeal(mealName, type, ingredientResult.ingredients, servingCount, Date.now(), consumer);
-      const depleted = pantry.filter((item) => parseAmount(amounts[item.barcode]) === item.quantity).map((item) => item.product);
+      const depleted = pantry
+        .filter((item) => {
+          const amount = parseAmount(amounts[item.barcode]);
+          if (!amount) return false;
+          return shouldAskToBuyAgain(item, { ...item, quantity: Math.max(0, Math.round((item.quantity - amount) * 100) / 100) });
+        })
+        .map((item) => item.product);
       await refresh();
       setCreatorOpen(false);
       setMessage(`Zapisano dla: ${consumer.name}, 1 z ${servingCount} porcji: ${mealName}. Produkty zostały odjęte ze spiżarni.`);

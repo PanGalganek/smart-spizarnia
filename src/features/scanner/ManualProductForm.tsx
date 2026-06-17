@@ -10,6 +10,7 @@ type Props = { barcode: string; onCancel: () => void; onSaved: (product: Product
 type NumericKey = "energyKcal" | "proteins" | "carbohydrates" | "fat" | "fiber" | "salt" | "netWeightGrams" | "packageAmount" | "quantity";
 
 export function ManualProductForm({ barcode, onCancel, onSaved }: Props) {
+  const [manualBarcode, setManualBarcode] = useState(barcode);
   const [name, setName] = useState("");
   const [brand, setBrand] = useState("");
   const [unit, setUnit] = useState<Unit>("g");
@@ -35,14 +36,15 @@ export function ManualProductForm({ barcode, onCancel, onSaved }: Props) {
 
   async function submit() {
     const kcal = numberValue("energyKcal");
-    if (!barcode.trim() || !name.trim()) return setError("Kod kreskowy i nazwa produktu sa wymagane.");
+    if (!name.trim()) return setError("Nazwa produktu jest wymagana.");
     if (kcal === undefined) return setError("Wpisz kalorie produktu. Bez nich produkt nie może trafić do posiłku.");
     if (basis === "perUnit" && unit !== "szt") return setError("Kalorie na sztukę wymagaja jednostki szt.");
     if (basis === "per100" && unit === "szt" && !numberValue("netWeightGrams")) return setError("Podaj masę jednej sztuki, aby poprawnie liczyć kalorie.");
     if ((numberValue("quantity") ?? 0) > 0 && !location.trim()) return setError("Dla produktu w spiżarni wybierz lokalizację. Data ważności jest opcjonalna.");
 
+    const productCode = manualBarcode.trim() || `manual-${Date.now()}`;
     const product: Product = {
-      barcode: barcode.trim(), name: name.trim(), ...(brand.trim() ? { brand: brand.trim() } : {}),
+      barcode: productCode, name: name.trim(), ...(brand.trim() ? { brand: brand.trim() } : {}),
       ...(numberValue("netWeightGrams") ? { netWeightGrams: numberValue("netWeightGrams") } : {}),
       ...(numberValue("packageAmount") ? { packageAmount: numberValue("packageAmount"), packageUnit } : {}),
       defaultUnit: unit, nutritionBasis: basis,
@@ -66,7 +68,8 @@ export function ManualProductForm({ barcode, onCancel, onSaved }: Props) {
 
   return (
     <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
-      <Text style={styles.title}>Dodaj produkt ręcznie</Text><Text style={styles.muted}>Kod: {barcode}</Text>
+      <Text style={styles.title}>Dodaj produkt ręcznie</Text>
+      <Field label="Kod kreskowy (opcjonalnie)" value={manualBarcode} onChangeText={setManualBarcode} numeric />
       <View style={styles.row}>
         <Field label="Nazwa produktu *" value={name} onChangeText={setName} />
         <Field label="Marka" value={brand} onChangeText={setBrand} />

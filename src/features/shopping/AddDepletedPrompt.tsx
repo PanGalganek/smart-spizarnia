@@ -1,5 +1,5 @@
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { useState } from "react";
+import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { colors } from "@/core/theme";
 import { Product } from "@/domain/product";
 import { addProductToShoppingList } from "@/services/shoppingRepository";
@@ -12,20 +12,23 @@ export function AddDepletedPrompt({ products, onClose, onAdded }: { products: Pr
 
   async function addAll() {
     try {
-      setBusy(true); setError("");
+      setBusy(true);
+      setError("");
       await Promise.all(products.map((product) => addProductToShoppingList(product, "depleted")));
       onAdded?.();
       onClose();
     } catch {
       setError("Nie udało się dodać produktu. Sprawdź połączenie i spróbuj ponownie.");
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <View style={styles.card}>
-          <Text style={styles.title}>Produkt został zużyty</Text>
+          <Text style={styles.title}>Produkt kończy się w spiżarni</Text>
           <Text style={styles.text}>{names}</Text>
           <Text style={styles.question}>Dodać {products.length > 1 ? "te produkty" : "ten produkt"} do listy zakupów?</Text>
           {!!error && <Text style={styles.error}>{error}</Text>}
@@ -48,5 +51,7 @@ const styles = StyleSheet.create({
   actions: { flexDirection: "row", justifyContent: "flex-end", flexWrap: "wrap", gap: 10, marginTop: 22 },
   secondary: { backgroundColor: colors.background, borderRadius: 11, paddingHorizontal: 18, paddingVertical: 14 },
   primary: { backgroundColor: colors.primary, borderRadius: 11, paddingHorizontal: 18, paddingVertical: 14 },
-  white: { color: "white", fontWeight: "800" }, error: { color: colors.danger, marginTop: 10, fontWeight: "700" }, disabled: { opacity: 0.55 }
+  white: { color: "white", fontWeight: "800" },
+  error: { color: colors.danger, marginTop: 10, fontWeight: "700" },
+  disabled: { opacity: 0.55 }
 });

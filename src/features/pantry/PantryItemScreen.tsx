@@ -9,6 +9,7 @@ import { PantryItem } from "@/domain/product";
 import { AddDepletedPrompt } from "@/features/shopping/AddDepletedPrompt";
 import { getExpiryWarning } from "@/services/expiry";
 import { changePantryQuantity, deletePantryItem, getPantryItem, savePantryItem } from "@/services/inventoryRepository";
+import { shouldAskToBuyAgain } from "@/services/shoppingPrompt";
 
 export function PantryItemScreen() {
   const params = useLocalSearchParams<{ barcode: string | string[] }>();
@@ -19,7 +20,7 @@ export function PantryItemScreen() {
   const [message, setMessage] = useState("Ladowanie produktu...");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [depleted, setDepleted] = useState(false);
+  const [shoppingPromptItems, setShoppingPromptItems] = useState<PantryItem["product"][]>([]);
   const [consumeOpen, setConsumeOpen] = useState(false);
   const [consumeAmount, setConsumeAmount] = useState("1");
   const itemRef = useRef<PantryItem | null>(null);
@@ -83,7 +84,11 @@ export function PantryItemScreen() {
       if (amount > item.quantity) throw new Error(`W spiżarni jest tylko ${item.quantity} ${item.unit}.`);
       await changePantryQuantity(item.product, -amount, item.unit);
       const refreshed = await getPantryItem(item.barcode);
-      if (refreshed) { itemRef.current = refreshed; setItem(refreshed); if (refreshed.quantity === 0) setDepleted(true); }
+      if (refreshed) {
+        itemRef.current = refreshed;
+        setItem(refreshed);
+        if (shouldAskToBuyAgain(item, refreshed)) setShoppingPromptItems([refreshed.product]);
+      }
       setConsumeOpen(false);
       setMessage(`Zużyto ${amount} ${item.unit}. Pozostało: ${refreshed?.quantity ?? 0} ${item.unit}.`);
     } catch (cause) { setMessage(cause instanceof Error ? cause.message : "Nie udało się zużyć produktu."); }
@@ -91,7 +96,7 @@ export function PantryItemScreen() {
   }
 
   return <ModuleScreen title="Produkt">
-    <AddDepletedPrompt products={depleted && item ? [item.product] : []} onClose={() => setDepleted(false)} onAdded={() => setMessage("Produkt dodano do listy zakupów.")} />
+    <AddDepletedPrompt products={shoppingPromptItems} onClose={() => setShoppingPromptItems([])} onAdded={() => setMessage("Produkt dodano do listy zakupów.")} />
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
       {!item ? <Text style={styles.loading}>{message}</Text> : <View style={styles.card}>
         <Text style={styles.name}>{item.product.name}</Text>

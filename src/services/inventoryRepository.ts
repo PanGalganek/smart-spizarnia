@@ -49,6 +49,23 @@ export async function saveProduct(product: Product) {
   await setDoc(doc(products, product.barcode), withoutUndefined(product), { merge: true });
 }
 
+export async function getSavedProduct(barcode: string): Promise<Product | null> {
+  const snapshot = await getDoc(doc(products, barcode));
+  return snapshot.exists() ? snapshot.data() as Product : null;
+}
+
+export async function updateProductDetails(product: Product): Promise<Product> {
+  const updated = { ...product, updatedAt: Date.now() };
+  await saveProduct(updated);
+  const pantryItem = await getPantryItem(product.barcode);
+  if (pantryItem) await savePantryItem({ ...pantryItem, product: updated });
+  return updated;
+}
+
+export async function deleteSavedProduct(barcode: string) {
+  await deleteDoc(doc(products, barcode));
+}
+
 export async function updateProductPackage(product: Product, packageAmount: number, packageUnit: Unit): Promise<Product> {
   if (!Number.isFinite(packageAmount) || packageAmount <= 0) throw new Error("Pojemność opakowania musi być większa od zera.");
   const updated: Product = {
