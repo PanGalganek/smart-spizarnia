@@ -100,7 +100,7 @@ export async function changePantryQuantity(
   product: Product,
   delta: number,
   selectedUnit?: Unit,
-  metadata?: { expiryDate?: string; location?: string }
+  metadata?: { expiryDate?: string; location?: string; packageId?: string }
 ): Promise<PantryItem> {
   const ref = doc(pantry, product.barcode);
   const inputUnit = selectedUnit ?? product.defaultUnit ?? "szt";
@@ -110,9 +110,9 @@ export async function changePantryQuantity(
     const unit = packageUnit(product, inputUnit, current?.unit);
     const previousQuantity = current?.quantity ?? 0;
     const stock = delta >= 0
-      ? addPackages(current, product, Math.abs(delta), inputUnit)
+      ? addPackages(current, product, Math.abs(delta), inputUnit, Date.now(), metadata?.expiryDate)
       : current
-        ? consumePackages(current, Math.abs(delta), inputUnit)
+        ? consumePackages(current, Math.abs(delta), inputUnit, metadata?.packageId)
         : (() => { throw new Error(`W spiżarni jest tylko 0 ${unit}.`); })();
     const next: PantryItem = {
       barcode: product.barcode,

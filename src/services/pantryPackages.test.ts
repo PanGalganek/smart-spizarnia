@@ -35,7 +35,7 @@ describe("pantry packages", () => {
     const summary = packageSummary({ ...item(milk), ...consumed });
 
     expect(consumed.quantity).toBe(1800);
-    expect(summary.text).toBe("1 × 1000 ml + 800 ml otwarte");
+    expect(summary.text).toBe("1 × 1000 ml + 800 ml");
   });
 
   it("removes one whole cottage cheese package without showing grams as the main state", () => {
@@ -51,6 +51,15 @@ describe("pantry packages", () => {
     const added = addPackages(null, pasta, 2, "szt", 1);
     const consumed = consumePackages({ ...item(pasta), ...added }, 150, "g");
 
-    expect(packageSummary({ ...item(pasta), ...consumed }).text).toBe("1 × 500 g + 350 g otwarte");
+    expect(packageSummary({ ...item(pasta), ...consumed }).text).toBe("1 × 500 g + 350 g");
+  });
+
+  it("uses selected package when opening one of many closed packages", () => {
+    const added = addPackages(null, milk, 2, "szt", 1, "2026-06-20");
+    const secondPackage = added.packages[1];
+    const consumed = consumePackages({ ...item(milk), ...added }, 200, "ml", secondPackage.id);
+
+    expect(consumed.packages.find((pack) => pack.id === secondPackage.id)?.amount).toBe(800);
+    expect(packageSummary({ ...item(milk), ...consumed }).activeExpiryDate).toBe("2026-06-20");
   });
 });

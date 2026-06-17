@@ -6,6 +6,7 @@ export type PantryPackage = {
   amount: number;
   capacity: number;
   unit: Unit;
+  expiryDate?: string;
   opened?: boolean;
   createdAt?: number;
 };

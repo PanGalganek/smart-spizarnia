@@ -5,11 +5,13 @@ import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, Vi
 import { formatPolishDate } from "@/core/components/DatePickerField";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
 import { colors } from "@/core/theme";
-import { PantryItem } from "@/domain/product";
+import { PantryItem, PantryPackage } from "@/domain/product";
+import { AddDepletedPrompt } from "@/features/shopping/AddDepletedPrompt";
 import { getExpiryWarning } from "@/services/expiry";
 import { addLocation, displayLocationName, listLocations, removeLocation } from "@/services/locationRepository";
-import { listPantry } from "@/services/inventoryRepository";
+import { changePantryQuantity, listPantry } from "@/services/inventoryRepository";
 import { packageSummary } from "@/services/pantryPackages";
+import { shouldAskToBuyAgain } from "@/services/shoppingPrompt";
 import { stockPercentage } from "@/services/stockLevel";
 
 const UNASSIGNED = "__unassigned__";
@@ -24,6 +26,9 @@ export function PantryScreen() {
   const [managerOpen, setManagerOpen] = useState(false);
   const [newLocation, setNewLocation] = useState("");
   const [managerMessage, setManagerMessage] = useState("");
+  const [shoppingPromptItems, setShoppingPromptItems] = useState<PantryItem["product"][]>([]);
+  const [packagePickerItem, setPackagePickerItem] = useState<PantryItem | null>(null);
+  const [quickMessage, setQuickMessage] = useState("");
 
   const refresh = useCallback(async () => {
     try {
@@ -99,9 +104,32 @@ export function PantryScreen() {
     } catch { setManagerMessage("Nie udało się usunąć lokalizacji."); }
   }
 
+  async function quickConsume(item: PantryItem, packageId?: string) {
+    const amount = item.product.quickUseAmount ?? (item.product.packageAmount ? 1 : 0);
+    const unit = item.product.quickUseUnit ?? (item.product.packageAmount ? "szt" : item.unit);
+    if (!amount || !unit) return setQuickMessage("Najpierw ustaw szybkie zużycie w kafelku Zapisane.");
+    try {
+      const updated = await changePantryQuantity(item.product, -amount, unit, { packageId });
+      setItems((current) => current.map((entry) => entry.barcode === updated.barcode ? updated : entry));
+      setPackagePickerItem(null);
+      setQuickMessage(`Zużyto ${amount} ${unit}: ${item.product.name}.`);
+      if (shouldAskToBuyAgain(item, updated)) setShoppingPromptItems([updated.product]);
+    } catch (cause) {
+      setQuickMessage(cause instanceof Error ? cause.message : "Nie udało się zużyć produktu.");
+    }
+  }
+
+  function requestQuickConsume(item: PantryItem) {
+    const summary = packageSummary(item);
+    if (!summary.hasOpenPackage && summary.fullPackages.length > 1) return setPackagePickerItem(item);
+    void quickConsume(item, summary.fullPackages[0]?.id);
+  }
+
   return (
     <ModuleScreen title="Spiżarnia" onBack={goBack}>
+      <AddDepletedPrompt products={shoppingPromptItems} onClose={() => setShoppingPromptItems([])} onAdded={() => setQuickMessage("Produkt dodano do listy zakupów.")} />
       {!!message && <Text style={styles.message}>{message}</Text>}
+      {!!quickMessage && <Text style={styles.quickMessage}>{quickMessage}</Text>}
       {!selectedLocation ? <>
         {urgentExpiryCount > 0 && <Text style={styles.expirySummary}>Uwaga: {urgentExpiryCount} produktów ma termin najpóźniej jutro lub jest po terminie.</Text>}
         <FlatList
@@ -135,7 +163,7 @@ export function PantryScreen() {
           contentContainerStyle={locationItems.length ? styles.list : styles.emptyList}
           keyboardShouldPersistTaps="handled"
           ListEmptyComponent={<Text style={styles.empty}>{query.trim() ? "Nie znaleziono pasującego produktu." : "Brak produktów w tej lokalizacji."}</Text>}
-          renderItem={({ item }) => <ProductCard item={item} />}
+          renderItem={({ item }) => <ProductCard item={item} onQuickConsume={requestQuickConsume} />}
         />
       </>}
 
@@ -153,14 +181,18 @@ export function PantryScreen() {
           <Text style={styles.managerHint}>Lokalizację zawierającą produkty można usunąć dopiero po przeniesieniu produktów w inne miejsce.</Text>
         </View></View>
       </Modal>
+      <PackagePicker item={packagePickerItem} onClose={() => setPackagePickerItem(null)} onSelect={(pack) => packagePickerItem && void quickConsume(packagePickerItem, pack.id)} />
     </ModuleScreen>
   );
 }
 
-function ProductCard({ item }: { item: PantryItem }) {
+function ProductCard({ item, onQuickConsume }: { item: PantryItem; onQuickConsume: (item: PantryItem) => void }) {
   const warning = item.quantity > 0 ? getExpiryWarning(item.expiryDate) : null;
   const percentage = stockPercentage(item);
   const summary = packageSummary(item);
+  const dateLabel = summary.activeExpiryDate ?? item.expiryDate;
+  const quickAmount = item.product.quickUseAmount ?? (item.product.packageAmount ? 1 : undefined);
+  const quickUnit = item.product.quickUseUnit ?? (item.product.packageAmount ? "szt" : undefined);
   return (
     <Pressable onPress={() => router.push({ pathname: "/pantry/[barcode]", params: { barcode: item.barcode } })} style={({ pressed }) => [styles.card, item.quantity === 0 && styles.consumed, pressed && styles.pressed]}>
       <View style={styles.header}>
@@ -169,14 +201,28 @@ function ProductCard({ item }: { item: PantryItem }) {
       </View>
       <Text style={styles.packageDetails}>Łącznie: {item.quantity} {item.unit}</Text>
       <View style={styles.meta}>
-        <Text>{item.expiryDate ? `Ważne do: ${formatPolishDate(item.expiryDate)}` : "Brak daty ważności"}</Text>
-        <Text style={item.quantity === 0 ? styles.used : styles.active}>{item.quantity === 0 ? "ZUŻYTY" : "AKTYWNY"}</Text>
+        <Text>{dateLabel ? `Ważne do: ${formatPolishDate(dateLabel)}` : "Brak daty ważności"}</Text>
+        {item.quantity === 0 && <Text style={styles.used}>ZUŻYTY</Text>}
       </View>
-      <View style={styles.stockRow}><View style={styles.battery}><View style={[styles.batteryFill, { width: `${percentage}%` }, percentage <= 20 && styles.batteryLow]} /></View><View style={styles.batteryTip} /><Text style={styles.stockText}>{percentage}% zapasu</Text></View>
+      <View style={styles.stockRow}><View style={styles.battery}><View style={[styles.batteryFill, { width: `${percentage}%` }, percentage <= 20 && styles.batteryLow]} /></View><View style={styles.batteryTip} /><Text style={styles.stockText}>{percentage}%</Text>{quickAmount && quickUnit && item.quantity > 0 && <Pressable onPress={(event) => { event.stopPropagation(); onQuickConsume(item); }} style={styles.quickUseButton}><Text style={styles.quickUseText}>Zużyj {quickAmount} {quickUnit}</Text></Pressable>}</View>
       {warning && <Text style={[styles.expiryWarning, warning.level === "soon" ? styles.expirySoon : styles.expiryUrgent]}>{warning.label}</Text>}
       <Text style={styles.open}>Otwórz szczegóły ›</Text>
     </Pressable>
   );
+}
+
+function PackagePicker({ item, onClose, onSelect }: { item: PantryItem | null; onClose: () => void; onSelect: (pack: PantryPackage) => void }) {
+  const packages = item ? packageSummary(item).fullPackages : [];
+  return <Modal visible={!!item} transparent animationType="fade" onRequestClose={onClose}>
+    <View style={styles.backdrop}><View style={styles.managerCard}>
+      <View style={styles.managerHeader}><Text style={styles.managerTitle}>Które opakowanie otwieramy?</Text><Pressable onPress={onClose} style={styles.managerClose}><Text style={styles.managerCloseText}>Zamknij</Text></Pressable></View>
+      <Text style={styles.managerHint}>Wybierz opakowanie po dacie ważności. Aplikacja zacznie zużywanie właśnie z niego.</Text>
+      <View style={styles.packageChoices}>{packages.map((pack, index) => <Pressable key={pack.id} onPress={() => onSelect(pack)} style={styles.packageChoice}>
+        <Text style={styles.packageChoiceName}>Opakowanie {index + 1}: {pack.capacity} {pack.unit}</Text>
+        <Text style={styles.packageChoiceDate}>{pack.expiryDate ? `Ważne do: ${formatPolishDate(pack.expiryDate)}` : "Brak daty ważności"}</Text>
+      </Pressable>)}</View>
+    </View></View>
+  </Modal>;
 }
 
 function isUrgent(item: PantryItem) {
@@ -204,7 +250,7 @@ const styles = StyleSheet.create({
   tilesHeader: { marginBottom: 14, gap: 10 }, hint: { color: colors.muted, fontSize: 16 }, manageButton: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 7, backgroundColor: "#E8F5E9", borderWidth: 1, borderColor: colors.primary, borderRadius: 11, paddingHorizontal: 13, paddingVertical: 10 }, manageButtonText: { color: colors.primary, fontWeight: "800" }, tiles: { paddingBottom: 30 }, tileColumns: { gap: 12 }, tile: { flex: 1, minWidth: 0, minHeight: 150, backgroundColor: colors.surface, borderRadius: 18, padding: 18, marginBottom: 12, justifyContent: "center", borderWidth: 1, borderColor: colors.border }, unassignedTile: { backgroundColor: "#FFF8E8", borderColor: "#F2C879" }, tileName: { fontSize: 20, fontWeight: "900", marginTop: 10 }, tileCount: { color: colors.muted, marginTop: 4 }, tileWarning: { color: "#8A4B00", fontWeight: "800", fontSize: 12, marginTop: 8 },
   locationHeader: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12, marginBottom: 12 }, locationsBack: { backgroundColor: colors.surface, borderRadius: 10, paddingHorizontal: 13, paddingVertical: 10 }, locationsBackText: { color: colors.primary, fontWeight: "800" }, locationTitle: { flex: 1, minWidth: 150, fontSize: 24, fontWeight: "900" }, search: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 13, paddingHorizontal: 16, paddingVertical: 14, fontSize: 17, marginBottom: 12 },
   list: { paddingBottom: 30 }, emptyList: { flexGrow: 1 }, card: { backgroundColor: colors.surface, borderRadius: 16, padding: 18, marginBottom: 12, gap: 10 }, consumed: { opacity: 0.65 }, pressed: { opacity: 0.72 }, header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }, name: { flex: 1, fontWeight: "800", fontSize: 18 }, qty: { flexShrink: 1, textAlign: "right", fontWeight: "800", fontSize: 19, color: colors.primary }, packageDetails: { color: colors.muted, fontWeight: "700" }, meta: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 8 }, active: { color: colors.primary, fontWeight: "800" }, used: { color: colors.danger, fontWeight: "800" }, open: { color: colors.primary, fontWeight: "800" },
-  stockRow: { flexDirection: "row", alignItems: "center", gap: 5 }, battery: { flex: 1, maxWidth: 210, height: 18, borderWidth: 2, borderColor: colors.text, borderRadius: 5, padding: 2, overflow: "hidden" }, batteryFill: { height: "100%", backgroundColor: colors.primary, borderRadius: 2 }, batteryLow: { backgroundColor: colors.danger }, batteryTip: { width: 4, height: 9, backgroundColor: colors.text, borderTopRightRadius: 2, borderBottomRightRadius: 2, marginLeft: -5 }, stockText: { color: colors.muted, fontSize: 12, fontWeight: "800", marginLeft: 4 },
-  expirySummary: { color: "#8A4B00", backgroundColor: "#FFF3E0", borderRadius: 11, padding: 12, marginBottom: 12, fontWeight: "800" }, expiryWarning: { alignSelf: "flex-start", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, fontWeight: "900" }, expiryUrgent: { color: colors.danger, backgroundColor: "#FFEBEE" }, expirySoon: { color: "#8A4B00", backgroundColor: "#FFF3E0" }, message: { color: colors.danger, textAlign: "center", marginBottom: 10, fontWeight: "600" }, empty: { textAlign: "center", color: colors.muted, marginTop: 70 },
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.48)", alignItems: "center", justifyContent: "center", padding: 18 }, managerCard: { width: "100%", maxWidth: 560, maxHeight: "90%", backgroundColor: colors.surface, borderRadius: 20, padding: 20 }, managerHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }, managerTitle: { flex: 1, fontSize: 23, fontWeight: "900" }, managerClose: { padding: 8 }, managerCloseText: { color: colors.muted, fontWeight: "700" }, addLocationRow: { flexDirection: "row", flexWrap: "wrap", gap: 9, marginTop: 16 }, locationInput: { flex: 1, minWidth: 170, backgroundColor: colors.background, borderRadius: 11, padding: 13, fontSize: 16 }, addLocationButton: { backgroundColor: colors.primary, borderRadius: 11, paddingHorizontal: 17, paddingVertical: 13, justifyContent: "center" }, white: { color: "white", fontWeight: "800" }, managerMessage: { color: colors.primary, backgroundColor: "#E8F5E9", borderRadius: 9, padding: 10, marginTop: 10, fontWeight: "700" }, managerError: { color: colors.danger, backgroundColor: "#FFEBEE" }, managerList: { minHeight: 100, marginTop: 12 }, managerListContent: { gap: 8, paddingBottom: 2 }, managerRow: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.background, borderRadius: 11, padding: 12 }, managerLocationText: { flex: 1 }, managerLocationName: { fontSize: 17, fontWeight: "800" }, managerLocationCount: { color: colors.muted, fontSize: 12, marginTop: 2 }, removeLocationButton: { backgroundColor: "#FFEBEE", borderRadius: 9, paddingHorizontal: 13, paddingVertical: 10 }, removeLocationDisabled: { opacity: 0.45 }, removeLocationText: { color: colors.danger, fontWeight: "800" }, managerHint: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 12 }
+  stockRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6 }, battery: { flex: 1, minWidth: 120, maxWidth: 210, height: 18, borderWidth: 2, borderColor: colors.text, borderRadius: 5, padding: 2, overflow: "hidden" }, batteryFill: { height: "100%", backgroundColor: colors.primary, borderRadius: 2 }, batteryLow: { backgroundColor: colors.danger }, batteryTip: { width: 4, height: 9, backgroundColor: colors.text, borderTopRightRadius: 2, borderBottomRightRadius: 2, marginLeft: -6 }, stockText: { color: colors.muted, fontSize: 12, fontWeight: "800", marginLeft: 2 }, quickUseButton: { backgroundColor: "#EF6C00", borderRadius: 9, paddingHorizontal: 10, paddingVertical: 8 }, quickUseText: { color: "white", fontWeight: "900", fontSize: 12 },
+  expirySummary: { color: "#8A4B00", backgroundColor: "#FFF3E0", borderRadius: 11, padding: 12, marginBottom: 12, fontWeight: "800" }, expiryWarning: { alignSelf: "flex-start", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, fontWeight: "900" }, expiryUrgent: { color: colors.danger, backgroundColor: "#FFEBEE" }, expirySoon: { color: "#8A4B00", backgroundColor: "#FFF3E0" }, message: { color: colors.danger, textAlign: "center", marginBottom: 10, fontWeight: "600" }, quickMessage: { color: colors.primary, backgroundColor: "#E8F5E9", borderRadius: 10, padding: 10, marginBottom: 10, fontWeight: "800" }, empty: { textAlign: "center", color: colors.muted, marginTop: 70 },
+  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.48)", alignItems: "center", justifyContent: "center", padding: 18 }, managerCard: { width: "100%", maxWidth: 560, maxHeight: "90%", backgroundColor: colors.surface, borderRadius: 20, padding: 20 }, managerHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }, managerTitle: { flex: 1, fontSize: 23, fontWeight: "900" }, managerClose: { padding: 8 }, managerCloseText: { color: colors.muted, fontWeight: "700" }, addLocationRow: { flexDirection: "row", flexWrap: "wrap", gap: 9, marginTop: 16 }, locationInput: { flex: 1, minWidth: 170, backgroundColor: colors.background, borderRadius: 11, padding: 13, fontSize: 16 }, addLocationButton: { backgroundColor: colors.primary, borderRadius: 11, paddingHorizontal: 17, paddingVertical: 13, justifyContent: "center" }, white: { color: "white", fontWeight: "800" }, managerMessage: { color: colors.primary, backgroundColor: "#E8F5E9", borderRadius: 9, padding: 10, marginTop: 10, fontWeight: "700" }, managerError: { color: colors.danger, backgroundColor: "#FFEBEE" }, managerList: { minHeight: 100, marginTop: 12 }, managerListContent: { gap: 8, paddingBottom: 2 }, managerRow: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.background, borderRadius: 11, padding: 12 }, managerLocationText: { flex: 1 }, managerLocationName: { fontSize: 17, fontWeight: "800" }, managerLocationCount: { color: colors.muted, fontSize: 12, marginTop: 2 }, removeLocationButton: { backgroundColor: "#FFEBEE", borderRadius: 9, paddingHorizontal: 13, paddingVertical: 10 }, removeLocationDisabled: { opacity: 0.45 }, removeLocationText: { color: colors.danger, fontWeight: "800" }, managerHint: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 12 }, packageChoices: { gap: 10, marginTop: 14 }, packageChoice: { backgroundColor: colors.background, borderRadius: 12, padding: 14 }, packageChoiceName: { fontSize: 17, fontWeight: "900" }, packageChoiceDate: { color: colors.muted, marginTop: 4, fontWeight: "700" }
 });
