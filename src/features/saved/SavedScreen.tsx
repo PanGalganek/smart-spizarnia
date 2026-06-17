@@ -15,7 +15,7 @@ import { canUseWholePackage, convertPantryAmount, preferredPantryUnit } from "@/
 import { addProductToShoppingList } from "@/services/shoppingRepository";
 
 type ActionMode = "details" | "edit" | "pantry" | "today";
-type EditKey = "energyKcal" | "proteins" | "carbohydrates" | "fat" | "fiber" | "salt" | "packageAmount";
+type EditKey = "energyKcal" | "proteins" | "carbohydrates" | "fat" | "fiber" | "salt" | "packageAmount" | "quickUseAmount";
 
 export function SavedScreen() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -33,6 +33,7 @@ export function SavedScreen() {
   const [editName, setEditName] = useState("");
   const [editBrand, setEditBrand] = useState("");
   const [editPackageUnit, setEditPackageUnit] = useState<Unit>("g");
+  const [editQuickUseUnit, setEditQuickUseUnit] = useState<Unit>("szt");
   const [editNumbers, setEditNumbers] = useState<Record<EditKey, string>>({
     energyKcal: "",
     proteins: "",
@@ -40,7 +41,8 @@ export function SavedScreen() {
     fat: "",
     fiber: "",
     salt: "",
-    packageAmount: ""
+    packageAmount: "",
+    quickUseAmount: ""
   });
 
   const refresh = useCallback(async () => {
@@ -73,6 +75,7 @@ export function SavedScreen() {
     setEditName(product.name);
     setEditBrand(product.brand ?? "");
     setEditPackageUnit(product.packageUnit ?? product.defaultUnit ?? "g");
+    setEditQuickUseUnit(product.quickUseUnit ?? (product.packageAmount ? "szt" : product.defaultUnit ?? "g"));
     setEditNumbers({
       energyKcal: textNumber(product.nutrientsPer100g.energyKcal),
       proteins: textNumber(product.nutrientsPer100g.proteins),
@@ -80,7 +83,8 @@ export function SavedScreen() {
       fat: textNumber(product.nutrientsPer100g.fat),
       fiber: textNumber(product.nutrientsPer100g.fiber),
       salt: textNumber(product.nutrientsPer100g.salt),
-      packageAmount: textNumber(product.packageAmount)
+      packageAmount: textNumber(product.packageAmount),
+      quickUseAmount: textNumber(product.quickUseAmount ?? (product.packageAmount ? 1 : undefined))
     });
   }
 
@@ -114,6 +118,8 @@ export function SavedScreen() {
         brand: editBrand.trim() || undefined,
         packageAmount: parseOptionalNumber(editNumbers.packageAmount),
         packageUnit: parseOptionalNumber(editNumbers.packageAmount) ? editPackageUnit : undefined,
+        quickUseAmount: parseOptionalNumber(editNumbers.quickUseAmount),
+        quickUseUnit: parseOptionalNumber(editNumbers.quickUseAmount) ? editQuickUseUnit : undefined,
         defaultUnit: selected.defaultUnit ?? editPackageUnit,
         nutrientsPer100g: {
           ...selected.nutrientsPer100g,
@@ -229,10 +235,12 @@ export function SavedScreen() {
               brand={editBrand}
               numbers={editNumbers}
               packageUnit={editPackageUnit}
+              quickUseUnit={editQuickUseUnit}
               onName={setEditName}
               onBrand={setEditBrand}
               onNumber={setEditNumber}
               onPackageUnit={setEditPackageUnit}
+              onQuickUseUnit={setEditQuickUseUnit}
             />}
             {actionMode === "pantry" && selected && <ActionForm
               title="Dodaj do spiżarni"
@@ -274,12 +282,13 @@ function Details({ product }: { product: Product }) {
     <Detail label="Makroskładniki" value={`B: ${product.nutrientsPer100g.proteins ?? "-"} g  W: ${product.nutrientsPer100g.carbohydrates ?? "-"} g  T: ${product.nutrientsPer100g.fat ?? "-"} g`} />
     <Detail label="Mikroelementy" value={`Potas: ${product.nutrientsPer100g.potassium ?? "-"} mg  Wapń: ${product.nutrientsPer100g.calcium ?? "-"} mg  Żelazo: ${product.nutrientsPer100g.iron ?? "-"} mg  Magnez: ${product.nutrientsPer100g.magnesium ?? "-"} mg`} />
     <Detail label="Jedno pełne opakowanie" value={product.packageAmount ? `${product.packageAmount} ${product.packageUnit}` : "brak danych"} />
+    <Detail label="Szybkie zużycie" value={product.quickUseAmount ? `${product.quickUseAmount} ${product.quickUseUnit}` : "brak danych"} />
   </>;
 }
 
-function EditForm({ name, brand, numbers, packageUnit, onName, onBrand, onNumber, onPackageUnit }: {
-  name: string; brand: string; numbers: Record<EditKey, string>; packageUnit: Unit;
-  onName: (value: string) => void; onBrand: (value: string) => void; onNumber: (key: EditKey, value: string) => void; onPackageUnit: (value: Unit) => void;
+function EditForm({ name, brand, numbers, packageUnit, quickUseUnit, onName, onBrand, onNumber, onPackageUnit, onQuickUseUnit }: {
+  name: string; brand: string; numbers: Record<EditKey, string>; packageUnit: Unit; quickUseUnit: Unit;
+  onName: (value: string) => void; onBrand: (value: string) => void; onNumber: (key: EditKey, value: string) => void; onPackageUnit: (value: Unit) => void; onQuickUseUnit: (value: Unit) => void;
 }) {
   return <View style={styles.actionForm}>
     <Text style={styles.actionTitle}>Ręczna korekta danych</Text>
@@ -298,6 +307,9 @@ function EditForm({ name, brand, numbers, packageUnit, onName, onBrand, onNumber
     </View>
     <Text style={styles.actionTitle}>Jedno pełne opakowanie</Text>
     <View style={styles.amountRow}><TextInput value={numbers.packageAmount} onChangeText={(value) => onNumber("packageAmount", value)} keyboardType="decimal-pad" placeholder="Np. 200" style={styles.amountInput} />{(["g", "ml", "szt"] as Unit[]).map((value) => <Pressable key={value} onPress={() => onPackageUnit(value)} style={[styles.unit, packageUnit === value && styles.unitActive]}><Text style={packageUnit === value ? styles.white : undefined}>{value}</Text></Pressable>)}</View>
+    <Text style={styles.actionTitle}>Szybki przycisk zużycia</Text>
+    <Text style={styles.hint}>Np. 1 szt. dla serka, 200 ml dla mleka albo 50 g dla masła.</Text>
+    <View style={styles.amountRow}><TextInput value={numbers.quickUseAmount} onChangeText={(value) => onNumber("quickUseAmount", value)} keyboardType="decimal-pad" placeholder="Np. 1" style={styles.amountInput} />{(["g", "ml", "szt"] as Unit[]).map((value) => <Pressable key={value} onPress={() => onQuickUseUnit(value)} style={[styles.unit, quickUseUnit === value && styles.unitActive]}><Text style={quickUseUnit === value ? styles.white : undefined}>{value}</Text></Pressable>)}</View>
   </View>;
 }
 

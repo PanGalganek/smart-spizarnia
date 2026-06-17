@@ -1,6 +1,14 @@
 export type Unit = "g" | "ml" | "szt";
 export type NutritionBasis = "per100" | "perUnit";
 export type PantryStatus = "active" | "consumed";
+export type PantryPackage = {
+  id: string;
+  amount: number;
+  capacity: number;
+  unit: Unit;
+  opened?: boolean;
+  createdAt?: number;
+};
 
 export type Nutrients = {
   energyKcal?: number;
@@ -27,6 +35,8 @@ export type Product = {
   netWeightGrams?: number;
   packageAmount?: number;
   packageUnit?: Unit;
+  quickUseAmount?: number;
+  quickUseUnit?: Unit;
   defaultUnit?: Unit;
   nutritionBasis?: NutritionBasis;
   nutrientsPer100g: Nutrients;
@@ -39,6 +49,7 @@ export type PantryItem = {
   product: Product;
   quantity: number;
   capacity?: number;
+  packages?: PantryPackage[];
   unit: Unit;
   expiryDate?: string;
   location?: string;

@@ -1,6 +1,8 @@
 import { PantryItem, Product, Unit } from "@/domain/product";
+import { normalizePackages, packageCapacity, packageTotal } from "@/services/pantryPackages";
 
 export function stockCapacity(item: PantryItem) {
+  if (item.packages?.length) return Math.max(packageCapacity(normalizePackages(item)), packageTotal(normalizePackages(item)), 1);
   const packageAmount = packageAmountInPantryUnit(item.product, item.unit);
   const savedCapacity = Math.max(Number(item.capacity) || 0, item.quantity);
   if (packageAmount) return roundUpToPackages(savedCapacity, packageAmount);

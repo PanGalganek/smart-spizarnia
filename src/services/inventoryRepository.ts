@@ -3,8 +3,8 @@ import { db } from "@/core/firebase";
 import { Consumer, DailySummary, Meal, MealIngredient, MealType } from "@/domain/meal";
 import { PantryItem, Product, Unit } from "@/domain/product";
 import { addNutrients, dateKey, scaleNutrients, sumNutrients } from "@/services/nutrition";
-import { convertPantryAmount, preferredPantryUnit } from "@/services/pantryUnits";
-import { capacityAfterStockChange, capacityForPackage, stockCapacity } from "@/services/stockLevel";
+import { addPackages, consumePackages, normalizePackages, packageCapacity, packageTotal, packageUnit } from "@/services/pantryPackages";
+import { capacityForPackage, stockCapacity } from "@/services/stockLevel";
 
 const products = collection(db, "products");
 const pantry = collection(db, "pantry");
@@ -16,12 +16,15 @@ function withoutUndefined<T>(value: T): T {
 }
 
 function normalizePantryItem(item: PantryItem): PantryItem {
-  const quantity = Number(item.quantity) || 0;
+  const unit = item.unit ?? item.product.defaultUnit ?? "szt";
+  const packages = normalizePackages({ ...item, unit });
+  const quantity = packageTotal(packages);
   return {
     ...item,
+    packages,
     quantity,
-    capacity: stockCapacity({ ...item, quantity }),
-    unit: item.unit ?? item.product.defaultUnit ?? "szt",
+    capacity: packageCapacity(packages) || stockCapacity({ ...item, quantity, unit }),
+    unit,
     status: item.status ?? (quantity > 0 ? "active" : "consumed")
   };
 }
@@ -104,22 +107,23 @@ export async function changePantryQuantity(
   const updated = await runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(ref);
     const current = snapshot.exists() ? normalizePantryItem(snapshot.data() as PantryItem) : null;
-    const unit = current?.unit ?? preferredPantryUnit(product, inputUnit);
-    const convertedDelta = convertPantryAmount(product, Math.abs(delta), inputUnit, unit) * Math.sign(delta);
+    const unit = packageUnit(product, inputUnit, current?.unit);
     const previousQuantity = current?.quantity ?? 0;
-    if (convertedDelta < 0 && Math.abs(convertedDelta) > previousQuantity) throw new Error(`W spiżarni jest tylko ${previousQuantity} ${unit}.`);
-    const quantity = Math.round((previousQuantity + convertedDelta) * 100) / 100;
+    const stock = delta >= 0
+      ? addPackages(current, product, Math.abs(delta), inputUnit)
+      : current
+        ? consumePackages(current, Math.abs(delta), inputUnit)
+        : (() => { throw new Error(`W spiżarni jest tylko 0 ${unit}.`); })();
     const next: PantryItem = {
       barcode: product.barcode,
       product,
-      quantity,
-      capacity: convertedDelta > 0
-        ? capacityAfterStockChange(current, quantity, convertedDelta, product, current?.unit ?? unit)
-        : current ? stockCapacity(current) : Math.max(previousQuantity, 1),
-      unit: current?.unit ?? unit,
+      quantity: stock.quantity,
+      capacity: stock.capacity || Math.max(previousQuantity, 1),
+      packages: stock.packages,
+      unit: stock.unit,
       expiryDate: metadata?.expiryDate ?? current?.expiryDate,
       location: metadata?.location ?? current?.location,
-      status: quantity === 0 ? "consumed" : "active",
+      status: stock.quantity === 0 ? "consumed" : "active",
       updatedAt: Date.now()
     };
     transaction.set(ref, withoutUndefined(next), { merge: true });
@@ -196,10 +200,12 @@ export async function createMeal(
 
     pantrySnapshots.forEach((snapshot, index) => {
       const item = normalizePantryItem(snapshot.data() as PantryItem);
-      const quantity = Math.round((item.quantity - ingredients[index].amount) * 100) / 100;
+      const stock = consumePackages(item, ingredients[index].amount, ingredients[index].unit);
       transaction.update(pantryRefs[index], {
-        quantity,
-        status: quantity === 0 ? "consumed" : "active",
+        quantity: stock.quantity,
+        capacity: stock.capacity,
+        packages: withoutUndefined(stock.packages),
+        status: stock.quantity === 0 ? "consumed" : "active",
         updatedAt: Date.now()
       });
     });
@@ -315,8 +321,11 @@ export async function deleteMeal(mealInput: Meal, restoreIngredients = true) {
 
     pantrySnapshots.forEach((snapshot, index) => {
       const current = normalizePantryItem(snapshot.data() as PantryItem);
+      const stock = addPackages(current, current.product, restorableIngredients[index].amount, restorableIngredients[index].unit);
       transaction.update(pantryRefs[index], {
-        quantity: Math.round((current.quantity + restorableIngredients[index].amount) * 100) / 100,
+        quantity: stock.quantity,
+        capacity: stock.capacity,
+        packages: withoutUndefined(stock.packages),
         status: "active",
         updatedAt: Date.now()
       });
