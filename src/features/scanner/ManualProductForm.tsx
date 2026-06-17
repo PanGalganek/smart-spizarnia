@@ -4,10 +4,10 @@ import { colors } from "@/core/theme";
 import { DatePickerField } from "@/core/components/DatePickerField";
 import { LocationPicker } from "@/core/components/LocationPicker";
 import { Nutrients, NutritionBasis, Product, Unit } from "@/domain/product";
-import { savePantryItem, saveProduct } from "@/services/inventoryRepository";
+import { changePantryQuantity, saveProduct } from "@/services/inventoryRepository";
 
 type Props = { barcode: string; onCancel: () => void; onSaved: (product: Product) => void };
-type NumericKey = "energyKcal" | "proteins" | "carbohydrates" | "fat" | "fiber" | "salt" | "netWeightGrams" | "packageAmount" | "quantity";
+type NumericKey = "energyKcal" | "proteins" | "carbohydrates" | "fat" | "fiber" | "salt" | "packageAmount" | "quantity";
 
 export function ManualProductForm({ barcode, onCancel, onSaved }: Props) {
   const [manualBarcode, setManualBarcode] = useState(barcode);
@@ -19,7 +19,7 @@ export function ManualProductForm({ barcode, onCancel, onSaved }: Props) {
   const [expiryDate, setExpiryDate] = useState("");
   const [location, setLocation] = useState("");
   const [numbers, setNumbers] = useState<Record<NumericKey, string>>({
-    quantity: "", netWeightGrams: "", packageAmount: "", energyKcal: "", proteins: "",
+    quantity: "", packageAmount: "", energyKcal: "", proteins: "",
     carbohydrates: "", fat: "", fiber: "", salt: ""
   });
   const [error, setError] = useState("");
@@ -39,14 +39,15 @@ export function ManualProductForm({ barcode, onCancel, onSaved }: Props) {
     if (!name.trim()) return setError("Nazwa produktu jest wymagana.");
     if (kcal === undefined) return setError("Wpisz kalorie produktu. Bez nich produkt nie może trafić do posiłku.");
     if (basis === "perUnit" && unit !== "szt") return setError("Kalorie na sztukę wymagaja jednostki szt.");
-    if (basis === "per100" && unit === "szt" && !numberValue("netWeightGrams")) return setError("Podaj masę jednej sztuki, aby poprawnie liczyć kalorie.");
+    if (basis === "per100" && unit === "szt" && (!numberValue("packageAmount") || packageUnit === "szt")) return setError("Podaj jedno pełne opakowanie w g albo ml, aby poprawnie liczyć kalorie.");
     if ((numberValue("quantity") ?? 0) > 0 && !location.trim()) return setError("Dla produktu w spiżarni wybierz lokalizację. Data ważności jest opcjonalna.");
 
     const productCode = manualBarcode.trim() || `manual-${Date.now()}`;
+    const packageAmount = numberValue("packageAmount");
     const product: Product = {
       barcode: productCode, name: name.trim(), ...(brand.trim() ? { brand: brand.trim() } : {}),
-      ...(numberValue("netWeightGrams") ? { netWeightGrams: numberValue("netWeightGrams") } : {}),
-      ...(numberValue("packageAmount") ? { packageAmount: numberValue("packageAmount"), packageUnit } : {}),
+      ...(unit === "szt" && packageAmount && packageUnit !== "szt" ? { netWeightGrams: packageAmount } : {}),
+      ...(packageAmount ? { packageAmount, packageUnit } : {}),
       defaultUnit: unit, nutritionBasis: basis,
       nutrientsPer100g: {
         energyKcal: kcal, proteins: numberValue("proteins"), carbohydrates: numberValue("carbohydrates"),
@@ -59,7 +60,7 @@ export function ManualProductForm({ barcode, onCancel, onSaved }: Props) {
       setBusy(true); setError("");
       const quantity = numberValue("quantity") ?? 0;
       if (quantity > 0) {
-        await savePantryItem({ barcode: product.barcode, product, quantity, unit, expiryDate: expiryDate.trim() || undefined, location: location.trim() || undefined, status: "active" });
+        await changePantryQuantity(product, quantity, unit, { expiryDate: expiryDate.trim() || undefined, location: location.trim() || undefined });
       } else await saveProduct(product);
       onSaved(product);
     } catch { setError("Nie udało się zapisać produktu w Firebase."); }
@@ -75,15 +76,14 @@ export function ManualProductForm({ barcode, onCancel, onSaved }: Props) {
         <Field label="Marka" value={brand} onChangeText={setBrand} />
         <Field label="Ilość początkowa" value={numbers.quantity} onChangeText={(v) => setNumber("quantity", v)} numeric />
       </View>
-      <Text style={styles.section}>Jednostka stanu</Text><ChoiceRow values={["g", "ml", "szt"]} selected={unit} onSelect={(value) => { setUnit(value as Unit); setPackageUnit(value as Unit); if (value !== "szt") setBasis("per100"); }} />
+      <Text style={styles.section}>Jednostka stanu</Text><ChoiceRow values={["g", "ml", "szt"]} selected={unit} onSelect={(value) => { setUnit(value as Unit); setPackageUnit(value === "szt" ? "g" : value as Unit); if (value !== "szt") setBasis("per100"); }} />
       <View style={styles.row}>
         <DatePickerField value={expiryDate} onChange={setExpiryDate} />
         <LocationPicker value={location} onChange={setLocation} />
-        {unit === "szt" && <Field label="Masa 1 sztuki (g)" value={numbers.netWeightGrams} onChangeText={(v) => setNumber("netWeightGrams", v)} numeric />}
       </View>
-      <Text style={styles.section}>Pojemność jednego opakowania (opcjonalna)</Text>
-      <Text style={styles.muted}>Np. 1000 ml mleka lub 200 g serka. Dzięki temu pasek zapasu pokaże poprawny procent.</Text>
-      <View style={styles.row}><Field label="Gramatura / objętość" value={numbers.packageAmount} onChangeText={(v) => setNumber("packageAmount", v)} numeric /><View style={styles.field}><Text style={styles.label}>Jednostka opakowania</Text><ChoiceRow values={["g", "ml", "szt"]} selected={packageUnit} onSelect={(value) => setPackageUnit(value as Unit)} /></View></View>
+      <Text style={styles.section}>Jedno pełne opakowanie</Text>
+      <Text style={styles.muted}>Np. serek 500 g, mleko 1000 ml albo jajko 1 szt. To pole służy do liczenia sztuk, paska zapasu i szybkiego zużycia całego opakowania.</Text>
+      <View style={styles.row}><Field label="Ilość w opakowaniu" value={numbers.packageAmount} onChangeText={(v) => setNumber("packageAmount", v)} numeric /><View style={styles.field}><Text style={styles.label}>Jednostka opakowania</Text><ChoiceRow values={["g", "ml", "szt"]} selected={packageUnit} onSelect={(value) => setPackageUnit(value as Unit)} /></View></View>
       <Text style={styles.section}>Sposób liczenia</Text><ChoiceRow values={["per100", "perUnit"]} labels={["na 100 g/ml", "na sztukę"]} selected={basis} onSelect={(value) => setBasis(value as NutritionBasis)} disabled={unit !== "szt"} />
       <Text style={styles.section}>Wartości odżywcze {basis === "perUnit" ? "na sztukę" : "na 100 g/ml"}</Text>
       <View style={styles.row}>
