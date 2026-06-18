@@ -1,24 +1,60 @@
 import { router } from "expo-router";
-import { deriveNavigationState, navigateTo } from "@/core/navigation/navigationManager";
+import { useMemo, useRef, useSyncExternalStore } from "react";
+import {
+  AppNavigationState,
+  closeNavigationLayer,
+  closeTopLayer,
+  createNavigationLayerId,
+  deriveNavigationState,
+  getNavigationSnapshot,
+  goBack,
+  navigateTo,
+  NavigationLayerKind,
+  openNavigationLayer,
+  replaceNavigationState,
+  subscribeNavigation,
+  updateNavigationState
+} from "@/core/navigation/navigationManager";
 
 type RouteHref = Parameters<typeof router.push>[0];
 
 export function useAppNavigation() {
-  return {
+  const state = useSyncExternalStore(subscribeNavigation, getNavigationSnapshot, getNavigationSnapshot);
+
+  return useMemo(() => ({
+    state,
     navigateToRoute,
     replaceWithRoute,
-    goBack: () => router.back()
+    goBack,
+    closeTopLayer,
+    updateState: updateNavigationState,
+    openLayer: openNavigationLayer,
+    closeLayer: closeNavigationLayer
+  }), [state]);
+}
+
+export function useNavigationLayer(name: string, kind: NavigationLayerKind = "modal", patch: Partial<AppNavigationState> = {}, onBack?: () => void) {
+  const appNavigation = useAppNavigation();
+  const id = useRef(createNavigationLayerId(name));
+  const open = appNavigation.state.layerId === id.current;
+
+  return {
+    open,
+    openLayer: (nextPatch?: unknown) => openNavigationLayer(id.current, { kind, name, onBack }, isNavigationPatch(nextPatch) ? nextPatch : patch),
+    closeLayer: () => closeNavigationLayer(id.current),
+    id: id.current
   };
 }
 
 export function navigateToRoute(href: RouteHref) {
   const path = hrefPath(href);
-  navigateTo(deriveNavigationState(path, hrefParams(href), path), href);
+  navigateTo(deriveNavigationState(path, hrefParams(href), hrefUrl(href)), href);
 }
 
 export function replaceWithRoute(href: RouteHref) {
   const path = hrefPath(href);
-  navigateTo(deriveNavigationState(path, hrefParams(href), path), href, { replace: true });
+  replaceNavigationState(deriveNavigationState(path, hrefParams(href), hrefUrl(href)));
+  navigateTo(deriveNavigationState(path, hrefParams(href), hrefUrl(href)), href, { replace: true });
 }
 
 function hrefPath(href: RouteHref) {
@@ -30,4 +66,21 @@ function hrefPath(href: RouteHref) {
 function hrefParams(href: RouteHref) {
   if (typeof href === "string") return {};
   return Object.fromEntries(Object.entries(href.params ?? {}).map(([key, value]) => [key, Array.isArray(value) ? value.map(String) : String(value)]));
+}
+
+function hrefUrl(href: RouteHref) {
+  if (typeof href === "string") return href;
+  const params = hrefParams(href);
+  const path = hrefPath(href);
+  const search = Object.entries(params)
+    .filter(([, value]) => value !== undefined && value !== "")
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(Array.isArray(value) ? value[0] ?? "" : value)}`)
+    .join("&");
+  return search ? `${path}?${search}` : path;
+}
+
+function isNavigationPatch(value: unknown): value is Partial<AppNavigationState> {
+  if (!value || typeof value !== "object") return false;
+  return ["view", "path", "url", "tab", "subview", "modal", "scanner", "mode", "editingProductId", "selectedId", "barcode", "layerId", "layerKind", "layerName"]
+    .some((key) => key in value);
 }

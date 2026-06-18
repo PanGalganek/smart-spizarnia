@@ -4,8 +4,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { DatePickerField } from "@/core/components/DatePickerField";
 import { LocationPicker } from "@/core/components/LocationPicker";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
-import { useBrowserBackLayer } from "@/core/hooks/useBrowserBackLayer";
-import { replaceWithRoute } from "@/core/navigation/useAppNavigation";
+import { replaceWithRoute, useNavigationLayer } from "@/core/navigation/useAppNavigation";
 import { colors } from "@/core/theme";
 import { ChemicalLevel, PantryItem, Unit } from "@/domain/product";
 import { AddDepletedPrompt } from "@/features/shopping/AddDepletedPrompt";
@@ -25,12 +24,12 @@ export function PantryItemScreen() {
   const [expiryDate, setExpiryDate] = useState("");
   const [location, setLocation] = useState("");
   const [message, setMessage] = useState("Ładowanie produktu...");
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
   const [shoppingPromptItems, setShoppingPromptItems] = useState<PantryItem["product"][]>([]);
   const [depletedPromptBarcodes, setDepletedPromptBarcodes] = useState<string[]>([]);
-  const [consumeOpen, setConsumeOpen] = useState(false);
   const [consumeAmount, setConsumeAmount] = useState("1");
+  const consumeLayer = useNavigationLayer("pantry-consume-product", "modal", { modal: "pantry-consume-product", mode: "consume-product", editingProductId: barcode ?? null });
+  const deleteLayer = useNavigationLayer("pantry-delete-product", "modal", { modal: "pantry-delete-product", mode: "delete-product", editingProductId: barcode ?? null });
   const itemRef = useRef<PantryItem | null>(null);
   const metadataQueue = useRef(Promise.resolve());
   const expiryWarning = getExpiryWarning(expiryDate);
@@ -38,10 +37,6 @@ export function PantryItemScreen() {
   const chemical = item ? isChemical(item.product) : false;
   const quickAmount = item?.product.quickUseAmount ?? (item?.product.packageAmount ? 1 : undefined);
   const quickUnit = item?.product.quickUseUnit ?? (item?.product.packageAmount ? "szt" : undefined);
-  useBrowserBackLayer(consumeOpen || confirmDelete, () => {
-    if (consumeOpen) setConsumeOpen(false);
-    else setConfirmDelete(false);
-  });
 
   useEffect(() => {
     if (!barcode) return setMessage("Brak kodu produktu.");
@@ -114,7 +109,7 @@ export function PantryItemScreen() {
     if (!item) return;
     setConsumeAmount("");
     setMessage("");
-    setConsumeOpen(true);
+    consumeLayer.openLayer();
   }
 
   async function consumeSelected(amount: number, unit: Unit, capToAvailable = false) {
@@ -134,7 +129,7 @@ export function PantryItemScreen() {
           setDepletedPromptBarcodes(refreshed.quantity <= 0 ? [refreshed.barcode] : []);
         }
       }
-      setConsumeOpen(false);
+      consumeLayer.closeLayer();
       setMessage(consumption.capped ? `Zużyto resztę: ${consumption.amount} ${consumption.unit}.` : `Zużyto ${consumption.amount} ${consumption.unit}. Pozostało: ${refreshed?.quantity ?? 0} ${refreshed?.unit ?? item.unit}.`);
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : "Nie udało się zużyć produktu.");
@@ -182,12 +177,12 @@ export function PantryItemScreen() {
         <View style={styles.dangerZone}>
           <Text style={styles.dangerTitle}>Usunięcie ze spiżarni</Text>
           <Text style={styles.muted}>Produkt zniknie ze stanu, ale pozostanie w katalogu Zapisane i w dotychczasowej historii.</Text>
-          {confirmDelete ? <View style={styles.confirm}><Pressable disabled={busy} onPress={() => void remove()} style={styles.delete}><Text style={styles.white}>Tak, usuń produkt</Text></Pressable><Pressable onPress={() => setConfirmDelete(false)} style={styles.cancel}><Text>Anuluj</Text></Pressable></View> : <Pressable onPress={() => setConfirmDelete(true)} style={styles.deleteOutline}><Text style={styles.deleteText}>Usuń produkt ze spiżarni</Text></Pressable>}
+          {deleteLayer.open ? <View style={styles.confirm}><Pressable disabled={busy} onPress={() => void remove()} style={styles.delete}><Text style={styles.white}>Tak, usuń produkt</Text></Pressable><Pressable onPress={deleteLayer.closeLayer} style={styles.cancel}><Text>Anuluj</Text></Pressable></View> : <Pressable onPress={deleteLayer.openLayer} style={styles.deleteOutline}><Text style={styles.deleteText}>Usuń produkt ze spiżarni</Text></Pressable>}
         </View>
       </View>}
     </ScrollView>
-    <Modal visible={consumeOpen} transparent animationType="fade" onRequestClose={() => setConsumeOpen(false)}><View style={styles.backdrop}><View style={styles.consumeCard}>
-      <View style={styles.consumeHeader}><Text style={styles.consumeTitle}>Zużyj: {item?.product.name}</Text><Pressable onPress={() => setConsumeOpen(false)}><Text style={styles.muted}>Zamknij</Text></Pressable></View>
+    <Modal visible={consumeLayer.open} transparent animationType="fade" onRequestClose={consumeLayer.closeLayer}><View style={styles.backdrop}><View style={styles.consumeCard}>
+      <View style={styles.consumeHeader}><Text style={styles.consumeTitle}>Zużyj: {item?.product.name}</Text><Pressable onPress={consumeLayer.closeLayer}><Text style={styles.muted}>Zamknij</Text></Pressable></View>
       <Text style={styles.muted}>Dostępne: {summary?.text ?? `${item?.quantity ?? 0} ${item?.unit ?? ""}`}</Text>
       <View style={styles.consumeAmountRow}><TextInput autoFocus value={consumeAmount} onChangeText={setConsumeAmount} keyboardType="decimal-pad" placeholder="Wpisz zużytą ilość" style={styles.consumeInput} /><Text style={styles.consumeUnit}>{item?.unit}</Text></View>
       <Pressable disabled={busy} onPress={() => void consume()} style={[styles.useButton, busy && styles.disabled]}><Text style={styles.white}>{busy ? "Zapisywanie..." : "Potwierdź zużycie"}</Text></Pressable>

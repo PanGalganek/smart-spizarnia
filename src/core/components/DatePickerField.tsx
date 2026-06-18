@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
-import { useBrowserBackLayer } from "@/core/hooks/useBrowserBackLayer";
+import { useNavigationLayer } from "@/core/navigation/useAppNavigation";
 import { colors } from "@/core/theme";
 
 type Props = { value: string; onChange: (value: string) => void; label?: string };
@@ -8,14 +8,13 @@ const weekdays = ["Pn", "Wt", "Sr", "Cz", "Pt", "So", "Nd"];
 
 export function DatePickerField({ value, onChange, label = "Data ważności (opcjonalna)" }: Props) {
   const selected = parseIsoDate(value);
-  const [open, setOpen] = useState(false);
+  const pickerLayer = useNavigationLayer("date-picker", "modal", { modal: "date-picker" });
   const [visibleMonth, setVisibleMonth] = useState(() => selected ?? new Date());
   const days = useMemo(() => calendarDays(visibleMonth), [visibleMonth]);
-  useBrowserBackLayer(open, () => setOpen(false));
 
   function show() {
     setVisibleMonth(selected ?? new Date());
-    setOpen(true);
+    pickerLayer.openLayer();
   }
 
   return <View style={styles.field}>
@@ -24,7 +23,7 @@ export function DatePickerField({ value, onChange, label = "Data ważności (opc
       <Pressable onPress={show} style={styles.input}><Text style={value ? styles.value : styles.placeholder}>{value ? formatPolishDate(value) : "Wybierz date z kalendarza"}</Text></Pressable>
       {!!value && <Pressable onPress={() => onChange("")} style={styles.clear}><Text style={styles.clearText}>Wyczysc</Text></Pressable>}
     </View>
-    <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+    <Modal visible={pickerLayer.open} transparent animationType="fade" onRequestClose={pickerLayer.closeLayer}>
       <View style={styles.backdrop}><View style={styles.calendar}>
         <View style={styles.monthHeader}>
           <Pressable onPress={() => setVisibleMonth(changeMonth(visibleMonth, -1))} style={styles.nav}><Text style={styles.navText}>{"<"}</Text></Pressable>
@@ -32,8 +31,8 @@ export function DatePickerField({ value, onChange, label = "Data ważności (opc
           <Pressable onPress={() => setVisibleMonth(changeMonth(visibleMonth, 1))} style={styles.nav}><Text style={styles.navText}>{">"}</Text></Pressable>
         </View>
         <View style={styles.week}>{weekdays.map((day) => <Text key={day} style={styles.weekday}>{day}</Text>)}</View>
-        <View style={styles.days}>{days.map((day, index) => day ? <Pressable key={toIsoDate(day)} onPress={() => { onChange(toIsoDate(day)); setOpen(false); }} style={[styles.day, value === toIsoDate(day) && styles.selectedDay]}><Text style={value === toIsoDate(day) ? styles.selectedText : undefined}>{day.getDate()}</Text></Pressable> : <View key={`empty-${index}`} style={styles.day} />)}</View>
-        <Pressable onPress={() => setOpen(false)} style={styles.close}><Text>Zamknij</Text></Pressable>
+        <View style={styles.days}>{days.map((day, index) => day ? <Pressable key={toIsoDate(day)} onPress={() => { onChange(toIsoDate(day)); pickerLayer.closeLayer(); }} style={[styles.day, value === toIsoDate(day) && styles.selectedDay]}><Text style={value === toIsoDate(day) ? styles.selectedText : undefined}>{day.getDate()}</Text></Pressable> : <View key={`empty-${index}`} style={styles.day} />)}</View>
+        <Pressable onPress={pickerLayer.closeLayer} style={styles.close}><Text>Zamknij</Text></Pressable>
       </View></View>
     </Modal>
   </View>;

@@ -3,7 +3,7 @@ import { useCallback, useState } from "react";
 import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useAuth } from "@/core/auth/AuthProvider";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
-import { useBrowserBackStack } from "@/core/hooks/useBrowserBackLayer";
+import { useAppNavigation, useNavigationLayer } from "@/core/navigation/useAppNavigation";
 import { colors } from "@/core/theme";
 import { accountStatusLabel, UserProfile } from "@/domain/userProfile";
 import { deleteUserProfileAndData, getUserProfilePreview, listUserProfiles, setUserStatus, UserProfilePreview } from "@/services/adminRepository";
@@ -11,16 +11,14 @@ import { productType } from "@/services/productTypes";
 
 export function AdminScreen() {
   const { isAdmin, profile } = useAuth();
+  const appNavigation = useAppNavigation();
+  const profileLayer = useNavigationLayer("admin-user-profile", "modal", { modal: "admin-user-profile", mode: "admin-details" });
   const [users, setUsers] = useState<UserProfile[]>([]);
-  const [selected, setSelected] = useState<UserProfile | null>(null);
   const [preview, setPreview] = useState<UserProfilePreview | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  useBrowserBackStack(selected ? (confirmDelete ? 2 : 1) : 0, () => {
-    if (confirmDelete) setConfirmDelete(false);
-    else setSelected(null);
-  });
+  const selected = profileLayer.open ? users.find((user) => user.uid === appNavigation.state.selectedId) ?? null : null;
+  const confirmDelete = profileLayer.open && appNavigation.state.mode === "admin-delete";
 
   const refresh = useCallback(async () => {
     if (!isAdmin) return;
@@ -35,11 +33,15 @@ export function AdminScreen() {
   useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
 
   async function openProfile(user: UserProfile) {
-    setSelected(user);
     setPreview(null);
-    setConfirmDelete(false);
+    profileLayer.openLayer({ modal: "admin-user-profile", mode: "admin-details", selectedId: user.uid });
     try { setPreview(await getUserProfilePreview(user.uid)); }
     catch { setMessage("Nie udało się pobrać profilu użytkownika."); }
+  }
+
+  function openDeleteProfile(user: UserProfile) {
+    setPreview(null);
+    profileLayer.openLayer({ modal: "admin-user-profile", mode: "admin-delete", selectedId: user.uid });
   }
 
   async function changeStatus(user: UserProfile, status: "active" | "blocked") {
@@ -47,7 +49,6 @@ export function AdminScreen() {
       setBusy(true);
       const updated = await setUserStatus(user, status);
       setUsers((current) => current.map((item) => item.uid === updated.uid ? updated : item));
-      if (selected?.uid === updated.uid) setSelected(updated);
       setMessage(status === "active" ? "Konto zatwierdzone." : "Konto zablokowane.");
     } catch {
       setMessage("Nie udało się zmienić statusu konta.");
@@ -62,9 +63,8 @@ export function AdminScreen() {
       setBusy(true);
       await deleteUserProfileAndData(selected.uid);
       setUsers((current) => current.filter((item) => item.uid !== selected.uid));
-      setSelected(null);
+      profileLayer.closeLayer();
       setPreview(null);
-      setConfirmDelete(false);
       setMessage("Profil użytkownika i jego dane zostały usunięte.");
     } catch {
       setMessage("Nie udało się usunąć profilu użytkownika.");
@@ -97,19 +97,19 @@ export function AdminScreen() {
           <Pressable onPress={() => void openProfile(item)} style={styles.secondary}><Text style={styles.secondaryText}>Podejrzyj profil</Text></Pressable>
           {item.status !== "active" && <Pressable disabled={busy} onPress={() => void changeStatus(item, "active")} style={styles.approve}><Text style={styles.white}>Zatwierdź konto</Text></Pressable>}
           {item.status !== "blocked" && <Pressable disabled={busy || item.uid === profile?.uid} onPress={() => void changeStatus(item, "blocked")} style={[styles.blockButton, item.uid === profile?.uid && styles.disabled]}><Text style={styles.white}>Zablokuj</Text></Pressable>}
-          <Pressable disabled={busy || item.uid === profile?.uid} onPress={() => { setSelected(item); setPreview(null); setConfirmDelete(true); }} style={[styles.deleteSmall, item.uid === profile?.uid && styles.disabled]}><Text style={styles.white}>Usuń</Text></Pressable>
+          <Pressable disabled={busy || item.uid === profile?.uid} onPress={() => openDeleteProfile(item)} style={[styles.deleteSmall, item.uid === profile?.uid && styles.disabled]}><Text style={styles.white}>Usuń</Text></Pressable>
         </View>
       </View>}
     />
 
-    <Modal visible={!!selected} transparent animationType="fade" onRequestClose={() => setSelected(null)}>
+    <Modal visible={profileLayer.open && !!selected} transparent animationType="fade" onRequestClose={profileLayer.closeLayer}>
       <View style={styles.backdrop}><View style={styles.modalCard}>
         <View style={styles.modalHeader}>
           <View style={styles.userText}>
             <Text style={styles.modalTitle}>{selected?.displayName || selected?.email}</Text>
             <Text style={styles.meta}>{selected?.email}</Text>
           </View>
-          <Pressable onPress={() => setSelected(null)}><Text style={styles.close}>Zamknij</Text></Pressable>
+          <Pressable onPress={profileLayer.closeLayer}><Text style={styles.close}>Zamknij</Text></Pressable>
         </View>
         <ScrollView contentContainerStyle={styles.preview}>
           <PreviewSection title="Produkty spożywcze" items={preview?.products.filter((item) => productType(item) === "food").map((item) => item.name) ?? []} />
@@ -127,8 +127,8 @@ export function AdminScreen() {
             {confirmDelete && <Text style={styles.error}>Czy na pewno chcesz usunąć tego użytkownika i wszystkie jego dane?</Text>}
             {confirmDelete ? <View style={styles.actions}>
               <Pressable disabled={busy || selected?.uid === profile?.uid} onPress={() => void removeProfile()} style={[styles.deleteButton, selected?.uid === profile?.uid && styles.disabled]}><Text style={styles.white}>Tak, usuń użytkownika i dane</Text></Pressable>
-              <Pressable onPress={() => setConfirmDelete(false)} style={styles.secondary}><Text style={styles.secondaryText}>Anuluj</Text></Pressable>
-            </View> : <Pressable disabled={selected?.uid === profile?.uid} onPress={() => setConfirmDelete(true)} style={[styles.deleteOutline, selected?.uid === profile?.uid && styles.disabled]}><Text style={styles.deleteText}>Usuń profil użytkownika</Text></Pressable>}
+              <Pressable onPress={() => appNavigation.updateState({ mode: "admin-details" })} style={styles.secondary}><Text style={styles.secondaryText}>Anuluj</Text></Pressable>
+            </View> : <Pressable disabled={selected?.uid === profile?.uid} onPress={() => appNavigation.updateState({ mode: "admin-delete" }, { push: true })} style={[styles.deleteOutline, selected?.uid === profile?.uid && styles.disabled]}><Text style={styles.deleteText}>Usuń profil użytkownika</Text></Pressable>}
           </View>
         </ScrollView>
       </View></View>

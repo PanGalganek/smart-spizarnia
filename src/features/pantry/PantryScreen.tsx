@@ -4,8 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { formatPolishDate } from "@/core/components/DatePickerField";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
-import { useBrowserBackLayer } from "@/core/hooks/useBrowserBackLayer";
-import { navigateToRoute, replaceWithRoute } from "@/core/navigation/useAppNavigation";
+import { navigateToRoute, replaceWithRoute, useAppNavigation, useNavigationLayer } from "@/core/navigation/useAppNavigation";
 import { colors } from "@/core/theme";
 import { PantryItem, PantryPackage, ProductType } from "@/domain/product";
 import { AddDepletedPrompt } from "@/features/shopping/AddDepletedPrompt";
@@ -23,21 +22,24 @@ const UNASSIGNED = "__unassigned__";
 export function PantryScreen() {
   const navigation = useNavigation();
   const params = useLocalSearchParams<{ location?: string | string[]; type?: ProductType | ProductType[] }>();
-  const [activeType, setActiveType] = useState<ProductType>("food");
+  const appNavigation = useAppNavigation();
+  const managerLayer = useNavigationLayer("pantry-location-manager", "modal", { modal: "pantry-location-manager" });
+  const packagePickerLayer = useNavigationLayer("pantry-package-picker", "modal", { modal: "pantry-package-picker" });
+  const routeType = firstParam(params.type);
+  const activeType: ProductType = appNavigation.state.view === "pantry" && isProductType(appNavigation.state.tab)
+    ? appNavigation.state.tab
+    : isProductType(routeType) ? routeType : "food";
+  const selectedLocation = appNavigation.state.view === "pantry" ? appNavigation.state.subview : firstParam(params.location) ?? null;
   const [items, setItems] = useState<PantryItem[]>([]);
   const [configuredLocations, setConfiguredLocations] = useState<string[]>([]);
-  const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [message, setMessage] = useState("");
-  const [managerOpen, setManagerOpen] = useState(false);
   const [newLocation, setNewLocation] = useState("");
   const [managerMessage, setManagerMessage] = useState("");
   const [shoppingPromptItems, setShoppingPromptItems] = useState<PantryItem["product"][]>([]);
   const [depletedPromptBarcodes, setDepletedPromptBarcodes] = useState<string[]>([]);
   const [packagePickerItem, setPackagePickerItem] = useState<PantryItem | null>(null);
   const [quickMessage, setQuickMessage] = useState("");
-  useBrowserBackLayer(managerOpen, () => setManagerOpen(false));
-  useBrowserBackLayer(!!packagePickerItem, () => setPackagePickerItem(null));
 
   const refresh = useCallback(async () => {
     try {
@@ -49,32 +51,25 @@ export function PantryScreen() {
   }, [activeType]);
   useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
 
-  useEffect(() => {
-    const type = firstParam(params.type);
-    if (type === "food" || type === "household_chemical") setActiveType(type);
-  }, [params.type]);
-
-  useEffect(() => {
-    const location = firstParam(params.location) ?? null;
-    setSelectedLocation(location);
-    setQuery("");
-  }, [params.location]);
+  useEffect(() => setQuery(""), [selectedLocation]);
 
   function changeType(type: ProductType) {
-    setActiveType(type);
-    setSelectedLocation(null);
     setQuery("");
-    setManagerOpen(false);
+    if (managerLayer.open) managerLayer.closeLayer();
     navigateToRoute({ pathname: "/pantry", params: { type } });
   }
 
   useEffect(() => navigation.addListener("beforeRemove", (event) => {
-    if (managerOpen) {
+    if (managerLayer.open) {
       event.preventDefault();
-      setManagerOpen(false);
+      managerLayer.closeLayer();
       return;
     }
-  }), [managerOpen, navigation]);
+    if (packagePickerLayer.open) {
+      event.preventDefault();
+      packagePickerLayer.closeLayer();
+    }
+  }), [managerLayer.open, packagePickerLayer.open, navigation]);
 
   const locations = useMemo(() => {
     const assigned = items.map((item) => item.location?.trim()).filter((value): value is string => Boolean(value)).map(displayLocationName);
@@ -94,14 +89,13 @@ export function PantryScreen() {
 
   function openLocation(location: string) {
     setQuery("");
-    setSelectedLocation(location);
     navigateToRoute({ pathname: "/pantry", params: { type: activeType, location } });
   }
 
   function goBack() {
-    if (managerOpen) return setManagerOpen(false);
+    if (managerLayer.open) return managerLayer.closeLayer();
+    if (packagePickerLayer.open) return packagePickerLayer.closeLayer();
     if (selectedLocation) {
-      setSelectedLocation(null);
       setQuery("");
       replaceWithRoute({ pathname: "/pantry", params: { type: activeType } });
       return;
@@ -140,6 +134,7 @@ export function PantryScreen() {
       const updated = await changePantryQuantity(item.product, -amount, unit, { packageId });
       setItems((current) => updated.quantity <= 0 ? current.filter((entry) => entry.barcode !== updated.barcode) : current.map((entry) => entry.barcode === updated.barcode ? updated : entry));
       setPackagePickerItem(null);
+      if (packagePickerLayer.open) packagePickerLayer.closeLayer();
       setQuickMessage(cappedConsumption?.capped ? `Zużyto resztę: ${amount} ${unit}.` : `Zużyto ${amount} ${unit}: ${item.product.name}.`);
       if (shouldAskToBuyAgain(item, updated)) {
         setShoppingPromptItems([updated.product]);
@@ -152,7 +147,11 @@ export function PantryScreen() {
 
   function requestQuickConsume(item: PantryItem) {
     const summary = packageSummary(item);
-    if (!summary.hasOpenPackage && summary.fullPackages.length > 1) return setPackagePickerItem(item);
+    if (!summary.hasOpenPackage && summary.fullPackages.length > 1) {
+      setPackagePickerItem(item);
+      packagePickerLayer.openLayer();
+      return;
+    }
     void quickConsume(item, summary.fullPackages[0]?.id);
   }
 
@@ -180,7 +179,7 @@ export function PantryScreen() {
           numColumns={2}
           columnWrapperStyle={styles.tileColumns}
           contentContainerStyle={styles.tiles}
-          ListHeaderComponent={<View style={styles.tilesHeader}><Text style={styles.hint}>Wybierz miejsce przechowywania</Text><Pressable onPress={() => { setManagerOpen(true); setManagerMessage(""); }} style={styles.manageButton}><MaterialCommunityIcons name="cog-outline" size={20} color={colors.primary} /><Text style={styles.manageButtonText}>Zarządzaj lokalizacjami</Text></Pressable></View>}
+          ListHeaderComponent={<View style={styles.tilesHeader}><Text style={styles.hint}>Wybierz miejsce przechowywania</Text><Pressable onPress={() => { managerLayer.openLayer(); setManagerMessage(""); }} style={styles.manageButton}><MaterialCommunityIcons name="cog-outline" size={20} color={colors.primary} /><Text style={styles.manageButtonText}>Zarządzaj lokalizacjami</Text></Pressable></View>}
           renderItem={({ item }) => {
             const unassigned = item === UNASSIGNED;
             const count = items.filter((product) => unassigned ? !product.location?.trim() : displayLocationName(product.location?.trim() ?? "") === item).length;
@@ -209,9 +208,9 @@ export function PantryScreen() {
         />
       </>}
 
-      <Modal visible={managerOpen} transparent animationType="fade" onRequestClose={() => setManagerOpen(false)}>
+      <Modal visible={managerLayer.open} transparent animationType="fade" onRequestClose={managerLayer.closeLayer}>
         <View style={styles.backdrop}><View style={styles.managerCard}>
-          <View style={styles.managerHeader}><Text style={styles.managerTitle}>Lokalizacje spiżarni</Text><Pressable onPress={() => setManagerOpen(false)} style={styles.managerClose}><Text style={styles.managerCloseText}>Zamknij</Text></Pressable></View>
+          <View style={styles.managerHeader}><Text style={styles.managerTitle}>Lokalizacje spiżarni</Text><Pressable onPress={managerLayer.closeLayer} style={styles.managerClose}><Text style={styles.managerCloseText}>Zamknij</Text></Pressable></View>
           <View style={styles.addLocationRow}><TextInput value={newLocation} onChangeText={setNewLocation} onSubmitEditing={() => void createLocation()} placeholder="Nowa lokalizacja" style={styles.locationInput} /><Pressable onPress={() => void createLocation()} style={styles.addLocationButton}><Text style={styles.white}>+ Dodaj</Text></Pressable></View>
           {!!managerMessage && <Text style={[styles.managerMessage, managerMessage.startsWith("Nie") && styles.managerError]}>{managerMessage}</Text>}
           <ScrollView style={styles.managerList} contentContainerStyle={styles.managerListContent}>
@@ -223,7 +222,7 @@ export function PantryScreen() {
           <Text style={styles.managerHint}>Lokalizację zawierającą produkty można usunąć dopiero po przeniesieniu produktów w inne miejsce.</Text>
         </View></View>
       </Modal>
-      <PackagePicker item={packagePickerItem} onClose={() => setPackagePickerItem(null)} onSelect={(pack) => packagePickerItem && void quickConsume(packagePickerItem, pack.id)} />
+      <PackagePicker visible={packagePickerLayer.open} item={packagePickerItem} onClose={() => { packagePickerLayer.closeLayer(); setPackagePickerItem(null); }} onSelect={(pack) => packagePickerItem && void quickConsume(packagePickerItem, pack.id)} />
     </ModuleScreen>
   );
 }
@@ -256,9 +255,9 @@ function ProductCard({ item, returnType, returnLocation, onQuickConsume }: { ite
   );
 }
 
-function PackagePicker({ item, onClose, onSelect }: { item: PantryItem | null; onClose: () => void; onSelect: (pack: PantryPackage) => void }) {
+function PackagePicker({ visible, item, onClose, onSelect }: { visible: boolean; item: PantryItem | null; onClose: () => void; onSelect: (pack: PantryPackage) => void }) {
   const packages = item ? packageSummary(item).fullPackages : [];
-  return <Modal visible={!!item} transparent animationType="fade" onRequestClose={onClose}>
+  return <Modal visible={visible && !!item} transparent animationType="fade" onRequestClose={onClose}>
     <View style={styles.backdrop}><View style={styles.managerCard}>
       <View style={styles.managerHeader}><Text style={styles.managerTitle}>Które opakowanie otwieramy?</Text><Pressable onPress={onClose} style={styles.managerClose}><Text style={styles.managerCloseText}>Zamknij</Text></Pressable></View>
       <Text style={styles.managerHint}>Wybierz opakowanie po dacie ważności. Aplikacja zacznie zużywanie właśnie z niego.</Text>
@@ -293,6 +292,10 @@ function locationIcon(location: string): keyof typeof MaterialCommunityIcons.gly
 
 function firstParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function isProductType(value: unknown): value is ProductType {
+  return value === "food" || value === "household_chemical";
 }
 
 const styles = StyleSheet.create({

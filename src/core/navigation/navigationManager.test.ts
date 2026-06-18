@@ -106,4 +106,41 @@ describe("navigationManager", () => {
 
     expect(history.go).toHaveBeenCalledWith(-1);
   });
+
+  it("restores the previous step inside the same layer before closing it", async () => {
+    const { entries } = installWindow("/meals");
+    const { deriveNavigationState, getCurrentNavigationState, handleSystemBackState, openNavigationLayer, replaceNavigationState, updateNavigationState } = await import("./navigationManager");
+    const onBack = vi.fn();
+
+    replaceNavigationState(deriveNavigationState("/meals", {}, "/meals"));
+    openNavigationLayer("meal-layer", { kind: "modal", name: "meal-creator", onBack }, { modal: "meal-creator", mode: "meal-type" });
+    updateNavigationState({ mode: "meal-products" }, { push: true });
+
+    expect(entries).toHaveLength(3);
+    expect(getCurrentNavigationState()?.mode).toBe("meal-products");
+
+    handleSystemBackState(entries[1].state);
+
+    expect(onBack).not.toHaveBeenCalled();
+    expect(getCurrentNavigationState()?.layerId).toBe("meal-layer");
+    expect(getCurrentNavigationState()?.mode).toBe("meal-type");
+
+    handleSystemBackState(entries[0].state);
+
+    expect(onBack).toHaveBeenCalledTimes(1);
+    expect(getCurrentNavigationState()?.layerId).toBeNull();
+  });
+
+  it("closes all history entries belonging to the same layer", async () => {
+    const { history } = installWindow("/meals");
+    const { closeNavigationLayer, deriveNavigationState, openNavigationLayer, replaceNavigationState, updateNavigationState } = await import("./navigationManager");
+
+    replaceNavigationState(deriveNavigationState("/meals", {}, "/meals"));
+    openNavigationLayer("meal-layer", { kind: "modal", name: "meal-creator" }, { modal: "meal-creator", mode: "meal-type" });
+    updateNavigationState({ mode: "meal-products" }, { push: true });
+
+    closeNavigationLayer("meal-layer");
+
+    expect(history.go).toHaveBeenCalledWith(-2);
+  });
 });

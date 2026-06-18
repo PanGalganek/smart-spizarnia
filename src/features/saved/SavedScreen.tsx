@@ -6,7 +6,7 @@ import { ModuleScreen } from "@/core/components/ModuleScreen";
 import { ConsumerPicker } from "@/core/components/ConsumerPicker";
 import { DatePickerField } from "@/core/components/DatePickerField";
 import { LocationPicker } from "@/core/components/LocationPicker";
-import { useBrowserBackStack } from "@/core/hooks/useBrowserBackLayer";
+import { useAppNavigation, useNavigationLayer } from "@/core/navigation/useAppNavigation";
 import { colors } from "@/core/theme";
 import { Consumer } from "@/domain/meal";
 import { ChemicalLevel, Product, ProductType, Unit } from "@/domain/product";
@@ -20,10 +20,10 @@ type ActionMode = "details" | "edit" | "pantry" | "today";
 type EditKey = "energyKcal" | "proteins" | "carbohydrates" | "fat" | "fiber" | "salt" | "packageAmount" | "quickUseAmount";
 
 export function SavedScreen() {
+  const appNavigation = useAppNavigation();
+  const savedLayer = useNavigationLayer("saved-product", "modal", { modal: "saved-product", mode: actionModeToMode("details") });
   const [products, setProducts] = useState<Product[]>([]);
-  const [activeType, setActiveType] = useState<ProductType>("food");
   const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<Product | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -34,7 +34,6 @@ export function SavedScreen() {
   const [packageDates, setPackageDates] = useState<string[]>([]);
   const [chemicalLevel, setChemicalLevel] = useState<ChemicalLevel>("full");
   const [consumer, setConsumer] = useState<Consumer | null>(null);
-  const [actionMode, setActionMode] = useState<ActionMode>("details");
   const [editName, setEditName] = useState("");
   const [editBrand, setEditBrand] = useState("");
   const [editPackageUnit, setEditPackageUnit] = useState<Unit>("g");
@@ -49,14 +48,9 @@ export function SavedScreen() {
     packageAmount: "",
     quickUseAmount: ""
   });
-  useBrowserBackStack(selected ? (actionMode === "details" ? 1 : 2) : 0, () => {
-    if (actionMode !== "details") {
-      setActionMode("details");
-      setError("");
-    } else {
-      setSelected(null);
-    }
-  });
+  const activeType: ProductType = appNavigation.state.view === "saved" && isProductType(appNavigation.state.tab) ? appNavigation.state.tab : "food";
+  const selected = savedLayer.open ? products.find((product) => product.barcode === appNavigation.state.selectedId) ?? null : null;
+  const actionMode = savedLayer.open ? actionModeFromMode(appNavigation.state.mode) : "details";
 
   const refresh = useCallback(async () => {
     setError("");
@@ -74,10 +68,8 @@ export function SavedScreen() {
   }, [activeType, products, query]);
 
   function openProduct(product: Product) {
-    setSelected(product);
     setMessage("");
     setError("");
-    setActionMode("details");
     setAmount(canUseWholePackage(product) ? "1" : "100");
     setUnit(canUseWholePackage(product) ? "szt" : product.defaultUnit ?? "g");
     setLocation("");
@@ -85,6 +77,7 @@ export function SavedScreen() {
     setPackageDates([]);
     setChemicalLevel("full");
     fillEditForm(product);
+    savedLayer.openLayer({ modal: "saved-product", mode: actionModeToMode("details"), selectedId: product.barcode });
   }
 
   function fillEditForm(product: Product) {
@@ -114,7 +107,7 @@ export function SavedScreen() {
       setPackageDates([]);
     }
     if (mode === "edit") fillEditForm(selected);
-    setActionMode(mode);
+    appNavigation.updateState({ mode: actionModeToMode(mode) }, { push: true });
   }
 
   function setEditNumber(key: EditKey, value: string) {
@@ -159,10 +152,9 @@ export function SavedScreen() {
         }
       };
       const saved = await updateProductDetails(updated);
-      setSelected(saved);
       setProducts((current) => current.map((product) => product.barcode === saved.barcode ? saved : product));
       setMessage("Dane produktu zostały zapisane.");
-      setActionMode("details");
+      appNavigation.updateState({ mode: actionModeToMode("details") });
     } catch {
       setError("Nie udało się zapisać zmian produktu.");
     } finally {
@@ -178,7 +170,7 @@ export function SavedScreen() {
       await deleteSavedProduct(selected.barcode);
       setProducts((current) => current.filter((product) => product.barcode !== selected.barcode));
       setMessage(`Usunięto z Zapisanych: ${selected.name}. Jeśli produkt jest w spiżarni, pozostaje tam.`);
-      setSelected(null);
+      savedLayer.closeLayer();
     } catch {
       setError("Nie udało się usunąć produktu z Zapisanych.");
     } finally {
@@ -192,7 +184,7 @@ export function SavedScreen() {
       setBusy(true);
       await addProductToShoppingList(selected, "saved");
       setMessage(`Dodano do listy zakupów: ${selected.name}.`);
-      setSelected(null);
+      savedLayer.closeLayer();
     } catch {
       setError("Nie udało się dodać produktu do listy zakupów.");
     } finally { setBusy(false); }
@@ -206,7 +198,7 @@ export function SavedScreen() {
         setBusy(true); setError("");
         const updated = await saveChemicalPantryItem(selected, chemicalLevel, { location });
         setMessage(`Dodano ${selected.name}. Stan: ${chemicalLevelLabel(updated.chemicalLevel)}.`);
-        setSelected(null);
+        savedLayer.closeLayer();
       } catch (cause) { setError(cause instanceof Error ? cause.message : "Nie udało się dodać produktu do spiżarni."); }
       finally { setBusy(false); }
       return;
@@ -219,7 +211,7 @@ export function SavedScreen() {
       const packageExpiryDates = buildPackageDates(selected, value, unit, expiryDate, packageDates);
       const updated = await changePantryQuantity(selected, value, unit, { location, expiryDate: expiryDate || undefined, packageExpiryDates });
       setMessage(`Dodano ${selected.name}. Stan: ${updated.quantity} ${updated.unit}.`);
-      setSelected(null);
+      savedLayer.closeLayer();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Nie udało się dodać produktu do spiżarni."); }
     finally { setBusy(false); }
   }
@@ -236,7 +228,7 @@ export function SavedScreen() {
       const ingredient = createUntrackedMealIngredient(selected, nutritionAmount, nutritionUnit);
       await createUntrackedMeal(`Przekąska: ${selected.name}`, "snack", ingredient, Date.now(), consumer);
       setMessage(`Dodano do bilansu osoby ${consumer.name}: ${ingredient.nutrients.energyKcal ?? 0} kcal.`);
-      setSelected(null);
+      savedLayer.closeLayer();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Nie udało się dodać produktu do bilansu."); }
     finally { setBusy(false); }
   }
@@ -244,7 +236,7 @@ export function SavedScreen() {
   return (
     <ModuleScreen title="Zapisane">
       <TextInput value={query} onChangeText={setQuery} placeholder="Szukaj produktu..." autoCorrect={false} style={styles.search} />
-      <View style={styles.tabs}>{productTypes.map((item) => <Pressable key={item.type} onPress={() => { setActiveType(item.type); setQuery(""); }} style={[styles.tab, activeType === item.type && styles.tabActive]}><Text style={activeType === item.type ? styles.tabTextActive : styles.tabText}>{item.label}</Text></Pressable>)}</View>
+      <View style={styles.tabs}>{productTypes.map((item) => <Pressable key={item.type} onPress={() => { appNavigation.updateState({ tab: item.type }, { push: true }); setQuery(""); }} style={[styles.tab, activeType === item.type && styles.tabActive]}><Text style={activeType === item.type ? styles.tabTextActive : styles.tabText}>{item.label}</Text></Pressable>)}</View>
       {!!error && <Text style={styles.error}>{error}</Text>}
       {!!message && <Text style={styles.message}>{message}</Text>}
       <FlatList
@@ -261,11 +253,11 @@ export function SavedScreen() {
         )}
       />
 
-      <Modal visible={!!selected} transparent animationType="fade" onRequestClose={() => setSelected(null)}>
+      <Modal visible={savedLayer.open && !!selected} transparent animationType="fade" onRequestClose={savedLayer.closeLayer}>
         <View style={styles.backdrop}><View style={styles.modalCard}>
           <View style={styles.modalHeader}>
-            <View style={styles.modalHeading}>{actionMode !== "details" && <Pressable onPress={() => { setActionMode("details"); setError(""); }} style={styles.backAction}><Text style={styles.backActionText}>‹ Szczegóły</Text></Pressable>}<Text style={styles.modalTitle}>{selected?.name}</Text></View>
-            <Pressable onPress={() => setSelected(null)} style={styles.close}><Text style={styles.closeText}>Zamknij</Text></Pressable>
+            <View style={styles.modalHeading}>{actionMode !== "details" && <Pressable onPress={() => { appNavigation.updateState({ mode: actionModeToMode("details") }); setError(""); }} style={styles.backAction}><Text style={styles.backActionText}>‹ Szczegóły</Text></Pressable>}<Text style={styles.modalTitle}>{selected?.name}</Text></View>
+            <Pressable onPress={savedLayer.closeLayer} style={styles.close}><Text style={styles.closeText}>Zamknij</Text></Pressable>
           </View>
           {!!selected?.brand && <Text style={styles.brand}>{selected.brand}</Text>}
           <ScrollView style={styles.detailsScroll} contentContainerStyle={styles.details} showsVerticalScrollIndicator keyboardShouldPersistTaps="handled">
@@ -402,6 +394,16 @@ function PackageDateFields({ product, amount, unit, packageDates, fallbackDate, 
 function parseAmount(value: string) { const number = Number(value.replace(",", ".")); return Number.isFinite(number) && number > 0 ? number : 0; }
 function parseOptionalNumber(value: string) { const number = Number(value.replace(",", ".")); return Number.isFinite(number) && number >= 0 ? number : undefined; }
 function textNumber(value?: number) { return value === undefined ? "" : String(value); }
+function actionModeToMode(mode: ActionMode) { return `saved-${mode}`; }
+function actionModeFromMode(mode: string | null): ActionMode {
+  if (mode === "saved-edit") return "edit";
+  if (mode === "saved-pantry") return "pantry";
+  if (mode === "saved-today") return "today";
+  return "details";
+}
+function isProductType(value: unknown): value is ProductType {
+  return value === "food" || value === "household_chemical";
+}
 
 const styles = StyleSheet.create({
   search: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 13, paddingHorizontal: 16, paddingVertical: 14, fontSize: 17, marginBottom: 12 },

@@ -11,7 +11,9 @@ export type AppNavigationState = {
   subview: string | null;
   modal: string | null;
   scanner: boolean;
+  mode: string | null;
   editingProductId: string | null;
+  selectedId: string | null;
   barcode: string | null;
   layerId: string | null;
   layerKind: NavigationLayerKind | null;
@@ -25,7 +27,7 @@ type LayerDescriptor = {
   id: string;
   kind: NavigationLayerKind;
   name: string;
-  onBack: () => void;
+  onBack?: () => void;
   order: number;
 };
 
@@ -33,6 +35,7 @@ const HISTORY_STATE_KEY = "__smartPantryNavigation";
 
 const layers = new Map<string, LayerDescriptor>();
 const appStack: AppNavigationState[] = [];
+const listeners = new Set<() => void>();
 
 let currentState: AppNavigationState | null = null;
 let layerCounter = 0;
@@ -62,10 +65,20 @@ export function deriveNavigationState(pathname: string, params: SearchParams = {
   return baseState("unknown", pathname, url);
 }
 
+export function subscribeNavigation(listener: () => void) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+export function getNavigationSnapshot() {
+  return currentState ? cloneState(currentState) : baseState("root", "/", "");
+}
+
 export function replaceNavigationState(state: AppNavigationState) {
-  currentState = cloneState(state);
-  if (!canUseHistory()) return;
-  window.history.replaceState(withNavigationState(window.history.state, currentState), "", currentState.url);
+  const next = mergeRouteState(state);
+  currentState = cloneState(next);
+  if (canUseHistory()) window.history.replaceState(withNavigationState(window.history.state, currentState), "", currentState.url);
+  notify();
 }
 
 export function pushNavigationState(nextState: AppNavigationState) {
@@ -73,6 +86,7 @@ export function pushNavigationState(nextState: AppNavigationState) {
   if (currentState) appStack.push(cloneState(currentState));
   currentState = cloneState(nextState);
   if (canUseHistory()) window.history.pushState(withNavigationState(window.history.state, currentState), "", currentState.url);
+  notify();
   return true;
 }
 
@@ -82,7 +96,26 @@ export function navigateTo(nextState: AppNavigationState, href: Href, options: {
   else router.push(href);
 }
 
+export function updateNavigationState(patch: Partial<AppNavigationState>, options: { push?: boolean } = {}) {
+  const base = currentState ?? deriveNavigationState(currentPathname());
+  const next = { ...base, ...patch };
+  if (options.push) pushNavigationState(next);
+  else {
+    currentState = cloneState(next);
+    if (canUseHistory()) window.history.replaceState(withNavigationState(window.history.state, currentState), "", currentState.url);
+    notify();
+  }
+}
+
+export function openNavigationLayer(id: string, descriptor: Omit<LayerDescriptor, "id" | "order">, patch: Partial<AppNavigationState> = {}) {
+  registerLayerInternal(id, descriptor, patch);
+}
+
 export function registerNavigationLayer(id: string, descriptor: Omit<LayerDescriptor, "id" | "order">) {
+  registerLayerInternal(id, descriptor, {});
+}
+
+function registerLayerInternal(id: string, descriptor: Omit<LayerDescriptor, "id" | "order">, patch: Partial<AppNavigationState>) {
   const existing = layers.get(id);
   if (existing) {
     layers.set(id, { ...existing, ...descriptor, id });
@@ -93,7 +126,7 @@ export function registerNavigationLayer(id: string, descriptor: Omit<LayerDescri
   layers.set(id, layer);
 
   const base = currentState ?? deriveNavigationState(currentPathname());
-  pushNavigationState(applyLayerToState(base, layer));
+  pushNavigationState({ ...applyLayerToState(base, layer), ...patch });
 }
 
 export function unregisterNavigationLayer(id: string) {
@@ -113,15 +146,51 @@ export function unregisterNavigationLayers(ids: string[]) {
   }
 }
 
+export function closeNavigationLayer(id: string) {
+  if (currentState?.layerId === id && canUseHistory()) {
+    window.history.go(-layerHistoryDepth(id));
+    return;
+  }
+  unregisterNavigationLayer(id);
+  if (currentState?.layerId === id) updateNavigationState(withoutLayer(currentState));
+}
+
+export function closeTopLayer() {
+  const layer = currentState?.layerId ? layers.get(currentState.layerId) : topLayer();
+  if (layer) {
+    closeNavigationLayer(layer.id);
+    return true;
+  }
+  if (currentState?.modal || currentState?.scanner || currentState?.mode || currentState?.editingProductId) {
+    updateNavigationState(withoutLayer(currentState));
+    return true;
+  }
+  return false;
+}
+
+export function goBack() {
+  if (closeTopLayer()) return;
+  router.back();
+}
+
 export function handleSystemBackState(rawState: unknown) {
   const nextState = readNavigationState(rawState);
   const activeLayer = currentState?.layerId ? layers.get(currentState.layerId) : topLayer();
+
+  if (activeLayer && nextState?.layerId === activeLayer.id) {
+    currentState = cloneState(nextState);
+    appStack.pop();
+    notify();
+    return true;
+  }
 
   if (activeLayer) {
     applyingSystemBack = true;
     currentState = nextState ? cloneState(nextState) : withoutLayer(currentState ?? deriveNavigationState(currentPathname()));
     appStack.pop();
-    activeLayer.onBack();
+    layers.delete(activeLayer.id);
+    activeLayer.onBack?.();
+    notify();
     window.setTimeout(() => { applyingSystemBack = false; }, 0);
     return true;
   }
@@ -129,6 +198,7 @@ export function handleSystemBackState(rawState: unknown) {
   if (nextState) {
     currentState = cloneState(nextState);
     appStack.pop();
+    notify();
   }
   return false;
 }
@@ -163,7 +233,9 @@ function withoutLayer(state: AppNavigationState): AppNavigationState {
     ...state,
     modal: null,
     scanner: false,
+    mode: null,
     editingProductId: null,
+    selectedId: null,
     layerId: null,
     layerKind: null,
     layerName: null
@@ -172,6 +244,15 @@ function withoutLayer(state: AppNavigationState): AppNavigationState {
 
 function topLayer() {
   return [...layers.values()].sort((left, right) => right.order - left.order)[0] ?? null;
+}
+
+function layerHistoryDepth(id: string) {
+  let depth = 1;
+  for (let index = appStack.length - 1; index >= 0; index -= 1) {
+    if (appStack[index].layerId !== id) break;
+    depth += 1;
+  }
+  return depth;
 }
 
 function readNavigationState(rawState: unknown): AppNavigationState | null {
@@ -188,7 +269,9 @@ function readNavigationState(rawState: unknown): AppNavigationState | null {
     subview: state.subview ?? null,
     modal: state.modal ?? null,
     scanner: Boolean(state.scanner),
+    mode: state.mode ?? null,
     editingProductId: state.editingProductId ?? null,
+    selectedId: state.selectedId ?? null,
     barcode: state.barcode ?? null,
     layerId: state.layerId ?? null,
     layerKind: state.layerKind ?? null,
@@ -212,7 +295,9 @@ function baseState(view: AppView, path: string, url: string): AppNavigationState
     subview: null,
     modal: null,
     scanner: false,
+    mode: null,
     editingProductId: null,
+    selectedId: null,
     barcode: null,
     layerId: null,
     layerKind: null,
@@ -238,12 +323,34 @@ function navigationKey(state: AppNavigationState) {
     subview: state.subview,
     modal: state.modal,
     scanner: state.scanner,
+    mode: state.mode,
     editingProductId: state.editingProductId,
+    selectedId: state.selectedId,
     barcode: state.barcode,
     layerId: state.layerId,
     layerKind: state.layerKind,
     layerName: state.layerName
   });
+}
+
+function mergeRouteState(routeState: AppNavigationState) {
+  if (!currentState) return routeState;
+  if (routeState.path !== currentState.path || routeState.url !== currentState.url || routeState.view !== currentState.view) return routeState;
+  return {
+    ...routeState,
+    modal: currentState.modal,
+    scanner: currentState.scanner,
+    mode: currentState.mode,
+    editingProductId: currentState.editingProductId,
+    selectedId: currentState.selectedId,
+    layerId: currentState.layerId,
+    layerKind: currentState.layerKind,
+    layerName: currentState.layerName
+  };
+}
+
+function notify() {
+  listeners.forEach((listener) => listener());
 }
 
 function canUseHistory() {

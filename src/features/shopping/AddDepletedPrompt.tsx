@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
-import { useBrowserBackLayer } from "@/core/hooks/useBrowserBackLayer";
+import { useNavigationLayer } from "@/core/navigation/useAppNavigation";
 import { colors } from "@/core/theme";
 import { Product } from "@/domain/product";
 import { addProductToShoppingList } from "@/services/shoppingRepository";
@@ -8,9 +8,19 @@ import { addProductToShoppingList } from "@/services/shoppingRepository";
 export function AddDepletedPrompt({ products, onClose, onAdded, onDeclined }: { products: Product[]; onClose: () => void; onAdded?: () => void; onDeclined?: () => void | Promise<void> }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  useBrowserBackLayer(products.length > 0, onClose);
+  const promptLayer = useNavigationLayer("depleted-products-prompt", "modal", { modal: "depleted-products-prompt" }, onClose);
+
+  useEffect(() => {
+    if (products.length > 0 && !promptLayer.open) promptLayer.openLayer();
+  }, [products.length, promptLayer.open]);
+
   if (!products.length) return null;
   const names = products.map((product) => product.name).join(", ");
+
+  function closePrompt() {
+    promptLayer.closeLayer();
+    onClose();
+  }
 
   async function addAll() {
     try {
@@ -18,7 +28,7 @@ export function AddDepletedPrompt({ products, onClose, onAdded, onDeclined }: { 
       setError("");
       await Promise.all(products.map((product) => addProductToShoppingList(product, "depleted")));
       onAdded?.();
-      onClose();
+      closePrompt();
     } catch {
       setError("Nie udało się dodać produktu. Sprawdź połączenie i spróbuj ponownie.");
     } finally {
@@ -31,7 +41,7 @@ export function AddDepletedPrompt({ products, onClose, onAdded, onDeclined }: { 
       setBusy(true);
       setError("");
       await onDeclined?.();
-      onClose();
+      closePrompt();
     } catch {
       setError("Nie udało się zamknąć powiadomienia. Spróbuj ponownie.");
     } finally {
@@ -40,7 +50,7 @@ export function AddDepletedPrompt({ products, onClose, onAdded, onDeclined }: { 
   }
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={promptLayer.open} transparent animationType="fade" onRequestClose={closePrompt}>
       <View style={styles.backdrop}>
         <View style={styles.card}>
           <Text style={styles.title}>Produkt kończy się w spiżarni</Text>

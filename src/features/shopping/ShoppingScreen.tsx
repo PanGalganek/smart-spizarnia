@@ -2,8 +2,7 @@ import { useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
-import { useBrowserBackStack } from "@/core/hooks/useBrowserBackLayer";
-import { navigateToRoute } from "@/core/navigation/useAppNavigation";
+import { navigateToRoute, useAppNavigation, useNavigationLayer } from "@/core/navigation/useAppNavigation";
 import { colors } from "@/core/theme";
 import { ShoppingItem } from "@/domain/shopping";
 import { Unit } from "@/domain/product";
@@ -13,19 +12,17 @@ import { canUseWholePackage } from "@/services/pantryUnits";
 type PurchaseStep = "same-product" | "quantity" | "open-scanner";
 
 export function ShoppingScreen() {
+  const appNavigation = useAppNavigation();
+  const purchaseLayer = useNavigationLayer("shopping-purchase", "modal", { modal: "shopping-purchase", mode: purchaseStepToMode("same-product") });
   const [items, setItems] = useState<ShoppingItem[]>([]);
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
-  const [selected, setSelected] = useState<ShoppingItem | null>(null);
-  const [purchaseStep, setPurchaseStep] = useState<PurchaseStep>("same-product");
   const [purchaseAmount, setPurchaseAmount] = useState("1");
   const [purchaseUnit, setPurchaseUnit] = useState<Unit>("szt");
   const [purchaseError, setPurchaseError] = useState("");
   const [purchaseBusy, setPurchaseBusy] = useState(false);
-  useBrowserBackStack(selected ? purchaseStepDepth(purchaseStep) : 0, () => {
-    if (purchaseStep === "same-product") setSelected(null);
-    else setPurchaseStep("same-product");
-  });
+  const selected = purchaseLayer.open ? items.find((item) => item.id === appNavigation.state.selectedId) ?? null : null;
+  const purchaseStep = purchaseLayer.open ? purchaseStepFromMode(appNavigation.state.mode) : "same-product";
   const active = useMemo(() => items.filter((item) => item.status === "active"), [items]);
   const purchased = useMemo(() => items.filter((item) => item.status === "purchased"), [items]);
 
@@ -41,20 +38,20 @@ export function ShoppingScreen() {
   }
 
   function startPurchase(item: ShoppingItem) {
-    setSelected(item); setPurchaseError("");
+    setPurchaseError("");
     if (!item.product) {
-      setPurchaseStep("open-scanner");
+      purchaseLayer.openLayer({ modal: "shopping-purchase", mode: purchaseStepToMode("open-scanner"), selectedId: item.id });
       return;
     }
     const wholePackage = canUseWholePackage(item.product);
     setPurchaseAmount(wholePackage ? "1" : String(item.product.packageAmount ?? 1));
     setPurchaseUnit(wholePackage ? "szt" : (item.product.defaultUnit ?? "szt"));
-    setPurchaseStep("same-product");
+    purchaseLayer.openLayer({ modal: "shopping-purchase", mode: purchaseStepToMode("same-product"), selectedId: item.id });
   }
 
   function confirmSameProduct() {
     setPurchaseError("");
-    setPurchaseStep("quantity");
+    appNavigation.updateState({ mode: purchaseStepToMode("quantity") }, { push: true });
   }
 
   async function addPurchasedProduct() {
@@ -64,7 +61,7 @@ export function ShoppingScreen() {
     try {
       setPurchaseBusy(true); setPurchaseError("");
       await purchaseKnownProduct(selected, amount, purchaseUnit);
-      setSelected(null);
+      purchaseLayer.closeLayer();
       setMessage(`Kupiono i dodano do spiżarni: ${selected.name} (${amount} ${purchaseUnit}).`);
       await refresh();
     } catch (error) {
@@ -75,7 +72,7 @@ export function ShoppingScreen() {
   async function openScannerForReplacement() {
     if (!selected) return;
     await markShoppingItemPurchased(selected);
-    setSelected(null);
+    purchaseLayer.closeLayer();
     await refresh();
     navigateToRoute({ pathname: "/scanner", params: { autoScan: "1" } });
   }
@@ -83,7 +80,7 @@ export function ShoppingScreen() {
   async function finishWithoutScanner() {
     if (!selected) return;
     await markShoppingItemPurchased(selected);
-    setSelected(null); setMessage(`Oznaczono jako kupione: ${selected.name}.`);
+    purchaseLayer.closeLayer(); setMessage(`Oznaczono jako kupione: ${selected.name}.`);
     await refresh();
   }
 
@@ -115,13 +112,13 @@ export function ShoppingScreen() {
         ListFooterComponent={purchased.length ? <View style={styles.purchasedSection}><View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Kupione</Text><Text style={styles.count}>{purchased.length}</Text></View>{purchased.map((item) => <ShoppingRow key={item.id} item={item} onRestore={() => void restore(item)} onDelete={() => void remove(item)} />)}</View> : null}
       />
 
-      <Modal visible={!!selected} transparent animationType="fade" onRequestClose={() => setSelected(null)}>
+      <Modal visible={purchaseLayer.open && !!selected} transparent animationType="fade" onRequestClose={purchaseLayer.closeLayer}>
         <View style={styles.backdrop}><View style={styles.modalCard}>
           {purchaseStep === "same-product" ? <>
             <Text style={styles.modalTitle}>Czy kupiono ten sam produkt?</Text>
             <Text style={styles.modalProduct}>{selected?.name}</Text>
             <Text style={styles.modalText}>Jeśli wybrano inny produkt lub inną markę, można od razu zeskanować jego kod.</Text>
-            <View style={styles.modalActions}><Pressable onPress={() => setSelected(null)} style={styles.secondary}><Text>Anuluj</Text></Pressable><Pressable onPress={() => setPurchaseStep("open-scanner")} style={styles.secondary}><Text>Nie, inny</Text></Pressable><Pressable onPress={confirmSameProduct} style={styles.primary}><Text style={styles.white}>Tak, ten sam</Text></Pressable></View>
+            <View style={styles.modalActions}><Pressable onPress={purchaseLayer.closeLayer} style={styles.secondary}><Text>Anuluj</Text></Pressable><Pressable onPress={() => appNavigation.updateState({ mode: purchaseStepToMode("open-scanner") }, { push: true })} style={styles.secondary}><Text>Nie, inny</Text></Pressable><Pressable onPress={confirmSameProduct} style={styles.primary}><Text style={styles.white}>Tak, ten sam</Text></Pressable></View>
           </> : purchaseStep === "quantity" ? <>
             <Text style={styles.modalTitle}>Ile kupiono?</Text>
             <Text style={styles.modalProduct}>{selected?.name}</Text>
@@ -131,11 +128,11 @@ export function ShoppingScreen() {
               {(["g", "ml", "szt"] as Unit[]).map((unit) => <Pressable key={unit} onPress={() => setPurchaseUnit(unit)} style={[styles.unitButton, purchaseUnit === unit && styles.unitActive]}><Text style={purchaseUnit === unit && styles.white}>{unit}</Text></Pressable>)}
             </View>
             {!!purchaseError && <Text style={styles.purchaseError}>{purchaseError}</Text>}
-            <View style={styles.modalActions}><Pressable onPress={() => setPurchaseStep("same-product")} style={styles.secondary}><Text>Wstecz</Text></Pressable><Pressable disabled={purchaseBusy} onPress={() => void addPurchasedProduct()} style={[styles.primary, purchaseBusy && styles.disabled]}><Text style={styles.white}>{purchaseBusy ? "Dodawanie..." : "Dodaj do spiżarni"}</Text></Pressable></View>
+            <View style={styles.modalActions}><Pressable onPress={() => appNavigation.updateState({ mode: purchaseStepToMode("same-product") })} style={styles.secondary}><Text>Wstecz</Text></Pressable><Pressable disabled={purchaseBusy} onPress={() => void addPurchasedProduct()} style={[styles.primary, purchaseBusy && styles.disabled]}><Text style={styles.white}>{purchaseBusy ? "Dodawanie..." : "Dodaj do spiżarni"}</Text></Pressable></View>
           </> : <>
             <Text style={styles.modalTitle}>Otworzyć skaner?</Text>
             <Text style={styles.modalText}>{selected?.product ? "Zeskanuj nowy produkt, aby zapisać jego kod i dane w aplikacji." : "Ten ręczny wpis nie ma jeszcze danych produktu. Zeskanuj kod, aby dodać zakup do spiżarni."}</Text>
-            <View style={styles.modalActions}><Pressable onPress={() => setPurchaseStep("same-product")} style={styles.secondary}><Text>Wstecz</Text></Pressable><Pressable onPress={() => void finishWithoutScanner()} style={styles.secondary}><Text>Nie otwieraj</Text></Pressable><Pressable onPress={() => void openScannerForReplacement()} style={styles.primary}><Text style={styles.white}>Otwórz skaner</Text></Pressable></View>
+            <View style={styles.modalActions}><Pressable onPress={() => appNavigation.updateState({ mode: purchaseStepToMode("same-product") })} style={styles.secondary}><Text>Wstecz</Text></Pressable><Pressable onPress={() => void finishWithoutScanner()} style={styles.secondary}><Text>Nie otwieraj</Text></Pressable><Pressable onPress={() => void openScannerForReplacement()} style={styles.primary}><Text style={styles.white}>Otwórz skaner</Text></Pressable></View>
           </>}
         </View></View>
       </Modal>
@@ -153,8 +150,14 @@ function sourceLabel(item: ShoppingItem) {
   return "Wpisano ręcznie";
 }
 
-function purchaseStepDepth(step: PurchaseStep) {
-  return step === "same-product" ? 1 : 2;
+function purchaseStepToMode(step: PurchaseStep) {
+  return `shopping-${step}`;
+}
+
+function purchaseStepFromMode(mode: string | null): PurchaseStep {
+  if (mode === "shopping-quantity") return "quantity";
+  if (mode === "shopping-open-scanner") return "open-scanner";
+  return "same-product";
 }
 
 const styles = StyleSheet.create({

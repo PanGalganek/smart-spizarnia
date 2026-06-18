@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useAppNavigation, useNavigationLayer } from "@/core/navigation/useAppNavigation";
 import { colors } from "@/core/theme";
 import { Meal } from "@/domain/meal";
 import { deleteMeal, renameMeal } from "@/services/inventoryRepository";
@@ -8,18 +9,25 @@ type Props = { meals: Meal[]; onChanged: () => Promise<void> };
 type DeleteMode = "restore" | "history";
 
 export function MealHistory({ meals, onChanged }: Props) {
-  const [editing, setEditing] = useState<Meal | null>(null);
+  const appNavigation = useAppNavigation();
+  const actionLayer = useNavigationLayer("meal-history-action", "modal", { modal: "meal-history-action", mode: "meal-history-edit" });
   const [name, setName] = useState("");
-  const [deleting, setDeleting] = useState<Meal | null>(null);
-  const [deleteMode, setDeleteMode] = useState<DeleteMode>("restore");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const selectedMeal = actionLayer.open ? meals.find((meal) => meal.id === appNavigation.state.selectedId) ?? null : null;
+  const editing = appNavigation.state.mode === "meal-history-edit" ? selectedMeal : null;
+  const deleting = appNavigation.state.mode?.startsWith("meal-history-delete") ? selectedMeal : null;
+  const deleteMode: DeleteMode = appNavigation.state.mode === "meal-history-delete-history" ? "history" : "restore";
 
   function startEditing(meal: Meal) {
-    setEditing(meal);
     setName(meal.name);
-    setDeleting(null);
     setMessage("");
+    actionLayer.openLayer({ modal: "meal-history-action", mode: "meal-history-edit", selectedId: meal.id });
+  }
+
+  function startDeleting(meal: Meal, mode: DeleteMode) {
+    setMessage("");
+    actionLayer.openLayer({ modal: "meal-history-action", mode: mode === "history" ? "meal-history-delete-history" : "meal-history-delete-restore", selectedId: meal.id });
   }
 
   async function saveName() {
@@ -27,7 +35,7 @@ export function MealHistory({ meals, onChanged }: Props) {
     try {
       setBusy(true);
       await renameMeal(editing.id, name);
-      setEditing(null);
+      actionLayer.closeLayer();
       await onChanged();
       setMessage("Nazwa posiłku została zmieniona.");
     } catch {
@@ -43,7 +51,7 @@ export function MealHistory({ meals, onChanged }: Props) {
       setBusy(true);
       const restore = deleteMode === "restore";
       await deleteMeal(deleting, restore);
-      setDeleting(null);
+      actionLayer.closeLayer();
       await onChanged();
       setMessage(restore ? "Cofnięto posiłek i zwrócono produkty do spiżarni." : "Usunięto wpis z historii. Stan spiżarni nie został zmieniony.");
     } catch {
@@ -64,7 +72,7 @@ export function MealHistory({ meals, onChanged }: Props) {
               <View style={styles.editRow}>
                 <TextInput value={name} onChangeText={setName} style={styles.input} />
                 <Pressable disabled={busy} onPress={() => void saveName()} style={styles.save}><Text style={styles.white}>Zapisz</Text></Pressable>
-                <Pressable onPress={() => setEditing(null)} style={styles.cancel}><Text>Anuluj</Text></Pressable>
+                <Pressable onPress={actionLayer.closeLayer} style={styles.cancel}><Text>Anuluj</Text></Pressable>
               </View>
             ) : (
               <View style={styles.header}>
@@ -79,13 +87,13 @@ export function MealHistory({ meals, onChanged }: Props) {
               <View style={styles.confirmBox}>
                 <Text style={styles.confirmText}>{deleteMode === "restore" ? "Cofnąć posiłek i zwrócić wszystkie składniki?" : "Trwale usunąć wpis? Produkty nie wrócą do spiżarni."}</Text>
                 <Pressable disabled={busy} onPress={() => void remove()} style={deleteMode === "restore" ? styles.restore : styles.delete}><Text style={styles.white}>{deleteMode === "restore" ? "Cofnij posiłek" : "Usuń wpis"}</Text></Pressable>
-                <Pressable onPress={() => setDeleting(null)} style={styles.cancel}><Text>Anuluj</Text></Pressable>
+                <Pressable onPress={actionLayer.closeLayer} style={styles.cancel}><Text>Anuluj</Text></Pressable>
               </View>
             ) : (
               <View style={styles.actions}>
                 <Pressable onPress={() => startEditing(item)} style={styles.cancel}><Text>Edytuj nazwę</Text></Pressable>
-                {canRestore && <Pressable onPress={() => { setDeleting(item); setDeleteMode("restore"); setEditing(null); }} style={styles.restore}><Text style={styles.white}>Cofnij</Text></Pressable>}
-                <Pressable onPress={() => { setDeleting(item); setDeleteMode("history"); setEditing(null); }} style={styles.delete}><Text style={styles.white}>Usuń wpis</Text></Pressable>
+                {canRestore && <Pressable onPress={() => startDeleting(item, "restore")} style={styles.restore}><Text style={styles.white}>Cofnij</Text></Pressable>}
+                <Pressable onPress={() => startDeleting(item, "history")} style={styles.delete}><Text style={styles.white}>Usuń wpis</Text></Pressable>
               </View>
             )}
           </View>;

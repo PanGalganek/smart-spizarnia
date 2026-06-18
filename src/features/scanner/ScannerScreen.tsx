@@ -5,7 +5,7 @@ import { ModuleScreen } from "@/core/components/ModuleScreen";
 import { DatePickerField } from "@/core/components/DatePickerField";
 import { ConsumerPicker } from "@/core/components/ConsumerPicker";
 import { LocationPicker } from "@/core/components/LocationPicker";
-import { useBrowserBackLayer } from "@/core/hooks/useBrowserBackLayer";
+import { useAppNavigation, useNavigationLayer } from "@/core/navigation/useAppNavigation";
 import { colors } from "@/core/theme";
 import { ChemicalLevel, Product, ProductType, Unit } from "@/domain/product";
 import { Consumer } from "@/domain/meal";
@@ -22,11 +22,13 @@ import { searchUsdaFoods, UsdaFoodResult } from "@/services/usdaFoodData";
 
 export function ScannerScreen() {
   const params = useLocalSearchParams<{ autoScan?: string }>();
-  const [activeType, setActiveType] = useState<ProductType>("food");
+  const appNavigation = useAppNavigation();
+  const cameraLayer = useNavigationLayer("scanner-camera", "scanner", { scanner: true });
+  const manualLayer = useNavigationLayer("scanner-manual-product", "form", { modal: "scanner-manual-product", mode: "add-product" });
+  const activeType = appNavigation.state.view === "scanner" && (appNavigation.state.tab === "food" || appNavigation.state.tab === "household_chemical") ? appNavigation.state.tab : "food";
+  const setActiveType = (type: ProductType) => appNavigation.updateState({ tab: type }, { push: true });
   const [barcode, setBarcode] = useState("");
   const [product, setProduct] = useState<Product | null>(null);
-  const [cameraOpen, setCameraOpen] = useState(false);
-  const [manualOpen, setManualOpen] = useState(false);
   const [message, setMessage] = useState("Zeskanuj kod lub wpisz go ręcznie.");
   const [stockAmount, setStockAmount] = useState("1");
   const [stockUnit, setStockUnit] = useState<Unit>("szt");
@@ -43,11 +45,9 @@ export function ScannerScreen() {
   const [depletedProducts, setDepletedProducts] = useState<Product[]>([]);
   const [consumer, setConsumer] = useState<Consumer | null>(null);
   const [chemicalLevel, setChemicalLevel] = useState<ChemicalLevel>("full");
-  useBrowserBackLayer(cameraOpen, () => setCameraOpen(false), { kind: "scanner", name: "scanner-camera" });
-  useBrowserBackLayer(manualOpen, () => setManualOpen(false), { kind: "form", name: "scanner-manual-product" });
 
   useEffect(() => {
-    if (params.autoScan === "1") setCameraOpen(true);
+    if (params.autoScan === "1") cameraLayer.openLayer();
   }, [params.autoScan]);
 
   async function search(value = barcode) {
@@ -64,7 +64,7 @@ export function ScannerScreen() {
         setStockAmount("1");
         setPackageDates([]);
         setActionMessage("");
-        setManualOpen(false);
+        manualLayer.closeLayer();
         setMessage("Produkt znaleziony w Twojej bazie Zapisane.");
         return;
       }
@@ -77,7 +77,7 @@ export function ScannerScreen() {
         setPackageDates([]);
       }
       setActionMessage("");
-      setManualOpen(false);
+      manualLayer.closeLayer();
       setMessage(result ? "Produkt znaleziony." : "Nie znaleziono tego produktu w bazie Open Food Facts. Możesz dodać go ręcznie.");
     } catch {
       setMessage("Nie udało się połączyć z Open Food Facts.");
@@ -85,7 +85,7 @@ export function ScannerScreen() {
   }
 
   function openCamera() {
-    setCameraOpen(true);
+    cameraLayer.openLayer();
   }
 
   async function searchByName() {
@@ -113,7 +113,7 @@ export function ScannerScreen() {
   }
 
   function scanned(value: string) {
-    setCameraOpen(false);
+    cameraLayer.closeLayer();
     setMessage(`Odczytano kod: ${value}`);
     void search(value);
   }
@@ -194,19 +194,19 @@ export function ScannerScreen() {
   return (
     <ModuleScreen title="Skaner">
       <AddDepletedPrompt products={depletedProducts} onClose={() => setDepletedProducts([])} onAdded={() => setActionMessage("Produkt zużyty i dodany do listy zakupów.")} />
-      {manualOpen ? (
+      {manualLayer.open ? (
         <ManualProductForm
           barcode={barcode}
           productType={activeType}
-          onCancel={() => setManualOpen(false)}
+          onCancel={manualLayer.closeLayer}
           onSaved={(savedProduct) => {
             setProduct(savedProduct);
-            setManualOpen(false);
+            manualLayer.closeLayer();
             setMessage("Produkt został zapisany ręcznie.");
           }}
         />
-      ) : cameraOpen ? (
-        <BarcodeCamera onCancel={() => setCameraOpen(false)} onScanned={scanned} />
+      ) : cameraLayer.open ? (
+        <BarcodeCamera onCancel={cameraLayer.closeLayer} onScanned={scanned} />
       ) : (
         <ScrollView
           style={[styles.scroll, Platform.OS === "web" && styles.webScroll]}
@@ -237,7 +237,7 @@ export function ScannerScreen() {
               <View style={styles.usdaNutrition}><Text style={styles.usdaKcal}>{result.product.nutrientsPer100g.energyKcal ?? 0} kcal</Text><Text style={styles.muted}>B {result.product.nutrientsPer100g.proteins ?? 0} | W {result.product.nutrientsPer100g.carbohydrates ?? 0} | T {result.product.nutrientsPer100g.fat ?? 0}</Text></View>
             </Pressable>)}
           </View>}
-          {!product && <Pressable onPress={() => setManualOpen(true)} style={styles.manual}><Text style={styles.white}>Dodaj produkt ręcznie</Text></Pressable>}
+          {!product && <Pressable onPress={manualLayer.openLayer} style={styles.manual}><Text style={styles.white}>Dodaj produkt ręcznie</Text></Pressable>}
           {product && (
             <View style={styles.product}>              <Text style={styles.name}>{product.name}</Text>
               <Text>{product.brand}</Text>
@@ -261,7 +261,7 @@ export function ScannerScreen() {
                 {!isChemical(product) && <Pressable disabled={busy} onPress={() => void eatNow()} style={[styles.eat, busy && styles.disabled]}><Text style={styles.white}>Zjedz teraz - tylko do bilansu</Text></Pressable>}
               </View>
               {!!actionMessage && <Text style={[styles.actionMessage, actionError ? styles.actionError : styles.actionSuccess]}>{actionMessage}</Text>}
-              {product.nutrientsPer100g.energyKcal === undefined && <Pressable onPress={() => setManualOpen(true)} style={styles.manual}><Text style={styles.white}>Uzupełnij kalorie ręcznie</Text></Pressable>}
+              {product.nutrientsPer100g.energyKcal === undefined && <Pressable onPress={manualLayer.openLayer} style={styles.manual}><Text style={styles.white}>Uzupełnij kalorie ręcznie</Text></Pressable>}
             </View>
           )}
         </View>

@@ -2,7 +2,7 @@ import { useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { FlatList, GestureResponderEvent, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
-import { useBrowserBackStack } from "@/core/hooks/useBrowserBackLayer";
+import { useAppNavigation, useNavigationLayer } from "@/core/navigation/useAppNavigation";
 import { colors } from "@/core/theme";
 import { Consumer, DailySummary, Meal, MealIngredient, MealType } from "@/domain/meal";
 import { Nutrients, PantryItem } from "@/domain/product";
@@ -28,15 +28,14 @@ type Step = "type" | "products" | "amount" | "review";
 export function MealsScreen() {
   const { width, height } = useWindowDimensions();
   const compact = width < 700;
+  const appNavigation = useAppNavigation();
+  const creatorLayer = useNavigationLayer("meal-creator", "modal", { modal: "meal-creator", mode: stepMode("type") });
   const [pantry, setPantry] = useState<PantryItem[]>([]);
   const [meals, setMeals] = useState<Meal[]>([]);
   const [dailySummary, setDailySummary] = useState<DailySummary>({ dateKey: dateKey(), totals: {}, mealCount: 0, updatedAt: Date.now() });
-  const [creatorOpen, setCreatorOpen] = useState(false);
-  const [step, setStep] = useState<Step>("type");
   const [type, setType] = useState<MealType | null>(null);
   const [customName, setCustomName] = useState("");
   const [amounts, setAmounts] = useState<Record<string, string>>({});
-  const [editedItem, setEditedItem] = useState<PantryItem | null>(null);
   const [amountDraft, setAmountDraft] = useState("");
   const [servings, setServings] = useState("1");
   const [message, setMessage] = useState("");
@@ -46,10 +45,9 @@ export function MealsScreen() {
   const [consumers, setConsumers] = useState<Consumer[]>([]);
   const [consumer, setConsumer] = useState<Consumer | null>(null);
   const [newConsumer, setNewConsumer] = useState("");
-  useBrowserBackStack(creatorOpen ? stepDepth(step) : 0, () => {
-    if (step === "type") setCreatorOpen(false);
-    else setStep(step === "amount" ? "products" : step === "review" ? "products" : "type");
-  });
+  const creatorOpen = creatorLayer.open;
+  const step = creatorOpen ? stepFromMode(appNavigation.state.mode) : "type";
+  const editedItem = step === "amount" ? pantry.find((item) => item.barcode === appNavigation.state.selectedId) ?? null : null;
 
   const refresh = useCallback(async () => {
     try {
@@ -78,32 +76,29 @@ export function MealsScreen() {
     setType(null);
     setCustomName("");
     setAmounts({});
-    setEditedItem(null);
     setAmountDraft("");
     setServings("1");
     setModalMessage("");
-    setStep("type");
-    setCreatorOpen(true);
+    creatorLayer.openLayer();
   }
 
   function chooseType(nextType: MealType) {
     setType(nextType);
     setModalMessage("");
-    if (nextType !== "custom") setStep("products");
+    if (nextType !== "custom") setCreatorStep("products");
   }
 
   function continueFromType() {
     if (!type) return setModalMessage("Wybierz rodzaj posiłku.");
     if (type === "custom" && !customName.trim()) return setModalMessage("Wpisz własną nazwę posiłku.");
     setModalMessage("");
-    setStep("products");
+    setCreatorStep("products");
   }
 
   function editAmount(item: PantryItem) {
-    setEditedItem(item);
     setAmountDraft(amounts[item.barcode] ?? "");
     setModalMessage("");
-    setStep("amount");
+    setCreatorStep("amount", item.barcode);
   }
 
   function confirmAmount() {
@@ -114,9 +109,8 @@ export function MealsScreen() {
     try { createMealIngredient(editedItem, amount); }
     catch (error) { return setModalMessage(error instanceof Error ? error.message : "Nieprawidłowa ilość."); }
     setAmounts((current) => ({ ...current, [editedItem.barcode]: String(amount) }));
-    setEditedItem(null);
     setModalMessage("");
-    setStep("products");
+    setCreatorStep("products", null, false);
   }
 
   function removeIngredient(barcode: string) {
@@ -131,7 +125,7 @@ export function MealsScreen() {
     if (ingredientResult.error) return setModalMessage(ingredientResult.error);
     if (!ingredientResult.ingredients.length) return setModalMessage("Wybierz przynajmniej jeden produkt.");
     setModalMessage("");
-    setStep("review");
+    setCreatorStep("review");
   }
 
   async function saveMeal() {
@@ -150,7 +144,7 @@ export function MealsScreen() {
         })
         .map((item) => item.product);
       await refresh();
-      setCreatorOpen(false);
+      creatorLayer.closeLayer();
       setMessage(`Zapisano dla: ${consumer.name}, 1 z ${servingCount} porcji: ${mealName}. Produkty zostały odjęte ze spiżarni.`);
       setDepletedProducts(depleted);
     } catch (error) {
@@ -164,6 +158,18 @@ export function MealsScreen() {
       setNewConsumer(""); setConsumers(await listConsumers()); setConsumer(created);
       setMessage(`Dodano osobę: ${created.name}.`);
     } catch (cause) { setMessage(cause instanceof Error ? cause.message : "Nie udało się dodać osoby."); }
+  }
+
+  function setCreatorStep(nextStep: Step, selectedId: string | null = null, push = true) {
+    appNavigation.updateState({ mode: stepMode(nextStep), selectedId }, { push });
+  }
+
+  function backInCreator() {
+    if (step === "amount" || step === "review") {
+      setCreatorStep("products", null, false);
+      return;
+    }
+    setCreatorStep("type", null, false);
   }
 
   return (
@@ -184,12 +190,12 @@ export function MealsScreen() {
         <MealHistory meals={consumer ? meals.filter((meal) => meal.consumerId === consumer.id) : []} onChanged={refresh} />
       </ScrollView>
 
-      <Modal visible={creatorOpen} transparent animationType="fade" onRequestClose={() => setCreatorOpen(false)}>
+      <Modal visible={creatorOpen} transparent animationType="fade" onRequestClose={creatorLayer.closeLayer}>
         <View style={[styles.backdrop, compact && styles.compactBackdrop]}>
           <View style={[styles.modalCard, compact && styles.compactModalCard, { maxHeight: Math.max(320, height - (compact ? 16 : 48)) }]}>
             <View style={styles.modalHeader}>
               <View style={styles.modalHeading}><Text style={styles.stepLabel}>{stepLabel(step)}</Text><Text style={[styles.modalTitle, compact && styles.compactModalTitle]}>{stepTitle(step, editedItem)}</Text></View>
-              <Pressable onPress={() => setCreatorOpen(false)} style={styles.close}><Text style={styles.closeText}>Zamknij</Text></Pressable>
+              <Pressable onPress={creatorLayer.closeLayer} style={styles.close}><Text style={styles.closeText}>Zamknij</Text></Pressable>
             </View>
 
             {step === "type" && <TypeStep type={type} customName={customName} onType={chooseType} onCustomName={setCustomName} />}
@@ -199,7 +205,7 @@ export function MealsScreen() {
 
             {!!modalMessage && <Text style={styles.errorBanner}>{modalMessage}</Text>}
             {(step !== "type" || type === "custom") && <View style={[styles.modalActions, compact && styles.compactModalActions]}>
-              {step !== "type" && <Pressable onPress={() => setStep(step === "amount" ? "products" : step === "review" ? "products" : "type")} style={styles.secondary}><Text>Wstecz</Text></Pressable>}
+              {step !== "type" && <Pressable onPress={backInCreator} style={styles.secondary}><Text>Wstecz</Text></Pressable>}
               <View style={styles.actionSpacer} />
               {step === "type" && type === "custom" && <PrimaryButton label="Dalej: wybierz produkty" onPress={continueFromType} />}
               {step === "products" && <PrimaryButton label="Dalej: podsumowanie" onPress={continueToReview} />}
@@ -276,7 +282,13 @@ function parseAmount(value?: string) { const number = Number((value ?? "").repla
 function parseServings(value?: string) { const number = Number(value); return Number.isInteger(number) && number >= 1 && number <= 100 ? number : 0; }
 function stepLabel(step: Step) { return step === "type" ? "KROK 1 Z 3" : step === "review" ? "KROK 3 Z 3" : "KROK 2 Z 3"; }
 function stepTitle(step: Step, item: PantryItem | null) { if (step === "type") return "Jaki to posiłek?"; if (step === "products") return "Wybierz produkty"; if (step === "amount") return `Podaj ilość: ${item?.product.name ?? "produkt"}`; return "Sprawdź posiłek"; }
-function stepDepth(step: Step) { if (step === "type") return 1; if (step === "products") return 2; return 3; }
+function stepMode(step: Step) { return `meal-${step}`; }
+function stepFromMode(mode: string | null): Step {
+  if (mode === "meal-products") return "products";
+  if (mode === "meal-amount") return "amount";
+  if (mode === "meal-review") return "review";
+  return "type";
+}
 function formatToday() { return new Date().toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long" }); }
 
 const styles = StyleSheet.create({
