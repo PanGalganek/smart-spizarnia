@@ -5,6 +5,7 @@ import { DatePickerField } from "@/core/components/DatePickerField";
 import { LocationPicker } from "@/core/components/LocationPicker";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
 import { useBrowserBackLayer } from "@/core/hooks/useBrowserBackLayer";
+import { replaceWithRoute } from "@/core/navigation/useAppNavigation";
 import { colors } from "@/core/theme";
 import { ChemicalLevel, PantryItem, Unit } from "@/domain/product";
 import { AddDepletedPrompt } from "@/features/shopping/AddDepletedPrompt";
@@ -156,7 +157,7 @@ export function PantryItemScreen() {
   }
 
   function goBack() {
-    router.replace({ pathname: "/pantry", params: { ...(returnType ? { type: returnType } : {}), ...(returnLocation ? { location: returnLocation } : {}) } });
+    replaceWithRoute({ pathname: "/pantry", params: { ...(returnType ? { type: returnType } : {}), ...(returnLocation ? { location: returnLocation } : {}) } });
   }
 
   return <ModuleScreen title="Produkt" onBack={goBack}>

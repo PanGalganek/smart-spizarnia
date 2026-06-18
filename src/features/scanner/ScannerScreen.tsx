@@ -43,8 +43,8 @@ export function ScannerScreen() {
   const [depletedProducts, setDepletedProducts] = useState<Product[]>([]);
   const [consumer, setConsumer] = useState<Consumer | null>(null);
   const [chemicalLevel, setChemicalLevel] = useState<ChemicalLevel>("full");
-  useBrowserBackLayer(cameraOpen, () => setCameraOpen(false));
-  useBrowserBackLayer(manualOpen, () => setManualOpen(false));
+  useBrowserBackLayer(cameraOpen, () => setCameraOpen(false), { kind: "scanner", name: "scanner-camera" });
+  useBrowserBackLayer(manualOpen, () => setManualOpen(false), { kind: "form", name: "scanner-manual-product" });
 
   useEffect(() => {
     if (params.autoScan === "1") setCameraOpen(true);

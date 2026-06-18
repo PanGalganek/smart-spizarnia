@@ -1,7 +1,8 @@
-import { Redirect, router } from "expo-router";
+import { Redirect } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useAuth } from "@/core/auth/AuthProvider";
+import { useAppNavigation } from "@/core/navigation/useAppNavigation";
 import { colors } from "@/core/theme";
 
 const tiles = [
@@ -12,10 +13,11 @@ const tiles = [
   { title: "Lista zakupów", subtitle: "Produkty do kupienia", icon: "cart-outline", route: "/shopping", color: "#AD5A00" }
 ] as const;
 
-const APP_VERSION = "0.11.19";
+const APP_VERSION = "0.11.20";
 
 export default function HomeScreen() {
   const { user, profile, isActive, isAdmin, signOut } = useAuth();
+  const appNavigation = useAppNavigation();
   const { width } = useWindowDimensions();
   const compact = width < 700;
   if (!user || !isActive) return <Redirect href="/login" />;
@@ -29,7 +31,7 @@ export default function HomeScreen() {
       </View>
       <View style={styles.grid}>
         {visibleTiles.map((tile) => (
-          <Pressable key={tile.title} onPress={() => router.push(tile.route)} style={[styles.tile, compact && styles.compactTile, { borderTopColor: tile.color }]}>
+          <Pressable key={tile.title} onPress={() => appNavigation.navigateToRoute(tile.route)} style={[styles.tile, compact && styles.compactTile, { borderTopColor: tile.color }]}>
             <MaterialCommunityIcons name={tile.icon} size={compact ? 48 : 64} color={tile.color} />
             <Text style={[styles.tileTitle, compact && styles.compactTileTitle]}>{tile.title}</Text>
             <Text style={styles.tileSubtitle}>{tile.subtitle}</Text>

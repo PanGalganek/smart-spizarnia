@@ -5,6 +5,7 @@ import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, Vi
 import { formatPolishDate } from "@/core/components/DatePickerField";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
 import { useBrowserBackLayer } from "@/core/hooks/useBrowserBackLayer";
+import { navigateToRoute, replaceWithRoute } from "@/core/navigation/useAppNavigation";
 import { colors } from "@/core/theme";
 import { PantryItem, PantryPackage, ProductType } from "@/domain/product";
 import { AddDepletedPrompt } from "@/features/shopping/AddDepletedPrompt";
@@ -64,7 +65,7 @@ export function PantryScreen() {
     setSelectedLocation(null);
     setQuery("");
     setManagerOpen(false);
-    router.replace({ pathname: "/pantry", params: { type } });
+    navigateToRoute({ pathname: "/pantry", params: { type } });
   }
 
   useEffect(() => navigation.addListener("beforeRemove", (event) => {
@@ -94,7 +95,7 @@ export function PantryScreen() {
   function openLocation(location: string) {
     setQuery("");
     setSelectedLocation(location);
-    router.push({ pathname: "/pantry", params: { type: activeType, location } });
+    navigateToRoute({ pathname: "/pantry", params: { type: activeType, location } });
   }
 
   function goBack() {
@@ -102,7 +103,7 @@ export function PantryScreen() {
     if (selectedLocation) {
       setSelectedLocation(null);
       setQuery("");
-      router.replace({ pathname: "/pantry", params: { type: activeType } });
+      replaceWithRoute({ pathname: "/pantry", params: { type: activeType } });
       return;
     }
     router.back();
@@ -238,7 +239,7 @@ function ProductCard({ item, returnType, returnLocation, onQuickConsume }: { ite
   const quantityText = chemical ? chemicalLevelLabel(item.chemicalLevel) : summary.text;
   const detailText = chemical ? "Produkt niespożywczy" : `Łącznie: ${item.quantity} ${item.unit}`;
   return (
-    <Pressable onPress={() => router.push({ pathname: "/pantry/[barcode]", params: { barcode: item.barcode, type: returnType, ...(returnLocation ? { location: returnLocation } : {}) } })} style={({ pressed }) => [styles.card, item.quantity === 0 && styles.consumed, pressed && styles.pressed]}>
+    <Pressable onPress={() => navigateToRoute({ pathname: "/pantry/[barcode]", params: { barcode: item.barcode, type: returnType, ...(returnLocation ? { location: returnLocation } : {}) } })} style={({ pressed }) => [styles.card, item.quantity === 0 && styles.consumed, pressed && styles.pressed]}>
       <View style={styles.header}>
         <Text style={styles.name}>{item.product.name}</Text>
         <Text style={styles.qty}>{quantityText}</Text>

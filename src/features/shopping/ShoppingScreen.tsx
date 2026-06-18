@@ -1,8 +1,9 @@
-import { router, useFocusEffect } from "expo-router";
+import { useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
 import { useBrowserBackStack } from "@/core/hooks/useBrowserBackLayer";
+import { navigateToRoute } from "@/core/navigation/useAppNavigation";
 import { colors } from "@/core/theme";
 import { ShoppingItem } from "@/domain/shopping";
 import { Unit } from "@/domain/product";
@@ -76,7 +77,7 @@ export function ShoppingScreen() {
     await markShoppingItemPurchased(selected);
     setSelected(null);
     await refresh();
-    router.push({ pathname: "/scanner", params: { autoScan: "1" } });
+    navigateToRoute({ pathname: "/scanner", params: { autoScan: "1" } });
   }
 
   async function finishWithoutScanner() {

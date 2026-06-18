@@ -1,6 +1,6 @@
 {
   "name": "smart-spizarnia",
-  "version": "0.11.19",
+  "version": "0.11.20",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
