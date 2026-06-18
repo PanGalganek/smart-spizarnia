@@ -1,5 +1,5 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { router, useFocusEffect, useNavigation } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams, useNavigation } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { formatPolishDate } from "@/core/components/DatePickerField";
@@ -20,6 +20,7 @@ const UNASSIGNED = "__unassigned__";
 
 export function PantryScreen() {
   const navigation = useNavigation();
+  const params = useLocalSearchParams<{ location?: string; type?: ProductType }>();
   const [activeType, setActiveType] = useState<ProductType>("food");
   const [items, setItems] = useState<PantryItem[]>([]);
   const [configuredLocations, setConfiguredLocations] = useState<string[]>([]);
@@ -44,11 +45,18 @@ export function PantryScreen() {
   }, [activeType]);
   useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
 
+  useEffect(() => {
+    if (params.type === "food" || params.type === "household_chemical") setActiveType(params.type);
+    setSelectedLocation(typeof params.location === "string" && params.location ? params.location : null);
+    if (!params.location) setQuery("");
+  }, [params.location, params.type]);
+
   function changeType(type: ProductType) {
     setActiveType(type);
     setSelectedLocation(null);
     setQuery("");
     setManagerOpen(false);
+    router.replace({ pathname: "/pantry", params: { type } });
   }
 
   useEffect(() => navigation.addListener("beforeRemove", (event) => {
@@ -57,12 +65,7 @@ export function PantryScreen() {
       setManagerOpen(false);
       return;
     }
-    if (selectedLocation) {
-      event.preventDefault();
-      setSelectedLocation(null);
-      setQuery("");
-    }
-  }), [managerOpen, navigation, selectedLocation]);
+  }), [managerOpen, navigation]);
 
   const locations = useMemo(() => {
     const assigned = items.map((item) => item.location?.trim()).filter((value): value is string => Boolean(value)).map(displayLocationName);
@@ -83,6 +86,7 @@ export function PantryScreen() {
   function openLocation(location: string) {
     setQuery("");
     setSelectedLocation(location);
+    router.push({ pathname: "/pantry", params: { type: activeType, location } });
   }
 
   function goBack() {
@@ -90,6 +94,7 @@ export function PantryScreen() {
     if (selectedLocation) {
       setSelectedLocation(null);
       setQuery("");
+      router.replace({ pathname: "/pantry", params: { type: activeType } });
       return;
     }
     router.back();
