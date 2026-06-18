@@ -18,7 +18,7 @@ import { stockPercentage } from "@/services/stockLevel";
 
 const UNASSIGNED = "__unassigned__";
 
-export function PantryScreen() {
+export function PantryScreen({ locationRoute = false }: { locationRoute?: boolean }) {
   const navigation = useNavigation();
   const params = useLocalSearchParams<{ location?: string; type?: ProductType }>();
   const [activeType, setActiveType] = useState<ProductType>("food");
@@ -86,7 +86,7 @@ export function PantryScreen() {
   function openLocation(location: string) {
     setQuery("");
     setSelectedLocation(location);
-    router.push({ pathname: "/pantry", params: { type: activeType, location } });
+    router.push({ pathname: "/pantry-location", params: { type: activeType, location } });
   }
 
   function goBack() {
@@ -94,7 +94,12 @@ export function PantryScreen() {
     if (selectedLocation) {
       setSelectedLocation(null);
       setQuery("");
-      router.replace({ pathname: "/pantry", params: { type: activeType } });
+      if (locationRoute) {
+        if (router.canGoBack()) router.back();
+        else router.replace({ pathname: "/pantry", params: { type: activeType } });
+      } else {
+        router.replace({ pathname: "/pantry", params: { type: activeType } });
+      }
       return;
     }
     router.back();
@@ -186,7 +191,7 @@ export function PantryScreen() {
         />
       </> : <>
         <View style={styles.locationHeader}>
-          <Pressable onPress={() => { setSelectedLocation(null); setQuery(""); }} style={styles.locationsBack}><Text style={styles.locationsBackText}>‹ Lokalizacje</Text></Pressable>
+          <Pressable onPress={goBack} style={styles.locationsBack}><Text style={styles.locationsBackText}>‹ Lokalizacje</Text></Pressable>
           <Text style={styles.locationTitle}>{selectedLocation === UNASSIGNED ? "Nieprzypisane" : selectedLocation}</Text>
         </View>
         <TextInput value={query} onChangeText={setQuery} placeholder="Szukaj produktu..." autoCorrect={false} style={styles.search} />
