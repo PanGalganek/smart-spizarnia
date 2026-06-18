@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useFocusEffect, useLocalSearchParams, useNavigation } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { formatPolishDate } from "@/core/components/DatePickerField";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
@@ -18,9 +18,11 @@ import { stockPercentage } from "@/services/stockLevel";
 
 const UNASSIGNED = "__unassigned__";
 
-export function PantryScreen({ locationRoute = false }: { locationRoute?: boolean }) {
+export function PantryScreen() {
   const navigation = useNavigation();
   const params = useLocalSearchParams<{ location?: string; type?: ProductType }>();
+  const selectedLocationRef = useRef<string | null>(null);
+  const pushedLocationHistoryRef = useRef(false);
   const [activeType, setActiveType] = useState<ProductType>("food");
   const [items, setItems] = useState<PantryItem[]>([]);
   const [configuredLocations, setConfiguredLocations] = useState<string[]>([]);
@@ -47,9 +49,24 @@ export function PantryScreen({ locationRoute = false }: { locationRoute?: boolea
 
   useEffect(() => {
     if (params.type === "food" || params.type === "household_chemical") setActiveType(params.type);
-    setSelectedLocation(typeof params.location === "string" && params.location ? params.location : null);
-    if (!params.location) setQuery("");
-  }, [params.location, params.type]);
+  }, [params.type]);
+
+  useEffect(() => {
+    selectedLocationRef.current = selectedLocation;
+  }, [selectedLocation]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onPopState = () => {
+      if (!selectedLocationRef.current) return;
+      selectedLocationRef.current = null;
+      pushedLocationHistoryRef.current = false;
+      setSelectedLocation(null);
+      setQuery("");
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   function changeType(type: ProductType) {
     setActiveType(type);
@@ -85,20 +102,23 @@ export function PantryScreen({ locationRoute = false }: { locationRoute?: boolea
 
   function openLocation(location: string) {
     setQuery("");
+    selectedLocationRef.current = location;
     setSelectedLocation(location);
-    router.push({ pathname: "/pantry-location", params: { type: activeType, location } });
+    if (typeof window !== "undefined") {
+      window.history.pushState({ smartPantrySubscreen: "location" }, "", window.location.href);
+      pushedLocationHistoryRef.current = true;
+    }
   }
 
   function goBack() {
     if (managerOpen) return setManagerOpen(false);
     if (selectedLocation) {
+      selectedLocationRef.current = null;
       setSelectedLocation(null);
       setQuery("");
-      if (locationRoute) {
-        if (router.canGoBack()) router.back();
-        else router.replace({ pathname: "/pantry", params: { type: activeType } });
-      } else {
-        router.replace({ pathname: "/pantry", params: { type: activeType } });
+      if (typeof window !== "undefined" && pushedLocationHistoryRef.current) {
+        pushedLocationHistoryRef.current = false;
+        window.history.back();
       }
       return;
     }
