@@ -28,7 +28,7 @@ export function SystemBackHandler() {
 
   useEffect(() => {
     if (Platform.OS !== "web" || typeof window === "undefined") return;
-    setBackGuardEnsurer(() => ensureBackGuard(pathnameRef.current));
+    setBackGuardEnsurer((force = false) => ensureBackGuard(pathnameRef.current, force));
 
     function onPopState() {
       const currentPath = pathnameRef.current;
@@ -36,7 +36,7 @@ export function SystemBackHandler() {
 
       handlingBackRef.current = true;
       if (runTopBackLayer()) {
-        window.setTimeout(() => ensureBackGuard(pathnameRef.current), 0);
+        window.setTimeout(() => ensureBackGuard(pathnameRef.current, true), 0);
       } else {
         performLogicalBack(currentPath, paramsRef.current);
       }
@@ -59,11 +59,12 @@ function shouldGuardPath(pathname: string) {
   return pathname !== HOME_PATH && pathname !== LOGIN_PATH && pathname !== "/";
 }
 
-function ensureBackGuard(pathname: string) {
+function ensureBackGuard(pathname: string, force = false) {
   if (!shouldGuardPath(pathname)) return;
+  if (!window.location.pathname.endsWith(pathname)) return;
   const guardUrl = `${window.location.pathname}${window.location.search}`;
   const state = window.history.state ?? {};
-  if (state.smartPantryBackGuard === true && state.smartPantryBackUrl === guardUrl) return;
+  if (!force && state.smartPantryBackGuard === true && state.smartPantryBackUrl === guardUrl) return;
   window.history.pushState({ ...state, smartPantryBackGuard: true, smartPantryBackUrl: guardUrl }, "", guardUrl);
 }
 

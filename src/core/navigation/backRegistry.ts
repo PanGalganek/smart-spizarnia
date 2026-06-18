@@ -7,9 +7,9 @@ type BackLayer = {
 const layers: BackLayer[] = [];
 
 let priorityCounter = 0;
-let ensureGuard: (() => void) | null = null;
+let ensureGuard: ((force?: boolean) => void) | null = null;
 
-export function setBackGuardEnsurer(callback: (() => void) | null) {
+export function setBackGuardEnsurer(callback: ((force?: boolean) => void) | null) {
   ensureGuard = callback;
 }
 
@@ -27,6 +27,7 @@ export function registerBackLayer(id: symbol, onBack: () => void) {
 export function unregisterBackLayer(id: symbol) {
   const index = layers.findIndex((layer) => layer.id === id);
   if (index >= 0) layers.splice(index, 1);
+  if (layers.length === 0) ensureGuard?.(true);
 }
 
 export function runTopBackLayer() {
