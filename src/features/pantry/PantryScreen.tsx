@@ -204,7 +204,7 @@ export function PantryScreen() {
           contentContainerStyle={locationItems.length ? styles.list : styles.emptyList}
           keyboardShouldPersistTaps="handled"
           ListEmptyComponent={<Text style={styles.empty}>{query.trim() ? "Nie znaleziono pasującego produktu." : "Brak produktów w tej lokalizacji."}</Text>}
-          renderItem={({ item }) => <ProductCard item={item} onQuickConsume={requestQuickConsume} />}
+          renderItem={({ item }) => <ProductCard item={item} returnType={activeType} returnLocation={selectedLocation} onQuickConsume={requestQuickConsume} />}
         />
       </>}
 
@@ -227,7 +227,7 @@ export function PantryScreen() {
   );
 }
 
-function ProductCard({ item, onQuickConsume }: { item: PantryItem; onQuickConsume: (item: PantryItem) => void }) {
+function ProductCard({ item, returnType, returnLocation, onQuickConsume }: { item: PantryItem; returnType: ProductType; returnLocation: string | null; onQuickConsume: (item: PantryItem) => void }) {
   const chemical = isChemical(item.product);
   const warning = item.quantity > 0 && !chemical ? getExpiryWarning(item.expiryDate) : null;
   const percentage = stockPercentage(item);
@@ -238,7 +238,7 @@ function ProductCard({ item, onQuickConsume }: { item: PantryItem; onQuickConsum
   const quantityText = chemical ? chemicalLevelLabel(item.chemicalLevel) : summary.text;
   const detailText = chemical ? "Produkt niespożywczy" : `Łącznie: ${item.quantity} ${item.unit}`;
   return (
-    <Pressable onPress={() => router.push({ pathname: "/pantry/[barcode]", params: { barcode: item.barcode } })} style={({ pressed }) => [styles.card, item.quantity === 0 && styles.consumed, pressed && styles.pressed]}>
+    <Pressable onPress={() => router.push({ pathname: "/pantry/[barcode]", params: { barcode: item.barcode, type: returnType, ...(returnLocation ? { location: returnLocation } : {}) } })} style={({ pressed }) => [styles.card, item.quantity === 0 && styles.consumed, pressed && styles.pressed]}>
       <View style={styles.header}>
         <Text style={styles.name}>{item.product.name}</Text>
         <Text style={styles.qty}>{quantityText}</Text>

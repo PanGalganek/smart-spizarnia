@@ -58,7 +58,9 @@ function shouldGuardPath(pathname: string) {
 
 function performLogicalBack(pathname: string, params: SearchParams) {
   if (pathname.startsWith("/pantry/")) {
-    router.back();
+    const type = firstParam(params.type);
+    const location = firstParam(params.location);
+    router.replace({ pathname: "/pantry", params: { ...(type ? { type } : {}), ...(location ? { location } : {}) } });
     return;
   }
 

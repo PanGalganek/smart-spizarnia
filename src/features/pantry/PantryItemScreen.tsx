@@ -16,8 +16,10 @@ import { chemicalLevelLabel, chemicalLevels, isChemical } from "@/services/produ
 import { shouldAskToBuyAgain } from "@/services/shoppingPrompt";
 
 export function PantryItemScreen() {
-  const params = useLocalSearchParams<{ barcode: string | string[] }>();
+  const params = useLocalSearchParams<{ barcode: string | string[]; type?: string | string[]; location?: string | string[] }>();
   const barcode = Array.isArray(params.barcode) ? params.barcode[0] : params.barcode;
+  const returnType = firstParam(params.type);
+  const returnLocation = firstParam(params.location);
   const [item, setItem] = useState<PantryItem | null>(null);
   const [expiryDate, setExpiryDate] = useState("");
   const [location, setLocation] = useState("");
@@ -153,7 +155,11 @@ export function PantryItemScreen() {
     router.replace("/pantry");
   }
 
-  return <ModuleScreen title="Produkt">
+  function goBack() {
+    router.replace({ pathname: "/pantry", params: { ...(returnType ? { type: returnType } : {}), ...(returnLocation ? { location: returnLocation } : {}) } });
+  }
+
+  return <ModuleScreen title="Produkt" onBack={goBack}>
     <AddDepletedPrompt products={shoppingPromptItems} onClose={() => { setShoppingPromptItems([]); setDepletedPromptBarcodes([]); }} onDeclined={declineShoppingPrompt} onAdded={() => setMessage("Produkt dodano do listy zakupów.")} />
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
       {!item ? <Text style={styles.loading}>{message}</Text> : <View style={styles.card}>
@@ -204,3 +210,7 @@ const styles = StyleSheet.create({
   confirm: { flexDirection: "row", flexWrap: "wrap", gap: 10 }, delete: { backgroundColor: colors.danger, borderRadius: 10, padding: 13 }, cancel: { backgroundColor: colors.background, borderRadius: 10, padding: 13 },
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.48)", alignItems: "center", justifyContent: "center", padding: 16 }, consumeCard: { width: "100%", maxWidth: 560, backgroundColor: colors.surface, borderRadius: 20, padding: 20, gap: 14 }, consumeHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }, consumeTitle: { flex: 1, fontSize: 22, fontWeight: "900" }, consumeAmountRow: { flexDirection: "row", alignItems: "center", gap: 10 }, consumeInput: { flex: 1, minWidth: 100, backgroundColor: colors.background, borderRadius: 10, padding: 13, fontSize: 18 }, consumeUnit: { fontSize: 18, fontWeight: "900" }, useButton: { backgroundColor: "#1565C0", borderRadius: 11, padding: 14, alignItems: "center" }
 });
+
+function firstParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
