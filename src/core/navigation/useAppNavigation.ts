@@ -7,6 +7,7 @@ import {
   createNavigationLayerId,
   deriveNavigationState,
   getNavigationSnapshot,
+  isNavigationLayerVisible,
   goBack,
   navigateTo,
   NavigationLayerKind,
@@ -36,7 +37,7 @@ export function useAppNavigation() {
 export function useNavigationLayer(name: string, kind: NavigationLayerKind = "modal", patch: Partial<AppNavigationState> = {}, onBack?: () => void) {
   const appNavigation = useAppNavigation();
   const id = useRef(createNavigationLayerId(name));
-  const open = appNavigation.state.layerId === id.current;
+  const open = isNavigationLayerVisible(id.current);
 
   return {
     open,

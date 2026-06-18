@@ -141,6 +141,46 @@ describe("navigationManager", () => {
     expect(getCurrentNavigationState()?.layerId).toBeNull();
   });
 
+  it("keeps a parent modal visible when a nested modal is opened and restored", async () => {
+    const { entries } = installWindow("/saved");
+    const { deriveNavigationState, getCurrentNavigationState, handleSystemBackState, isNavigationLayerVisible, openNavigationLayer, replaceNavigationState } = await import("./navigationManager");
+
+    replaceNavigationState(deriveNavigationState("/saved", {}, "/saved"));
+    openNavigationLayer("saved-product", { kind: "modal", name: "saved-product" }, { modal: "saved-product", mode: "saved-details", selectedId: "590" });
+    openNavigationLayer("location-picker", { kind: "modal", name: "location-picker" }, { modal: "location-picker" });
+
+    expect(getCurrentNavigationState()?.layerId).toBe("location-picker");
+    expect(getCurrentNavigationState()?.selectedId).toBe("590");
+    expect(getCurrentNavigationState()?.mode).toBe("saved-details");
+    expect(isNavigationLayerVisible("saved-product")).toBe(true);
+    expect(isNavigationLayerVisible("location-picker")).toBe(true);
+
+    handleSystemBackState(entries[1].state);
+
+    expect(getCurrentNavigationState()?.layerId).toBe("saved-product");
+    expect(getCurrentNavigationState()?.selectedId).toBe("590");
+    expect(isNavigationLayerVisible("saved-product")).toBe(true);
+    expect(isNavigationLayerVisible("location-picker")).toBe(false);
+  });
+
+  it("cleans hidden layer history when the browser jumps back several entries", async () => {
+    const { entries } = installWindow("/saved");
+    const { deriveNavigationState, getCurrentNavigationState, getNavigationStackSnapshot, handleSystemBackState, isNavigationLayerVisible, openNavigationLayer, replaceNavigationState, updateNavigationState } = await import("./navigationManager");
+
+    replaceNavigationState(deriveNavigationState("/saved", {}, "/saved"));
+    openNavigationLayer("saved-product", { kind: "modal", name: "saved-product" }, { modal: "saved-product", mode: "saved-details", selectedId: "590" });
+    updateNavigationState({ mode: "saved-edit" }, { push: true });
+
+    expect(entries).toHaveLength(3);
+    expect(isNavigationLayerVisible("saved-product")).toBe(true);
+
+    handleSystemBackState(entries[0].state);
+
+    expect(getCurrentNavigationState()?.layerId).toBeNull();
+    expect(getNavigationStackSnapshot()).toHaveLength(0);
+    expect(isNavigationLayerVisible("saved-product")).toBe(false);
+  });
+
   it("closes all history entries belonging to the same layer", async () => {
     const { history } = installWindow("/meals");
     const { closeNavigationLayer, deriveNavigationState, openNavigationLayer, replaceNavigationState, updateNavigationState } = await import("./navigationManager");

@@ -97,7 +97,8 @@ export function PantryScreen() {
     if (packagePickerLayer.open) return packagePickerLayer.closeLayer();
     if (selectedLocation) {
       setQuery("");
-      replaceWithRoute({ pathname: "/pantry", params: { type: activeType } });
+      if (router.canGoBack()) router.back();
+      else replaceWithRoute({ pathname: "/pantry", params: { type: activeType } });
       return;
     }
     router.back();

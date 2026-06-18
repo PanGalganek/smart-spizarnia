@@ -75,6 +75,10 @@ export function getNavigationSnapshot() {
   return currentState ?? fallbackNavigationState;
 }
 
+export function isNavigationLayerVisible(id: string) {
+  return currentState?.layerId === id || appStack.some((state) => state.layerId === id);
+}
+
 export function replaceNavigationState(state: AppNavigationState) {
   const next = mergeRouteState(state);
   currentState = cloneState(next);
@@ -180,7 +184,8 @@ export function handleSystemBackState(rawState: unknown) {
 
   if (activeLayer && nextState?.layerId === activeLayer.id) {
     currentState = cloneState(nextState);
-    appStack.pop();
+    restoreStackForState(nextState);
+    pruneLayersToVisibleStack();
     notify();
     return true;
   }
@@ -188,8 +193,9 @@ export function handleSystemBackState(rawState: unknown) {
   if (activeLayer) {
     applyingSystemBack = true;
     currentState = nextState ? cloneState(nextState) : withoutLayer(currentState ?? deriveNavigationState(currentPathname()));
-    appStack.pop();
+    restoreStackForState(nextState);
     layers.delete(activeLayer.id);
+    pruneLayersToVisibleStack();
     activeLayer.onBack?.();
     notify();
     window.setTimeout(() => { applyingSystemBack = false; }, 0);
@@ -198,7 +204,8 @@ export function handleSystemBackState(rawState: unknown) {
 
   if (nextState) {
     currentState = cloneState(nextState);
-    appStack.pop();
+    restoreStackForState(nextState);
+    pruneLayersToVisibleStack();
     notify();
   }
   return false;
@@ -217,7 +224,7 @@ export function isApplyingSystemBack() {
 }
 
 function applyLayerToState(base: AppNavigationState, layer: LayerDescriptor): AppNavigationState {
-  const next = withoutLayer(base);
+  const next = { ...base };
   next.layerId = layer.id;
   next.layerKind = layer.kind;
   next.layerName = layer.name;
@@ -245,6 +252,39 @@ function withoutLayer(state: AppNavigationState): AppNavigationState {
 
 function topLayer() {
   return [...layers.values()].sort((left, right) => right.order - left.order)[0] ?? null;
+}
+
+function restoreStackForState(nextState: AppNavigationState | null) {
+  if (!nextState) {
+    appStack.length = 0;
+    return;
+  }
+
+  const index = findLastStackIndex(nextState);
+  if (index >= 0) {
+    appStack.splice(index);
+    return;
+  }
+
+  appStack.pop();
+}
+
+function pruneLayersToVisibleStack() {
+  const visibleLayerIds = new Set<string>();
+  if (currentState?.layerId) visibleLayerIds.add(currentState.layerId);
+  appStack.forEach((state) => {
+    if (state.layerId) visibleLayerIds.add(state.layerId);
+  });
+  [...layers.keys()].forEach((id) => {
+    if (!visibleLayerIds.has(id)) layers.delete(id);
+  });
+}
+
+function findLastStackIndex(state: AppNavigationState) {
+  for (let index = appStack.length - 1; index >= 0; index -= 1) {
+    if (isSameNavigationState(appStack[index], state)) return index;
+  }
+  return -1;
 }
 
 function layerHistoryDepth(id: string) {

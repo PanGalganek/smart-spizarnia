@@ -152,6 +152,10 @@ export function PantryItemScreen() {
   }
 
   function goBack() {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
     replaceWithRoute({ pathname: "/pantry", params: { ...(returnType ? { type: returnType } : {}), ...(returnLocation ? { location: returnLocation } : {}) } });
   }
 
