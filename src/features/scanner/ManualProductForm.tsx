@@ -40,9 +40,9 @@ export function ManualProductForm({ barcode, onCancel, onSaved, productType = "f
     const kcal = numberValue("energyKcal");
     if (!name.trim()) return setError("Nazwa produktu jest wymagana.");
     if (productType === "food" && kcal === undefined) return setError("Wpisz kalorie produktu. Bez nich produkt nie może trafić do posiłku.");
-    if (basis === "perUnit" && unit !== "szt") return setError("Kalorie na sztukÄ™ wymagaja jednostki szt.");
-    if (basis === "per100" && unit === "szt" && (!numberValue("packageAmount") || packageUnit === "szt")) return setError("Podaj jedno peĹ‚ne opakowanie w g albo ml, aby poprawnie liczyÄ‡ kalorie.");
-    if ((numberValue("quantity") ?? 0) > 0 && !location.trim()) return setError("Dla produktu w spiĹĽarni wybierz lokalizacjÄ™. Data waĹĽnoĹ›ci jest opcjonalna.");
+    if (basis === "perUnit" && unit !== "szt") return setError("Kalorie na sztukę wymagaja jednostki szt.");
+    if (basis === "per100" && unit === "szt" && (!numberValue("packageAmount") || packageUnit === "szt")) return setError("Podaj jedno pełne opakowanie w g albo ml, aby poprawnie liczyć kalorie.");
+    if ((numberValue("quantity") ?? 0) > 0 && !location.trim()) return setError("Dla produktu w spiżarni wybierz lokalizację. Data ważności jest opcjonalna.");
 
     const productCode = manualBarcode.trim() || `manual-${Date.now()}`;
     const packageAmount = numberValue("packageAmount");
@@ -67,18 +67,18 @@ export function ManualProductForm({ barcode, onCancel, onSaved, productType = "f
         await changePantryQuantity(product, quantity, unit, { expiryDate: expiryDate.trim() || undefined, location: location.trim() || undefined });
       } else await saveProduct(product);
       onSaved(product);
-    } catch { setError("Nie udaĹ‚o siÄ™ zapisaÄ‡ produktu w Firebase."); }
+    } catch { setError("Nie udało się zapisać produktu w Firebase."); }
     finally { setBusy(false); }
   }
 
   return (
     <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
-      <Text style={styles.title}>Dodaj produkt rÄ™cznie</Text>
+      <Text style={styles.title}>Dodaj produkt ręcznie</Text>
       <Field label="Kod kreskowy (opcjonalnie)" value={manualBarcode} onChangeText={setManualBarcode} numeric />
       <View style={styles.row}>
         <Field label="Nazwa produktu *" value={name} onChangeText={setName} />
         <Field label="Marka" value={brand} onChangeText={setBrand} />
-        {productType === "food" && <Field label="IloĹ›Ä‡ poczÄ…tkowa" value={numbers.quantity} onChangeText={(v) => setNumber("quantity", v)} numeric />}
+        {productType === "food" && <Field label="Ilość początkowa" value={numbers.quantity} onChangeText={(v) => setNumber("quantity", v)} numeric />}
       </View>
       {productType === "food" ? <>
       <Text style={styles.section}>Jednostka stanu</Text><ChoiceRow values={["g", "ml", "szt"]} selected={unit} onSelect={(value) => { setUnit(value as Unit); setPackageUnit(value === "szt" ? "g" : value as Unit); if (value !== "szt") setBasis("per100"); }} />
@@ -86,16 +86,16 @@ export function ManualProductForm({ barcode, onCancel, onSaved, productType = "f
         <DatePickerField value={expiryDate} onChange={setExpiryDate} />
         <LocationPicker value={location} onChange={setLocation} productType={productType} />
       </View>
-      <Text style={styles.section}>Jedno peĹ‚ne opakowanie</Text>
-      <Text style={styles.muted}>Np. serek 500 g, mleko 1000 ml albo jajko 1 szt. To pole sĹ‚uĹĽy do liczenia sztuk, paska zapasu i szybkiego zuĹĽycia caĹ‚ego opakowania.</Text>
-      <View style={styles.row}><Field label="IloĹ›Ä‡ w opakowaniu" value={numbers.packageAmount} onChangeText={(v) => setNumber("packageAmount", v)} numeric /><View style={styles.field}><Text style={styles.label}>Jednostka opakowania</Text><ChoiceRow values={["g", "ml", "szt"]} selected={packageUnit} onSelect={(value) => setPackageUnit(value as Unit)} /></View></View>
-      <Text style={styles.section}>SposĂłb liczenia</Text><ChoiceRow values={["per100", "perUnit"]} labels={["na 100 g/ml", "na sztukÄ™"]} selected={basis} onSelect={(value) => setBasis(value as NutritionBasis)} disabled={unit !== "szt"} />
-      <Text style={styles.section}>WartoĹ›ci odĹĽywcze {basis === "perUnit" ? "na sztukÄ™" : "na 100 g/ml"}</Text>
+      <Text style={styles.section}>Jedno pełne opakowanie</Text>
+      <Text style={styles.muted}>Np. serek 500 g, mleko 1000 ml albo jajko 1 szt. To pole służy do liczenia sztuk, paska zapasu i szybkiego zużycia całego opakowania.</Text>
+      <View style={styles.row}><Field label="Ilość w opakowaniu" value={numbers.packageAmount} onChangeText={(v) => setNumber("packageAmount", v)} numeric /><View style={styles.field}><Text style={styles.label}>Jednostka opakowania</Text><ChoiceRow values={["g", "ml", "szt"]} selected={packageUnit} onSelect={(value) => setPackageUnit(value as Unit)} /></View></View>
+      <Text style={styles.section}>Sposób liczenia</Text><ChoiceRow values={["per100", "perUnit"]} labels={["na 100 g/ml", "na sztukę"]} selected={basis} onSelect={(value) => setBasis(value as NutritionBasis)} disabled={unit !== "szt"} />
+      <Text style={styles.section}>Wartości odżywcze {basis === "perUnit" ? "na sztukę" : "na 100 g/ml"}</Text>
       <View style={styles.row}>
         <Field label="kcal *" value={numbers.energyKcal} onChangeText={(v) => setNumber("energyKcal", v)} numeric />
-        <Field label="BiaĹ‚ko (g)" value={numbers.proteins} onChangeText={(v) => setNumber("proteins", v)} numeric />
-        <Field label="WÄ™glowodany (g)" value={numbers.carbohydrates} onChangeText={(v) => setNumber("carbohydrates", v)} numeric />
-        <Field label="TĹ‚uszcz (g)" value={numbers.fat} onChangeText={(v) => setNumber("fat", v)} numeric />
+        <Field label="Białko (g)" value={numbers.proteins} onChangeText={(v) => setNumber("proteins", v)} numeric />
+        <Field label="Węglowodany (g)" value={numbers.carbohydrates} onChangeText={(v) => setNumber("carbohydrates", v)} numeric />
+        <Field label="Tłuszcz (g)" value={numbers.fat} onChangeText={(v) => setNumber("fat", v)} numeric />
       </View>
       </> : <>
         <LocationPicker value={location} onChange={setLocation} productType={productType} />

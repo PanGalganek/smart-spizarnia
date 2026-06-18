@@ -20,7 +20,7 @@ export function PantryItemScreen() {
   const [item, setItem] = useState<PantryItem | null>(null);
   const [expiryDate, setExpiryDate] = useState("");
   const [location, setLocation] = useState("");
-  const [message, setMessage] = useState("Ĺadowanie produktu...");
+  const [message, setMessage] = useState("Ładowanie produktu...");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
   const [shoppingPromptItems, setShoppingPromptItems] = useState<PantryItem["product"][]>([]);
@@ -38,13 +38,13 @@ export function PantryItemScreen() {
   useEffect(() => {
     if (!barcode) return setMessage("Brak kodu produktu.");
     void getPantryItem(barcode).then((found) => {
-      if (!found) return setMessage("Tego produktu nie ma juĹĽ w spiĹĽarni.");
+      if (!found) return setMessage("Tego produktu nie ma już w spiżarni.");
       itemRef.current = found;
       setItem(found);
       setExpiryDate(found.expiryDate ?? "");
       setLocation(found.location ?? "");
       setMessage("");
-    }).catch(() => setMessage("Nie udaĹ‚o siÄ™ pobraÄ‡ produktu."));
+    }).catch(() => setMessage("Nie udało się pobrać produktu."));
   }, [barcode]);
 
   function saveMetadata(patch: Pick<PantryItem, "expiryDate"> | Pick<PantryItem, "location">, successMessage: string) {
@@ -57,17 +57,17 @@ export function PantryItemScreen() {
     metadataQueue.current = metadataQueue.current
       .then(() => savePantryItem(next))
       .then(() => setMessage(successMessage))
-      .catch(() => setMessage("Nie udaĹ‚o siÄ™ zapisaÄ‡ zmiany."));
+      .catch(() => setMessage("Nie udało się zapisać zmiany."));
   }
 
   function changeExpiryDate(value: string) {
     setExpiryDate(value);
-    saveMetadata({ expiryDate: value.trim() || undefined }, value ? "Data waĹĽnoĹ›ci zostaĹ‚a zapisana." : "Data waĹĽnoĹ›ci zostaĹ‚a usuniÄ™ta.");
+    saveMetadata({ expiryDate: value.trim() || undefined }, value ? "Data ważności została zapisana." : "Data ważności została usunięta.");
   }
 
   function changeLocation(value: string) {
     setLocation(value);
-    saveMetadata({ location: value.trim() || undefined }, value ? "Lokalizacja zostaĹ‚a zapisana." : "UsuniÄ™to przypisanie lokalizacji.");
+    saveMetadata({ location: value.trim() || undefined }, value ? "Lokalizacja została zapisana." : "Usunięto przypisanie lokalizacji.");
   }
 
   async function changeChemicalLevel(level: ChemicalLevel) {
@@ -84,7 +84,7 @@ export function PantryItemScreen() {
         setDepletedPromptBarcodes(level === "empty" ? [updated.barcode] : []);
       }
     } catch {
-      setMessage("Nie udaĹ‚o siÄ™ zapisaÄ‡ poziomu produktu.");
+      setMessage("Nie udało się zapisać poziomu produktu.");
     } finally {
       setBusy(false);
     }
@@ -97,7 +97,7 @@ export function PantryItemScreen() {
       await deletePantryItem(barcode);
       router.replace("/pantry");
     } catch {
-      setMessage("Nie udaĹ‚o siÄ™ usunÄ…Ä‡ produktu ze spiĹĽarni.");
+      setMessage("Nie udało się usunąć produktu ze spiżarni.");
       setBusy(false);
     }
   }
@@ -114,7 +114,7 @@ export function PantryItemScreen() {
     try {
       setBusy(true);
       setMessage("");
-      if (!Number.isFinite(amount) || amount <= 0) throw new Error("Wpisz prawidĹ‚owÄ… iloĹ›Ä‡.");
+      if (!Number.isFinite(amount) || amount <= 0) throw new Error("Wpisz prawidłową ilość.");
       const consumption = capToAvailable ? capConsumptionToAvailable(item.product, item.quantity, item.unit, amount, unit) : { amount, unit, capped: false };
       await changePantryQuantity(item.product, -consumption.amount, consumption.unit);
       const refreshed = await getPantryItem(item.barcode);
@@ -127,9 +127,9 @@ export function PantryItemScreen() {
         }
       }
       setConsumeOpen(false);
-      setMessage(consumption.capped ? `ZuĹĽyto resztÄ™: ${consumption.amount} ${consumption.unit}.` : `ZuĹĽyto ${consumption.amount} ${consumption.unit}. PozostaĹ‚o: ${refreshed?.quantity ?? 0} ${refreshed?.unit ?? item.unit}.`);
+      setMessage(consumption.capped ? `Zużyto resztę: ${consumption.amount} ${consumption.unit}.` : `Zużyto ${consumption.amount} ${consumption.unit}. Pozostało: ${refreshed?.quantity ?? 0} ${refreshed?.unit ?? item.unit}.`);
     } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : "Nie udaĹ‚o siÄ™ zuĹĽyÄ‡ produktu.");
+      setMessage(cause instanceof Error ? cause.message : "Nie udało się zużyć produktu.");
     } finally {
       setBusy(false);
     }
@@ -144,12 +144,12 @@ export function PantryItemScreen() {
     await Promise.all(depletedPromptBarcodes.map((value) => deletePantryItem(value)));
     setDepletedPromptBarcodes([]);
     setItem(null);
-    setMessage("ZuĹĽyty produkt usuniÄ™to ze spiĹĽarni.");
+    setMessage("Zużyty produkt usunięto ze spiżarni.");
     router.replace("/pantry");
   }
 
   return <ModuleScreen title="Produkt">
-    <AddDepletedPrompt products={shoppingPromptItems} onClose={() => { setShoppingPromptItems([]); setDepletedPromptBarcodes([]); }} onDeclined={declineShoppingPrompt} onAdded={() => setMessage("Produkt dodano do listy zakupĂłw.")} />
+    <AddDepletedPrompt products={shoppingPromptItems} onClose={() => { setShoppingPromptItems([]); setDepletedPromptBarcodes([]); }} onDeclined={declineShoppingPrompt} onAdded={() => setMessage("Produkt dodano do listy zakupów.")} />
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
       {!item ? <Text style={styles.loading}>{message}</Text> : <View style={styles.card}>
         <Text style={styles.name}>{item.product.name}</Text>
@@ -164,21 +164,21 @@ export function PantryItemScreen() {
         <LocationPicker value={location} onChange={changeLocation} productType={chemical ? "household_chemical" : "food"} />
         {!!message && <Text style={message.startsWith("Nie") ? styles.error : styles.success}>{message}</Text>}
         {!chemical && item.quantity > 0 && <View style={styles.consumeActions}>
-          {quickAmount && quickUnit && <Pressable disabled={busy} onPress={() => void consumeSelected(quickAmount, quickUnit, true)} style={[styles.quickButton, busy && styles.disabled]}><Text style={styles.white}>Szybko zuĹĽyj: {quickAmount} {quickUnit}</Text></Pressable>}
-          <Pressable disabled={busy} onPress={openConsumption} style={[styles.consumeButton, busy && styles.disabled]}><Text style={styles.white}>ZuĹĽyj innÄ… iloĹ›Ä‡</Text></Pressable>
+          {quickAmount && quickUnit && <Pressable disabled={busy} onPress={() => void consumeSelected(quickAmount, quickUnit, true)} style={[styles.quickButton, busy && styles.disabled]}><Text style={styles.white}>Szybko zużyj: {quickAmount} {quickUnit}</Text></Pressable>}
+          <Pressable disabled={busy} onPress={openConsumption} style={[styles.consumeButton, busy && styles.disabled]}><Text style={styles.white}>Zużyj inną ilość</Text></Pressable>
         </View>}
         <View style={styles.dangerZone}>
-          <Text style={styles.dangerTitle}>UsuniÄ™cie ze spiĹĽarni</Text>
+          <Text style={styles.dangerTitle}>Usunięcie ze spiżarni</Text>
           <Text style={styles.muted}>Produkt zniknie ze stanu, ale pozostanie w katalogu Zapisane i w dotychczasowej historii.</Text>
-          {confirmDelete ? <View style={styles.confirm}><Pressable disabled={busy} onPress={() => void remove()} style={styles.delete}><Text style={styles.white}>Tak, usuĹ„ produkt</Text></Pressable><Pressable onPress={() => setConfirmDelete(false)} style={styles.cancel}><Text>Anuluj</Text></Pressable></View> : <Pressable onPress={() => setConfirmDelete(true)} style={styles.deleteOutline}><Text style={styles.deleteText}>UsuĹ„ produkt ze spiĹĽarni</Text></Pressable>}
+          {confirmDelete ? <View style={styles.confirm}><Pressable disabled={busy} onPress={() => void remove()} style={styles.delete}><Text style={styles.white}>Tak, usuń produkt</Text></Pressable><Pressable onPress={() => setConfirmDelete(false)} style={styles.cancel}><Text>Anuluj</Text></Pressable></View> : <Pressable onPress={() => setConfirmDelete(true)} style={styles.deleteOutline}><Text style={styles.deleteText}>Usuń produkt ze spiżarni</Text></Pressable>}
         </View>
       </View>}
     </ScrollView>
     <Modal visible={consumeOpen} transparent animationType="fade" onRequestClose={() => setConsumeOpen(false)}><View style={styles.backdrop}><View style={styles.consumeCard}>
-      <View style={styles.consumeHeader}><Text style={styles.consumeTitle}>ZuĹĽyj: {item?.product.name}</Text><Pressable onPress={() => setConsumeOpen(false)}><Text style={styles.muted}>Zamknij</Text></Pressable></View>
-      <Text style={styles.muted}>DostÄ™pne: {summary?.text ?? `${item?.quantity ?? 0} ${item?.unit ?? ""}`}</Text>
-      <View style={styles.consumeAmountRow}><TextInput autoFocus value={consumeAmount} onChangeText={setConsumeAmount} keyboardType="decimal-pad" placeholder="Wpisz zuĹĽytÄ… iloĹ›Ä‡" style={styles.consumeInput} /><Text style={styles.consumeUnit}>{item?.unit}</Text></View>
-      <Pressable disabled={busy} onPress={() => void consume()} style={[styles.useButton, busy && styles.disabled]}><Text style={styles.white}>{busy ? "Zapisywanie..." : "PotwierdĹş zuĹĽycie"}</Text></Pressable>
+      <View style={styles.consumeHeader}><Text style={styles.consumeTitle}>Zużyj: {item?.product.name}</Text><Pressable onPress={() => setConsumeOpen(false)}><Text style={styles.muted}>Zamknij</Text></Pressable></View>
+      <Text style={styles.muted}>Dostępne: {summary?.text ?? `${item?.quantity ?? 0} ${item?.unit ?? ""}`}</Text>
+      <View style={styles.consumeAmountRow}><TextInput autoFocus value={consumeAmount} onChangeText={setConsumeAmount} keyboardType="decimal-pad" placeholder="Wpisz zużytą ilość" style={styles.consumeInput} /><Text style={styles.consumeUnit}>{item?.unit}</Text></View>
+      <Pressable disabled={busy} onPress={() => void consume()} style={[styles.useButton, busy && styles.disabled]}><Text style={styles.white}>{busy ? "Zapisywanie..." : "Potwierdź zużycie"}</Text></Pressable>
     </View></View></Modal>
   </ModuleScreen>;
 }

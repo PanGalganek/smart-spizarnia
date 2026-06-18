@@ -52,7 +52,7 @@ export function SavedScreen() {
   const refresh = useCallback(async () => {
     setError("");
     try { setProducts(await listSavedProducts()); }
-    catch { setError("Nie udaĹ‚o siÄ™ pobraÄ‡ zapisanych produktĂłw."); }
+    catch { setError("Nie udało się pobrać zapisanych produktów."); }
   }, []);
   useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
 
@@ -152,10 +152,10 @@ export function SavedScreen() {
       const saved = await updateProductDetails(updated);
       setSelected(saved);
       setProducts((current) => current.map((product) => product.barcode === saved.barcode ? saved : product));
-      setMessage("Dane produktu zostaĹ‚y zapisane.");
+      setMessage("Dane produktu zostały zapisane.");
       setActionMode("details");
     } catch {
-      setError("Nie udaĹ‚o siÄ™ zapisaÄ‡ zmian produktu.");
+      setError("Nie udało się zapisać zmian produktu.");
     } finally {
       setBusy(false);
     }
@@ -168,10 +168,10 @@ export function SavedScreen() {
       setError("");
       await deleteSavedProduct(selected.barcode);
       setProducts((current) => current.filter((product) => product.barcode !== selected.barcode));
-      setMessage(`UsuniÄ™to z Zapisanych: ${selected.name}. JeĹ›li produkt jest w spiĹĽarni, pozostaje tam.`);
+      setMessage(`Usunięto z Zapisanych: ${selected.name}. Jeśli produkt jest w spiżarni, pozostaje tam.`);
       setSelected(null);
     } catch {
-      setError("Nie udaĹ‚o siÄ™ usunÄ…Ä‡ produktu z Zapisanych.");
+      setError("Nie udało się usunąć produktu z Zapisanych.");
     } finally {
       setBusy(false);
     }
@@ -182,10 +182,10 @@ export function SavedScreen() {
     try {
       setBusy(true);
       await addProductToShoppingList(selected, "saved");
-      setMessage(`Dodano do listy zakupĂłw: ${selected.name}.`);
+      setMessage(`Dodano do listy zakupów: ${selected.name}.`);
       setSelected(null);
     } catch {
-      setError("Nie udaĹ‚o siÄ™ dodaÄ‡ produktu do listy zakupĂłw.");
+      setError("Nie udało się dodać produktu do listy zakupów.");
     } finally { setBusy(false); }
   }
 
@@ -203,31 +203,31 @@ export function SavedScreen() {
       return;
     }
     const value = parseAmount(amount);
-    if (!value) return setError("Wpisz prawidĹ‚owÄ… iloĹ›Ä‡.");
-    if (!location.trim()) return setError("Wybierz lokalizacjÄ™ w spiĹĽarni.");
+    if (!value) return setError("Wpisz prawidłową ilość.");
+    if (!location.trim()) return setError("Wybierz lokalizację w spiżarni.");
     try {
       setBusy(true); setError("");
       const packageExpiryDates = buildPackageDates(selected, value, unit, expiryDate, packageDates);
       const updated = await changePantryQuantity(selected, value, unit, { location, expiryDate: expiryDate || undefined, packageExpiryDates });
       setMessage(`Dodano ${selected.name}. Stan: ${updated.quantity} ${updated.unit}.`);
       setSelected(null);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Nie udaĹ‚o siÄ™ dodaÄ‡ produktu do spiĹĽarni."); }
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Nie udało się dodać produktu do spiżarni."); }
     finally { setBusy(false); }
   }
 
   async function addToToday() {
     if (!selected) return;
     const value = parseAmount(amount);
-    if (!value) return setError("Wpisz prawidĹ‚owÄ… iloĹ›Ä‡.");
+    if (!value) return setError("Wpisz prawidłową ilość.");
     try {
       setBusy(true); setError("");
       const nutritionUnit = unit === "szt" && canUseWholePackage(selected) && selected.nutritionBasis !== "perUnit" ? preferredPantryUnit(selected, unit) : unit;
       const nutritionAmount = nutritionUnit === unit ? value : convertPantryAmount(selected, value, unit, nutritionUnit);
       const ingredient = createUntrackedMealIngredient(selected, nutritionAmount, nutritionUnit);
-      await createUntrackedMeal(`PrzekÄ…ska: ${selected.name}`, "snack", ingredient, Date.now(), consumer);
+      await createUntrackedMeal(`Przekąska: ${selected.name}`, "snack", ingredient, Date.now(), consumer);
       setMessage(`Dodano do bilansu osoby ${consumer.name}: ${ingredient.nutrients.energyKcal ?? 0} kcal.`);
       setSelected(null);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Nie udaĹ‚o siÄ™ dodaÄ‡ produktu do bilansu."); }
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Nie udało się dodać produktu do bilansu."); }
     finally { setBusy(false); }
   }
 
@@ -242,11 +242,11 @@ export function SavedScreen() {
         keyExtractor={(item) => item.barcode}
         contentContainerStyle={visibleProducts.length ? styles.list : styles.emptyList}
         keyboardShouldPersistTaps="handled"
-        ListEmptyComponent={<Text style={styles.empty}>{query.trim() ? "Nie znaleziono pasujÄ…cego produktu." : "Brak zapisanych produktĂłw."}</Text>}
+        ListEmptyComponent={<Text style={styles.empty}>{query.trim() ? "Nie znaleziono pasującego produktu." : "Brak zapisanych produktów."}</Text>}
         renderItem={({ item }) => (
           <Pressable onPress={() => openProduct(item)} style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
             <Text style={styles.name}>{item.name}</Text>
-            <Text style={styles.open}>SzczegĂłĹ‚y â€ş</Text>
+            <Text style={styles.open}>Szczegóły ›</Text>
           </Pressable>
         )}
       />
@@ -254,7 +254,7 @@ export function SavedScreen() {
       <Modal visible={!!selected} transparent animationType="fade" onRequestClose={() => setSelected(null)}>
         <View style={styles.backdrop}><View style={styles.modalCard}>
           <View style={styles.modalHeader}>
-            <View style={styles.modalHeading}>{actionMode !== "details" && <Pressable onPress={() => { setActionMode("details"); setError(""); }} style={styles.backAction}><Text style={styles.backActionText}>â€ą SzczegĂłĹ‚y</Text></Pressable>}<Text style={styles.modalTitle}>{selected?.name}</Text></View>
+            <View style={styles.modalHeading}>{actionMode !== "details" && <Pressable onPress={() => { setActionMode("details"); setError(""); }} style={styles.backAction}><Text style={styles.backActionText}>‹ Szczegóły</Text></Pressable>}<Text style={styles.modalTitle}>{selected?.name}</Text></View>
             <Pressable onPress={() => setSelected(null)} style={styles.close}><Text style={styles.closeText}>Zamknij</Text></Pressable>
           </View>
           {!!selected?.brand && <Text style={styles.brand}>{selected.brand}</Text>}
@@ -274,7 +274,7 @@ export function SavedScreen() {
               onQuickUseUnit={setEditQuickUseUnit}
             />}
             {actionMode === "pantry" && selected && <ActionForm
-              title="Dodaj do spiĹĽarni"
+              title="Dodaj do spiżarni"
               selected={selected}
               amount={amount}
               unit={unit}
@@ -289,15 +289,15 @@ export function SavedScreen() {
               unit={unit}
               onAmount={setAmount}
               onUnit={setUnit}
-              footer={<><ConsumerPicker value={consumer} onChange={setConsumer} label="Bilans kalorii dla" /><Pressable disabled={busy} onPress={() => void addToToday()} style={[styles.todayButton, busy && styles.disabled]}><Text style={styles.white}>{busy ? "Dodawanie..." : "PotwierdĹş dodanie do bilansu"}</Text></Pressable></>}
+              footer={<><ConsumerPicker value={consumer} onChange={setConsumer} label="Bilans kalorii dla" /><Pressable disabled={busy} onPress={() => void addToToday()} style={[styles.todayButton, busy && styles.disabled]}><Text style={styles.white}>{busy ? "Dodawanie..." : "Potwierdź dodanie do bilansu"}</Text></Pressable></>}
             />}
           </ScrollView>
           {actionMode === "details" && <View style={styles.actions}>
             <Pressable disabled={busy} onPress={() => openAction("edit")} style={[styles.editButton, busy && styles.disabled]}><Text style={styles.white}>Edytuj dane produktu</Text></Pressable>
-            <Pressable disabled={busy} onPress={() => openAction("pantry")} style={[styles.addButton, busy && styles.disabled]}><Text style={styles.white}>Dodaj do spiĹĽarni</Text></Pressable>
+            <Pressable disabled={busy} onPress={() => openAction("pantry")} style={[styles.addButton, busy && styles.disabled]}><Text style={styles.white}>Dodaj do spiżarni</Text></Pressable>
             {selected && !isChemical(selected) && <Pressable disabled={busy} onPress={() => openAction("today")} style={[styles.todayButton, busy && styles.disabled]}><Text style={styles.white}>Dodaj do dzisiejszego bilansu</Text></Pressable>}
-            <Pressable disabled={busy} onPress={() => void addToShoppingList()} style={[styles.shoppingButton, busy && styles.disabled]}><Text style={styles.white}>Dodaj do listy zakupĂłw</Text></Pressable>
-            <Pressable disabled={busy} onPress={() => void removeSavedProduct()} style={[styles.deleteButton, busy && styles.disabled]}><Text style={styles.deleteText}>UsuĹ„ z Zapisanych</Text></Pressable>
+            <Pressable disabled={busy} onPress={() => void addToShoppingList()} style={[styles.shoppingButton, busy && styles.disabled]}><Text style={styles.white}>Dodaj do listy zakupów</Text></Pressable>
+            <Pressable disabled={busy} onPress={() => void removeSavedProduct()} style={[styles.deleteButton, busy && styles.disabled]}><Text style={styles.deleteText}>Usuń z Zapisanych</Text></Pressable>
           </View>}
           {actionMode === "edit" && <View style={styles.actions}><Pressable disabled={busy} onPress={() => void saveEditedProduct()} style={[styles.addButton, busy && styles.disabled]}><Text style={styles.white}>{busy ? "Zapisywanie..." : "Zapisz poprawione dane"}</Text></Pressable></View>}
         </View></View>
@@ -315,10 +315,10 @@ function Details({ product }: { product: Product }) {
   return <>
     <Detail label="Kod produktu" value={product.source === "usda" || product.barcode.startsWith("manual-") ? product.barcode : product.barcode} />
     <Detail label="Kalorie" value={`${product.nutrientsPer100g.energyKcal ?? "brak"} kcal / ${product.nutritionBasis === "perUnit" ? "szt." : "100 g/ml"}`} />
-    <Detail label="MakroskĹ‚adniki" value={`B: ${product.nutrientsPer100g.proteins ?? "-"} g  W: ${product.nutrientsPer100g.carbohydrates ?? "-"} g  T: ${product.nutrientsPer100g.fat ?? "-"} g`} />
-    <Detail label="Mikroelementy" value={`Potas: ${product.nutrientsPer100g.potassium ?? "-"} mg  WapĹ„: ${product.nutrientsPer100g.calcium ?? "-"} mg  Ĺ»elazo: ${product.nutrientsPer100g.iron ?? "-"} mg  Magnez: ${product.nutrientsPer100g.magnesium ?? "-"} mg`} />
-    <Detail label="Jedno peĹ‚ne opakowanie" value={product.packageAmount ? `${product.packageAmount} ${product.packageUnit}` : "brak danych"} />
-    <Detail label="Szybkie zuĹĽycie" value={product.quickUseAmount ? `${product.quickUseAmount} ${product.quickUseUnit}` : "brak danych"} />
+    <Detail label="Makroskładniki" value={`B: ${product.nutrientsPer100g.proteins ?? "-"} g  W: ${product.nutrientsPer100g.carbohydrates ?? "-"} g  T: ${product.nutrientsPer100g.fat ?? "-"} g`} />
+    <Detail label="Mikroelementy" value={`Potas: ${product.nutrientsPer100g.potassium ?? "-"} mg  Wapń: ${product.nutrientsPer100g.calcium ?? "-"} mg  Żelazo: ${product.nutrientsPer100g.iron ?? "-"} mg  Magnez: ${product.nutrientsPer100g.magnesium ?? "-"} mg`} />
+    <Detail label="Jedno pełne opakowanie" value={product.packageAmount ? `${product.packageAmount} ${product.packageUnit}` : "brak danych"} />
+    <Detail label="Szybkie zużycie" value={product.quickUseAmount ? `${product.quickUseAmount} ${product.quickUseUnit}` : "brak danych"} />
   </>;
 }
 
@@ -327,24 +327,24 @@ function EditForm({ name, brand, numbers, packageUnit, quickUseUnit, onName, onB
   onName: (value: string) => void; onBrand: (value: string) => void; onNumber: (key: EditKey, value: string) => void; onPackageUnit: (value: Unit) => void; onQuickUseUnit: (value: Unit) => void;
 }) {
   return <View style={styles.actionForm}>
-    <Text style={styles.actionTitle}>RÄ™czna korekta danych</Text>
+    <Text style={styles.actionTitle}>Ręczna korekta danych</Text>
     <Field label="Nazwa produktu" value={name} onChangeText={onName} />
     <Field label="Marka" value={brand} onChangeText={onBrand} />
-    <Text style={styles.hint}>Popraw tu dane, jeĹ›li etykieta produktu rĂłĹĽni siÄ™ od informacji pobranych z internetu.</Text>
+    <Text style={styles.hint}>Popraw tu dane, jeśli etykieta produktu różni się od informacji pobranych z internetu.</Text>
     <Field label="kcal na 100 g/ml albo szt." value={numbers.energyKcal} onChangeText={(value) => onNumber("energyKcal", value)} numeric />
     <View style={styles.threeColumns}>
-      <Field label="BiaĹ‚ko" value={numbers.proteins} onChangeText={(value) => onNumber("proteins", value)} numeric />
-      <Field label="WÄ™glowodany" value={numbers.carbohydrates} onChangeText={(value) => onNumber("carbohydrates", value)} numeric />
-      <Field label="TĹ‚uszcz" value={numbers.fat} onChangeText={(value) => onNumber("fat", value)} numeric />
+      <Field label="Białko" value={numbers.proteins} onChangeText={(value) => onNumber("proteins", value)} numeric />
+      <Field label="Węglowodany" value={numbers.carbohydrates} onChangeText={(value) => onNumber("carbohydrates", value)} numeric />
+      <Field label="Tłuszcz" value={numbers.fat} onChangeText={(value) => onNumber("fat", value)} numeric />
     </View>
     <View style={styles.threeColumns}>
-      <Field label="BĹ‚onnik" value={numbers.fiber} onChangeText={(value) => onNumber("fiber", value)} numeric />
-      <Field label="SĂłl" value={numbers.salt} onChangeText={(value) => onNumber("salt", value)} numeric />
+      <Field label="Błonnik" value={numbers.fiber} onChangeText={(value) => onNumber("fiber", value)} numeric />
+      <Field label="Sól" value={numbers.salt} onChangeText={(value) => onNumber("salt", value)} numeric />
     </View>
-    <Text style={styles.actionTitle}>Jedno peĹ‚ne opakowanie</Text>
+    <Text style={styles.actionTitle}>Jedno pełne opakowanie</Text>
     <View style={styles.amountRow}><TextInput value={numbers.packageAmount} onChangeText={(value) => onNumber("packageAmount", value)} keyboardType="decimal-pad" placeholder="Np. 200" style={styles.amountInput} />{(["g", "ml", "szt"] as Unit[]).map((value) => <Pressable key={value} onPress={() => onPackageUnit(value)} style={[styles.unit, packageUnit === value && styles.unitActive]}><Text style={packageUnit === value ? styles.white : undefined}>{value}</Text></Pressable>)}</View>
-    <Text style={styles.actionTitle}>Szybki przycisk zuĹĽycia</Text>
-    <Text style={styles.hint}>Np. 1 szt. dla serka, 200 ml dla mleka albo 50 g dla masĹ‚a.</Text>
+    <Text style={styles.actionTitle}>Szybki przycisk zużycia</Text>
+    <Text style={styles.hint}>Np. 1 szt. dla serka, 200 ml dla mleka albo 50 g dla masła.</Text>
     <View style={styles.amountRow}><TextInput value={numbers.quickUseAmount} onChangeText={(value) => onNumber("quickUseAmount", value)} keyboardType="decimal-pad" placeholder="Np. 1" style={styles.amountInput} />{(["g", "ml", "szt"] as Unit[]).map((value) => <Pressable key={value} onPress={() => onQuickUseUnit(value)} style={[styles.unit, quickUseUnit === value && styles.unitActive]}><Text style={quickUseUnit === value ? styles.white : undefined}>{value}</Text></Pressable>)}</View>
   </View>;
 }
@@ -353,7 +353,7 @@ function ActionForm({ title, selected, amount, unit, onAmount, onUnit, footer }:
   const chemical = isChemical(selected);
   return <View style={styles.actionForm}>
     <Text style={styles.actionTitle}>{title}</Text>
-    {!chemical && canUseWholePackage(selected) && <View style={styles.packageButton}><Text style={styles.packageText}>Jedno opakowanie: {selected.packageAmount} {selected.packageUnit}</Text><Text style={styles.hint}>Wpisz np. 4 szt., a aplikacja zapisze peĹ‚nÄ… iloĹ›Ä‡ produktu.</Text></View>}
+    {!chemical && canUseWholePackage(selected) && <View style={styles.packageButton}><Text style={styles.packageText}>Jedno opakowanie: {selected.packageAmount} {selected.packageUnit}</Text><Text style={styles.hint}>Wpisz np. 4 szt., a aplikacja zapisze pełną ilość produktu.</Text></View>}
     {!chemical && <View style={styles.amountRow}><TextInput value={amount} onChangeText={onAmount} keyboardType="decimal-pad" style={styles.amountInput} />{(["g", "ml", "szt"] as Unit[]).map((value) => <Pressable key={value} onPress={() => onUnit(value)} style={[styles.unit, unit === value && styles.unitActive]}><Text style={unit === value ? styles.white : undefined}>{value}</Text></Pressable>)}</View>}
     {footer}
   </View>;
@@ -383,8 +383,8 @@ function PackageDateFields({ product, amount, unit, packageDates, fallbackDate, 
   const count = packageDateCount(product, amount, unit);
   if (!count) return null;
   return <View style={styles.packageDates}>
-    <Text style={styles.packageDatesTitle}>Daty dla poszczegĂłlnych opakowaĹ„ (opcjonalne)</Text>
-    <Text style={styles.hint}>Puste pola uĹĽyjÄ… daty ogĂłlnej albo zostanÄ… bez daty.</Text>
+    <Text style={styles.packageDatesTitle}>Daty dla poszczególnych opakowań (opcjonalne)</Text>
+    <Text style={styles.hint}>Puste pola użyją daty ogólnej albo zostaną bez daty.</Text>
     {Array.from({ length: count }, (_, index) => <DatePickerField key={index} label={`Opakowanie ${index + 1}`} value={packageDates[index] ?? fallbackDate} onChange={(value) => onChange(index, value)} />)}
   </View>;
 }

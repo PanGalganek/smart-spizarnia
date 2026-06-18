@@ -26,7 +26,7 @@ export function ScannerScreen() {
   const [product, setProduct] = useState<Product | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
-  const [message, setMessage] = useState("Zeskanuj kod lub wpisz go rÄ™cznie.");
+  const [message, setMessage] = useState("Zeskanuj kod lub wpisz go ręcznie.");
   const [stockAmount, setStockAmount] = useState("1");
   const [stockUnit, setStockUnit] = useState<Unit>("szt");
   const [expiryDate, setExpiryDate] = useState("");
@@ -75,9 +75,9 @@ export function ScannerScreen() {
       }
       setActionMessage("");
       setManualOpen(false);
-      setMessage(result ? "Produkt znaleziony." : "Nie znaleziono tego produktu w bazie Open Food Facts. MoĹĽesz dodaÄ‡ go rÄ™cznie.");
+      setMessage(result ? "Produkt znaleziony." : "Nie znaleziono tego produktu w bazie Open Food Facts. Możesz dodać go ręcznie.");
     } catch {
-      setMessage("Nie udaĹ‚o siÄ™ poĹ‚Ä…czyÄ‡ z Open Food Facts.");
+      setMessage("Nie udało się połączyć z Open Food Facts.");
     }
   }
 
@@ -87,13 +87,13 @@ export function ScannerScreen() {
 
   async function searchByName() {
     const query = foodName.trim();
-    if (!query) return setUsdaMessage("Wpisz nazwÄ™ produktu, np. pomidor.");
+    if (!query) return setUsdaMessage("Wpisz nazwę produktu, np. pomidor.");
     try {
       setUsdaBusy(true); setUsdaMessage("Wyszukiwanie w bazie USDA..."); setUsdaResults([]);
       const results = await searchUsdaFoods(query);
       setUsdaResults(results);
-      setUsdaMessage(results.length ? "Wybierz produkt najbardziej pasujÄ…cy do Twojego." : "USDA nie znalazĹ‚o produktu z danymi kalorycznymi.");
-    } catch { setUsdaMessage("Nie udaĹ‚o siÄ™ poĹ‚Ä…czyÄ‡ z USDA FoodData Central."); }
+      setUsdaMessage(results.length ? "Wybierz produkt najbardziej pasujący do Twojego." : "USDA nie znalazło produktu z danymi kalorycznymi.");
+    } catch { setUsdaMessage("Nie udało się połączyć z USDA FoodData Central."); }
     finally { setUsdaBusy(false); }
   }
 
@@ -104,7 +104,7 @@ export function ScannerScreen() {
     setStockUnit("g");
     setPackageDates([]);
     setUsdaResults([]);
-    setUsdaMessage(`Wybrano: ${result.description}. Podaj iloĹ›Ä‡ i dodaj produkt do spiĹĽarni.`);
+    setUsdaMessage(`Wybrano: ${result.description}. Podaj ilość i dodaj produkt do spiżarni.`);
     setMessage("Produkt bez kodu pobrany z USDA.");
     setActionMessage("");
   }
@@ -121,10 +121,10 @@ export function ScannerScreen() {
     setActionMessage("");
     setActionError(false);
     if (!Number.isFinite(amount) || amount <= 0) {
-      setActionError(true); setActionMessage("Wpisz prawidĹ‚owÄ… iloĹ›Ä‡."); return;
+      setActionError(true); setActionMessage("Wpisz prawidłową ilość."); return;
     }
     if (direction > 0 && !location.trim()) {
-      setActionError(true); setActionMessage("Przed dodaniem wybierz lokalizacjÄ™. Data waĹĽnoĹ›ci jest opcjonalna."); return;
+      setActionError(true); setActionMessage("Przed dodaniem wybierz lokalizację. Data ważności jest opcjonalna."); return;
     }
     if (direction > 0 && isChemical(product)) {
       try {
@@ -143,13 +143,13 @@ export function ScannerScreen() {
       const before = direction < 0 ? await getPantryItem(product.barcode) : null;
       const packageExpiryDates = direction > 0 ? buildPackageDates(product, amount, stockUnit, expiryDate, packageDates) : undefined;
       const updated = await changePantryQuantity(product, amount * direction, stockUnit, { expiryDate: expiryDate.trim() || undefined, location: location.trim() || undefined, packageExpiryDates });
-      const operation = direction > 0 ? "Dodano" : "OdjÄ™to";
+      const operation = direction > 0 ? "Dodano" : "Odjęto";
       setActionMessage(`${operation} ${amount} ${stockUnit}. Stan: ${updated.quantity} ${updated.unit}.`);
-      setMessage(direction > 0 ? "Produkt dodany do spiĹĽarni." : "Produkt odjÄ™ty ze spiĹĽarni.");
+      setMessage(direction > 0 ? "Produkt dodany do spiżarni." : "Produkt odjęty ze spiżarni.");
       if (direction < 0 && before && shouldAskToBuyAgain(before, updated)) setDepletedProducts([product]);
     } catch (error) {
       setActionError(true);
-      setActionMessage(error instanceof Error ? error.message : "Nie udaĹ‚o siÄ™ zmieniÄ‡ stanu.");
+      setActionMessage(error instanceof Error ? error.message : "Nie udało się zmienić stanu.");
     } finally { setBusy(false); }
   }
 
@@ -174,18 +174,18 @@ export function ScannerScreen() {
       const nutritionAmount = nutritionUnit === stockUnit ? amount : convertPantryAmount(product, amount, stockUnit, nutritionUnit);
       const ingredient = createUntrackedMealIngredient(product, nutritionAmount, nutritionUnit);
       await saveProduct(product);
-      await createUntrackedMeal(`PrzekÄ…ska: ${product.name}`, "snack", ingredient, Date.now(), consumer);
-      setActionMessage(`Dodano do bilansu osoby ${consumer.name}: ${amount} ${stockUnit}, ${ingredient.nutrients.energyKcal ?? 0} kcal. Stan spiĹĽarni nie zostaĹ‚ zmieniony.`);
+      await createUntrackedMeal(`Przekąska: ${product.name}`, "snack", ingredient, Date.now(), consumer);
+      setActionMessage(`Dodano do bilansu osoby ${consumer.name}: ${amount} ${stockUnit}, ${ingredient.nutrients.energyKcal ?? 0} kcal. Stan spiżarni nie został zmieniony.`);
       setMessage("Produkt zapisany w dzisiejszym bilansie.");
     } catch (error) {
       setActionError(true);
-      setActionMessage(error instanceof Error ? error.message : "Nie udaĹ‚o siÄ™ zapisaÄ‡ produktu w bilansie.");
+      setActionMessage(error instanceof Error ? error.message : "Nie udało się zapisać produktu w bilansie.");
     } finally { setBusy(false); }
   }
 
   return (
     <ModuleScreen title="Skaner">
-      <AddDepletedPrompt products={depletedProducts} onClose={() => setDepletedProducts([])} onAdded={() => setActionMessage("Produkt zuĹĽyty i dodany do listy zakupĂłw.")} />
+      <AddDepletedPrompt products={depletedProducts} onClose={() => setDepletedProducts([])} onAdded={() => setActionMessage("Produkt zużyty i dodany do listy zakupów.")} />
       {manualOpen ? (
         <ManualProductForm
           barcode={barcode}
@@ -194,7 +194,7 @@ export function ScannerScreen() {
           onSaved={(savedProduct) => {
             setProduct(savedProduct);
             setManualOpen(false);
-            setMessage("Produkt zostaĹ‚ zapisany rÄ™cznie.");
+            setMessage("Produkt został zapisany ręcznie.");
           }}
         />
       ) : cameraOpen ? (
@@ -212,13 +212,13 @@ export function ScannerScreen() {
           <View style={styles.tabs}>{productTypes.map((item) => <Pressable key={item.type} onPress={() => { setActiveType(item.type); setProduct(null); setActionMessage(""); }} style={[styles.tab, activeType === item.type && styles.tabActive]}><Text style={activeType === item.type ? styles.tabTextActive : styles.tabText}>{item.label}</Text></Pressable>)}</View>
           <View style={styles.row}>
             <TextInput keyboardType="number-pad" value={barcode} onChangeText={setBarcode} placeholder="Kod kreskowy" style={styles.input} />
-            <Pressable onPress={() => void search()} style={styles.button}><Text style={styles.white}>SprawdĹş</Text></Pressable>
+            <Pressable onPress={() => void search()} style={styles.button}><Text style={styles.white}>Sprawdź</Text></Pressable>
             <Pressable onPress={openCamera} style={styles.scan}><Text style={styles.white}>Skanuj</Text></Pressable>
           </View>
           <Text style={styles.message}>{message}</Text>
           {activeType === "food" && <View style={styles.usdaPanel}>
             <Text style={styles.usdaTitle}>Produkt bez kodu kreskowego</Text>
-            <Text style={styles.usdaHint}>Wpisz np. pomidor, marchew lub jabĹ‚ko. Dane odĹĽywcze pobierzemy z USDA.</Text>
+            <Text style={styles.usdaHint}>Wpisz np. pomidor, marchew lub jabłko. Dane odżywcze pobierzemy z USDA.</Text>
             <View style={styles.row}>
               <TextInput value={foodName} onChangeText={setFoodName} onSubmitEditing={() => void searchByName()} placeholder="Nazwa produktu, np. pomidor" style={styles.input} />
               <Pressable disabled={usdaBusy} onPress={() => void searchByName()} style={[styles.usdaButton, usdaBusy && styles.disabled]}><Text style={styles.white}>{usdaBusy ? "Szukam..." : "Szukaj USDA"}</Text></Pressable>
@@ -229,7 +229,7 @@ export function ScannerScreen() {
               <View style={styles.usdaNutrition}><Text style={styles.usdaKcal}>{result.product.nutrientsPer100g.energyKcal ?? 0} kcal</Text><Text style={styles.muted}>B {result.product.nutrientsPer100g.proteins ?? 0} | W {result.product.nutrientsPer100g.carbohydrates ?? 0} | T {result.product.nutrientsPer100g.fat ?? 0}</Text></View>
             </Pressable>)}
           </View>}
-          {!product && <Pressable onPress={() => setManualOpen(true)} style={styles.manual}><Text style={styles.white}>Dodaj produkt rÄ™cznie</Text></Pressable>}
+          {!product && <Pressable onPress={() => setManualOpen(true)} style={styles.manual}><Text style={styles.white}>Dodaj produkt ręcznie</Text></Pressable>}
           {product && (
             <View style={styles.product}>              <Text style={styles.name}>{product.name}</Text>
               <Text>{product.brand}</Text>
@@ -253,7 +253,7 @@ export function ScannerScreen() {
                 {!isChemical(product) && <Pressable disabled={busy} onPress={() => void eatNow()} style={[styles.eat, busy && styles.disabled]}><Text style={styles.white}>Zjedz teraz - tylko do bilansu</Text></Pressable>}
               </View>
               {!!actionMessage && <Text style={[styles.actionMessage, actionError ? styles.actionError : styles.actionSuccess]}>{actionMessage}</Text>}
-              {product.nutrientsPer100g.energyKcal === undefined && <Pressable onPress={() => setManualOpen(true)} style={styles.manual}><Text style={styles.white}>UzupeĹ‚nij kalorie rÄ™cznie</Text></Pressable>}
+              {product.nutrientsPer100g.energyKcal === undefined && <Pressable onPress={() => setManualOpen(true)} style={styles.manual}><Text style={styles.white}>Uzupełnij kalorie ręcznie</Text></Pressable>}
             </View>
           )}
         </View>
@@ -279,8 +279,8 @@ function PackageDateFields({ product, amount, unit, packageDates, fallbackDate, 
   const count = packageDateCount(product, amount, unit);
   if (!count) return null;
   return <View style={styles.packageDates}>
-    <Text style={styles.packageDatesTitle}>Daty dla poszczegĂłlnych opakowaĹ„ (opcjonalne)</Text>
-    <Text style={styles.muted}>Puste pola uĹĽyjÄ… daty ogĂłlnej albo zostanÄ… bez daty.</Text>
+    <Text style={styles.packageDatesTitle}>Daty dla poszczególnych opakowań (opcjonalne)</Text>
+    <Text style={styles.muted}>Puste pola użyją daty ogólnej albo zostaną bez daty.</Text>
     {Array.from({ length: count }, (_, index) => <DatePickerField key={index} label={`Opakowanie ${index + 1}`} value={packageDates[index] ?? fallbackDate} onChange={(value) => onChange(index, value)} />)}
   </View>;
 }
