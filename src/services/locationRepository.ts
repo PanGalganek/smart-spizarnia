@@ -1,6 +1,7 @@
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "@/core/firebase";
 import { ProductType } from "@/domain/product";
+import { userDoc } from "@/services/userData";
 
 const legacyLocationNames: Record<string, string> = {
   Lodowka: "Lodówka",
@@ -13,7 +14,7 @@ export const defaultLocations = ["Lodówka", "Zamrażarka", "Spiżarnia", "Szafk
 export const defaultChemicalLocations = ["Szafka pod zlewem", "Łazienka", "Pralnia", "Garaż", "Schowek"];
 
 function locationsRef(type: ProductType = "food") {
-  return doc(db, "settings", type === "household_chemical" ? "storageLocations_household_chemical" : "storageLocations");
+  return userDoc("settings", type === "household_chemical" ? "storageLocations_household_chemical" : "storageLocations");
 }
 
 function defaultsFor(type: ProductType = "food") {

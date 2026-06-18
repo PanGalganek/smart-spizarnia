@@ -12,13 +12,14 @@ const tiles = [
   { title: "Lista zakupów", subtitle: "Produkty do kupienia", icon: "cart-outline", route: "/shopping", color: "#AD5A00" }
 ] as const;
 
-const APP_VERSION = "0.11.7";
+const APP_VERSION = "0.11.8";
 
 export default function HomeScreen() {
-  const { user, signOut } = useAuth();
+  const { user, profile, isActive, isAdmin, signOut } = useAuth();
   const { width } = useWindowDimensions();
   const compact = width < 700;
-  if (!user) return <Redirect href="/login" />;
+  if (!user || !isActive) return <Redirect href="/login" />;
+  const visibleTiles = isAdmin ? [...tiles, { title: "Panel administratora", subtitle: "Użytkownicy i zatwierdzanie kont", icon: "shield-account-outline", route: "/admin", color: "#455A64" } as const] : tiles;
 
   return (
     <ScrollView style={styles.page} contentContainerStyle={[styles.content, compact && styles.compactContent]}>
@@ -27,7 +28,7 @@ export default function HomeScreen() {
         <Pressable onPress={signOut} style={styles.logout}><Text>Wyloguj</Text></Pressable>
       </View>
       <View style={styles.grid}>
-        {tiles.map((tile) => (
+        {visibleTiles.map((tile) => (
           <Pressable key={tile.title} onPress={() => router.push(tile.route)} style={[styles.tile, compact && styles.compactTile, { borderTopColor: tile.color }]}>
             <MaterialCommunityIcons name={tile.icon} size={compact ? 48 : 64} color={tile.color} />
             <Text style={[styles.tileTitle, compact && styles.compactTileTitle]}>{tile.title}</Text>

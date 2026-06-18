@@ -1,9 +1,47 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isOwner() {
-      return request.auth != null
-        && request.auth.uid == "xFkLT9w6iWhSgzTyUy1QUj3d26R2";
+    function adminUid() {
+      return "xFkLT9w6iWhSgzTyUy1QUj3d26R2";
+    }
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function profilePath(uid) {
+      return /databases/$(database)/documents/userProfiles/$(uid);
+    }
+
+    function existingProfile(uid) {
+      return get(profilePath(uid)).data;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && (
+          request.auth.uid == adminUid()
+          || (
+            exists(profilePath(request.auth.uid))
+            && existingProfile(request.auth.uid).role == "admin"
+            && existingProfile(request.auth.uid).status == "active"
+          )
+        );
+    }
+
+    function isActiveUser(uid) {
+      return signedIn()
+        && request.auth.uid == uid
+        && exists(profilePath(uid))
+        && existingProfile(uid).status == "active";
+    }
+
+    function canReadUserData(uid) {
+      return isAdmin() || isActiveUser(uid);
+    }
+
+    function canWriteUserData(uid) {
+      return isAdmin() || isActiveUser(uid);
     }
 
     function optionalString(data, field) {
@@ -28,6 +66,24 @@ service cloud.firestore {
 
     function isUnit(value) {
       return value in ["g", "ml", "szt"];
+    }
+
+    function validUserProfile(data) {
+      return data.keys().hasOnly(["uid", "email", "displayName", "role", "status", "createdAt", "updatedAt"])
+        && data.uid is string
+        && data.email is string
+        && data.role in ["admin", "user"]
+        && data.status in ["pending", "active", "blocked"]
+        && data.createdAt is number
+        && data.updatedAt is number
+        && optionalString(data, "displayName");
+    }
+
+    function validOwnPendingProfile(uid, data) {
+      return validUserProfile(data)
+        && data.uid == uid
+        && data.role == "user"
+        && data.status == "pending";
     }
 
     function validProduct(data) {
@@ -128,44 +184,94 @@ service cloud.firestore {
         && optionalBool(data, "protected");
     }
 
-    match /products/{barcode} {
-      allow read, delete: if isOwner();
-      allow create, update: if isOwner() && validProduct(request.resource.data);
+    function validSettings(settingsId, data) {
+      return settingsId in ["storageLocations", "storageLocations_household_chemical", "legacyRootMigration_v1"]
+        && data.keys().hasOnly(["values", "updatedAt", "type"])
+        && data.values is list
+        && data.updatedAt is number
+        && (!("type" in data) || data.type in ["food", "household_chemical"]);
     }
 
-    match /pantry/{barcode} {
-      allow read, delete: if isOwner();
-      allow create, update: if isOwner() && validPantryItem(request.resource.data);
+    match /userProfiles/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create: if signedIn()
+        && (
+          (request.auth.uid == uid && validOwnPendingProfile(uid, request.resource.data))
+          || (isAdmin() && validUserProfile(request.resource.data))
+          || (request.auth.uid == adminUid() && uid == adminUid() && validUserProfile(request.resource.data))
+        );
+      allow update: if isAdmin() && validUserProfile(request.resource.data);
+      allow delete: if isAdmin() && uid != request.auth.uid;
     }
 
-    match /meals/{mealId} {
-      allow read, delete: if isOwner();
-      allow create, update: if isOwner() && validMeal(request.resource.data);
+    match /users/{userId}/products/{barcode} {
+      allow read, delete: if canReadUserData(userId);
+      allow create, update: if canWriteUserData(userId) && validProduct(request.resource.data);
     }
 
-    match /dailySummaries/{summaryId} {
-      allow read, delete: if isOwner();
-      allow create, update: if isOwner() && validDailySummary(request.resource.data);
+    match /users/{userId}/pantry/{barcode} {
+      allow read, delete: if canReadUserData(userId);
+      allow create, update: if canWriteUserData(userId) && validPantryItem(request.resource.data);
     }
 
-    match /shoppingList/{itemId} {
-      allow read, delete: if isOwner();
-      allow create, update: if isOwner() && validShoppingItem(request.resource.data);
+    match /users/{userId}/meals/{mealId} {
+      allow read, delete: if canReadUserData(userId);
+      allow create, update: if canWriteUserData(userId) && validMeal(request.resource.data);
     }
 
-    match /consumers/{consumerId} {
-      allow read, delete: if isOwner();
-      allow create, update: if isOwner() && validConsumer(request.resource.data);
+    match /users/{userId}/dailySummaries/{summaryId} {
+      allow read, delete: if canReadUserData(userId);
+      allow create, update: if canWriteUserData(userId) && validDailySummary(request.resource.data);
     }
 
-    match /settings/{settingsId} {
-      allow read, delete: if isOwner();
-      allow create, update: if isOwner()
-        && settingsId in ["storageLocations", "storageLocations_household_chemical"]
-        && request.resource.data.keys().hasOnly(["values", "updatedAt", "type"])
-        && request.resource.data.values is list
-        && request.resource.data.updatedAt is number
-        && (!("type" in request.resource.data) || request.resource.data.type in ["food", "household_chemical"]);
+    match /users/{userId}/shoppingList/{itemId} {
+      allow read, delete: if canReadUserData(userId);
+      allow create, update: if canWriteUserData(userId) && validShoppingItem(request.resource.data);
+    }
+
+    match /users/{userId}/consumers/{consumerId} {
+      allow read, delete: if canReadUserData(userId);
+      allow create, update: if canWriteUserData(userId) && validConsumer(request.resource.data);
+    }
+
+    match /users/{userId}/settings/{settingsId} {
+      allow read, delete: if canReadUserData(userId);
+      allow create, update: if canWriteUserData(userId) && validSettings(settingsId, request.resource.data);
+    }
+
+    match /products/{documentId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /pantry/{documentId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /meals/{documentId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /dailySummaries/{documentId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /shoppingList/{documentId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /consumers/{documentId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /settings/{documentId} {
+      allow read: if isAdmin();
+      allow write: if false;
     }
 
     match /{document=**} {

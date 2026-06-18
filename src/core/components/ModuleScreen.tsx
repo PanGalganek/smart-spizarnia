@@ -1,9 +1,13 @@
-import { router } from "expo-router";
+import { Redirect, router } from "expo-router";
 import { PropsWithChildren } from "react";
-import { Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { useAuth } from "@/core/auth/AuthProvider";
 import { colors } from "@/core/theme";
 
 export function ModuleScreen({ title, children, onBack }: PropsWithChildren<{ title: string; onBack?: () => void }>) {
+  const { user, loading, isActive } = useAuth();
+  if (loading) return <View style={styles.loading}><ActivityIndicator color={colors.primary} /></View>;
+  if (!user || !isActive) return <Redirect href="/login" />;
   return (
     <SafeAreaView style={styles.page}>
       <View style={styles.header}>
@@ -25,4 +29,5 @@ const styles = StyleSheet.create({
   backText: { color: colors.primary, fontWeight: "700" },
   title: { fontSize: 28, fontWeight: "800", color: colors.text },
   content: { flex: 1, minHeight: 0, paddingHorizontal: 24, paddingBottom: 24 }
+  ,loading: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background }
 });

@@ -1,4 +1,4 @@
-import { collection, deleteDoc, doc, getDoc, getDocs, runTransaction, setDoc } from "firebase/firestore";
+import { deleteDoc, doc, getDoc, getDocs, runTransaction, setDoc } from "firebase/firestore";
 import { db } from "@/core/firebase";
 import { Consumer, DailySummary, Meal, MealIngredient, MealType } from "@/domain/meal";
 import { PantryItem, Product, Unit } from "@/domain/product";
@@ -6,11 +6,7 @@ import { addNutrients, dateKey, scaleNutrients, sumNutrients } from "@/services/
 import { addPackages, consumePackages, normalizePackages, packageCapacity, packageTotal, packageUnit } from "@/services/pantryPackages";
 import { capacityForPackage, stockCapacity } from "@/services/stockLevel";
 import { chemicalLevelQuantity, isChemical, normalizeChemicalItem } from "@/services/productTypes";
-
-const products = collection(db, "products");
-const pantry = collection(db, "pantry");
-const meals = collection(db, "meals");
-const dailySummaries = collection(db, "dailySummaries");
+import { userCollection, userDoc } from "@/services/userData";
 
 function withoutUndefined<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -51,11 +47,11 @@ function normalizeMeal(meal: Meal): Meal {
 }
 
 export async function saveProduct(product: Product) {
-  await setDoc(doc(products, product.barcode), withoutUndefined({ ...product, type: product.type ?? "food" }), { merge: true });
+  await setDoc(userDoc("products", product.barcode), withoutUndefined({ ...product, type: product.type ?? "food" }), { merge: true });
 }
 
 export async function getSavedProduct(barcode: string): Promise<Product | null> {
-  const snapshot = await getDoc(doc(products, barcode));
+  const snapshot = await getDoc(userDoc("products", barcode));
   return snapshot.exists() ? { ...snapshot.data() as Product, type: (snapshot.data() as Product).type ?? "food" } : null;
 }
 
@@ -68,7 +64,7 @@ export async function updateProductDetails(product: Product): Promise<Product> {
 }
 
 export async function deleteSavedProduct(barcode: string) {
-  await deleteDoc(doc(products, barcode));
+  await deleteDoc(userDoc("products", barcode));
 }
 
 export async function updateProductPackage(product: Product, packageAmount: number, packageUnit: Unit): Promise<Product> {
@@ -94,7 +90,7 @@ export async function updateProductPackage(product: Product, packageAmount: numb
 
 export async function savePantryItem(item: PantryItem) {
   const normalized = normalizePantryItem({ ...item, updatedAt: Date.now() });
-  await setDoc(doc(pantry, item.barcode), withoutUndefined(normalized), { merge: true });
+  await setDoc(userDoc("pantry", item.barcode), withoutUndefined(normalized), { merge: true });
   await saveProduct(normalized.product);
 }
 
@@ -111,7 +107,7 @@ export async function saveChemicalPantryItem(product: Product, chemicalLevel: Pa
     status: level === "empty" ? "consumed" : "active",
     updatedAt: Date.now()
   };
-  await setDoc(doc(pantry, product.barcode), withoutUndefined(item), { merge: true });
+  await setDoc(userDoc("pantry", product.barcode), withoutUndefined(item), { merge: true });
   await saveProduct(item.product);
   return item;
 }
@@ -122,7 +118,7 @@ export async function changePantryQuantity(
   selectedUnit?: Unit,
   metadata?: { expiryDate?: string; location?: string; packageId?: string; packageExpiryDates?: (string | undefined)[] }
 ): Promise<PantryItem> {
-  const ref = doc(pantry, product.barcode);
+  const ref = userDoc("pantry", product.barcode);
   const inputUnit = selectedUnit ?? product.defaultUnit ?? "szt";
   const updated = await runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(ref);
@@ -154,7 +150,7 @@ export async function changePantryQuantity(
 }
 
 export async function listPantry(includeConsumed = false): Promise<PantryItem[]> {
-  const snapshot = await getDocs(pantry);
+  const snapshot = await getDocs(userCollection("pantry"));
   return snapshot.docs
     .map((item) => normalizePantryItem(item.data() as PantryItem))
     .filter((item) => includeConsumed || item.quantity > 0)
@@ -162,16 +158,16 @@ export async function listPantry(includeConsumed = false): Promise<PantryItem[]>
 }
 
 export async function getPantryItem(barcode: string): Promise<PantryItem | null> {
-  const snapshot = await getDoc(doc(pantry, barcode));
+  const snapshot = await getDoc(userDoc("pantry", barcode));
   return snapshot.exists() ? normalizePantryItem(snapshot.data() as PantryItem) : null;
 }
 
 export async function deletePantryItem(barcode: string) {
-  await deleteDoc(doc(pantry, barcode));
+  await deleteDoc(userDoc("pantry", barcode));
 }
 
 export async function listSavedProducts(): Promise<Product[]> {
-  const snapshot = await getDocs(products);
+  const snapshot = await getDocs(userCollection("products"));
   return snapshot.docs.map((item) => ({ ...item.data() as Product, type: (item.data() as Product).type ?? "food" }));
 }
 
@@ -185,10 +181,10 @@ export async function createMeal(
 ): Promise<Meal> {
   if (!ingredients.length) throw new Error("Dodaj przynajmniej jeden składnik.");
   if (!Number.isInteger(servings) || servings < 1 || servings > 100) throw new Error("Podaj liczbę porcji od 1 do 100.");
-  const mealRef = doc(meals);
+  const mealRef = doc(userCollection("meals"));
   const day = dateKey(createdAt);
-  const summaryRef = doc(dailySummaries, summaryId(day, consumer.id));
-  const legacySummaryRef = doc(dailySummaries, day);
+  const summaryRef = userDoc("dailySummaries", summaryId(day, consumer.id));
+  const legacySummaryRef = userDoc("dailySummaries", day);
   const recipeTotals = sumNutrients(ingredients.map((item) => item.nutrients));
   const meal: Meal = {
     id: mealRef.id,
@@ -205,7 +201,7 @@ export async function createMeal(
   };
 
   await runTransaction(db, async (transaction) => {
-    const pantryRefs = ingredients.map((item) => doc(pantry, item.barcode));
+    const pantryRefs = ingredients.map((item) => userDoc("pantry", item.barcode));
     const pantrySnapshots = await Promise.all(pantryRefs.map((ref) => transaction.get(ref)));
     const summarySnapshot = await transaction.get(summaryRef);
     const legacySummarySnapshot = consumer.id === "bartek" ? await transaction.get(legacySummaryRef) : null;
@@ -256,10 +252,10 @@ export async function createUntrackedMeal(
   createdAt = Date.now(),
   consumer: Consumer = { id: "bartek", name: "Bartek" }
 ): Promise<Meal> {
-  const mealRef = doc(meals);
+  const mealRef = doc(userCollection("meals"));
   const day = dateKey(createdAt);
-  const summaryRef = doc(dailySummaries, summaryId(day, consumer.id));
-  const legacySummaryRef = doc(dailySummaries, day);
+  const summaryRef = userDoc("dailySummaries", summaryId(day, consumer.id));
+  const legacySummaryRef = userDoc("dailySummaries", day);
   const meal: Meal = {
     id: mealRef.id,
     name,
@@ -294,7 +290,7 @@ export async function createUntrackedMeal(
 }
 
 export async function listMeals(day?: string): Promise<Meal[]> {
-  const snapshot = await getDocs(meals);
+  const snapshot = await getDocs(userCollection("meals"));
   return snapshot.docs
     .map((item) => normalizeMeal(item.data() as Meal))
     .filter((meal) => !day || meal.dateKey === day)
@@ -302,7 +298,7 @@ export async function listMeals(day?: string): Promise<Meal[]> {
 }
 
 export async function getDailySummary(day: string, consumer: Consumer = { id: "bartek", name: "Bartek" }): Promise<DailySummary> {
-  const found = await getDoc(doc(dailySummaries, summaryId(day, consumer.id)));
+  const found = await getDoc(userDoc("dailySummaries", summaryId(day, consumer.id)));
   if (found.exists()) return found.data() as DailySummary;
   const dayMeals = (await listMeals(day)).filter((meal) => meal.consumerId === consumer.id);
   return {
@@ -316,18 +312,18 @@ export async function getDailySummary(day: string, consumer: Consumer = { id: "b
 }
 
 export async function renameMeal(mealId: string, name: string) {
-  await setDoc(doc(meals, mealId), { name: name.trim() }, { merge: true });
+  await setDoc(userDoc("meals", mealId), { name: name.trim() }, { merge: true });
 }
 
 export async function deleteMeal(mealInput: Meal, restoreIngredients = true) {
   const meal = normalizeMeal(mealInput);
-  const mealRef = doc(meals, meal.id);
-  const summaryRef = doc(dailySummaries, summaryId(meal.dateKey, meal.consumerId ?? "bartek"));
-  const legacySummaryRef = doc(dailySummaries, meal.dateKey);
+  const mealRef = userDoc("meals", meal.id);
+  const summaryRef = userDoc("dailySummaries", summaryId(meal.dateKey, meal.consumerId ?? "bartek"));
+  const legacySummaryRef = userDoc("dailySummaries", meal.dateKey);
 
   await runTransaction(db, async (transaction) => {
     const restorableIngredients = restoreIngredients ? meal.ingredients.filter((item) => item.tracksPantry !== false) : [];
-    const pantryRefs = restorableIngredients.map((item) => doc(pantry, item.barcode));
+    const pantryRefs = restorableIngredients.map((item) => userDoc("pantry", item.barcode));
     const pantrySnapshots = await Promise.all(pantryRefs.map((ref) => transaction.get(ref)));
     const summarySnapshot = await transaction.get(summaryRef);
     const legacySummarySnapshot = !summarySnapshot.exists() && (meal.consumerId ?? "bartek") === "bartek" ? await transaction.get(legacySummaryRef) : null;
