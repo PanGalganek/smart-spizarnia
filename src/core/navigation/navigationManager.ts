@@ -306,6 +306,7 @@ function topLayer() {
 function closeLayerById(id: string, options: { callOnBack?: boolean; fromBack?: boolean } = {}) {
   const layer = layers.get(id);
   if (!layer) return false;
+  if (options.fromBack && hasPotentialFormChanges(layer) && !confirmDiscardChanges()) return true;
   if (options.fromBack) applyingSystemBack = true;
 
   const nextState = previousStateAfterClosingLayer(id) ?? withoutLayer(currentState ?? deriveNavigationState(currentPathname()));
@@ -322,6 +323,15 @@ function closeLayerById(id: string, options: { callOnBack?: boolean; fromBack?: 
     applyingSystemBack = false;
   }
   return true;
+}
+
+function hasPotentialFormChanges(layer: LayerDescriptor) {
+  return layer.kind === "form" || layer.kind === "edit";
+}
+
+function confirmDiscardChanges() {
+  if (typeof window === "undefined" || typeof window.confirm !== "function") return true;
+  return window.confirm("Masz niezapisane zmiany. Czy na pewno chcesz wrócić?");
 }
 
 function previousStateAfterClosingLayer(id: string) {
