@@ -1,10 +1,10 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { router, useFocusEffect, useLocalSearchParams, useNavigation } from "expo-router";
+import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { formatPolishDate } from "@/core/components/DatePickerField";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
-import { navigateToRoute, replaceWithRoute, useAppNavigation, useNavigationLayer } from "@/core/navigation/useAppNavigation";
+import { navigateToRoute, useAppNavigation, useNavigationLayer } from "@/core/navigation/useAppNavigation";
 import { colors } from "@/core/theme";
 import { PantryItem, PantryPackage, ProductType } from "@/domain/product";
 import { AddDepletedPrompt } from "@/features/shopping/AddDepletedPrompt";
@@ -20,7 +20,6 @@ import { stockPercentage } from "@/services/stockLevel";
 const UNASSIGNED = "__unassigned__";
 
 export function PantryScreen() {
-  const navigation = useNavigation();
   const params = useLocalSearchParams<{ location?: string | string[]; type?: ProductType | ProductType[] }>();
   const appNavigation = useAppNavigation();
   const managerLayer = useNavigationLayer("pantry-location-manager", "modal", { modal: "pantry-location-manager" });
@@ -59,18 +58,6 @@ export function PantryScreen() {
     navigateToRoute({ pathname: "/pantry", params: { type } });
   }
 
-  useEffect(() => navigation.addListener("beforeRemove", (event) => {
-    if (managerLayer.open) {
-      event.preventDefault();
-      managerLayer.closeLayer();
-      return;
-    }
-    if (packagePickerLayer.open) {
-      event.preventDefault();
-      packagePickerLayer.closeLayer();
-    }
-  }), [managerLayer.open, packagePickerLayer.open, navigation]);
-
   const locations = useMemo(() => {
     const assigned = items.map((item) => item.location?.trim()).filter((value): value is string => Boolean(value)).map(displayLocationName);
     return [...new Set([...configuredLocations.map(displayLocationName), ...assigned])]
@@ -90,18 +77,6 @@ export function PantryScreen() {
   function openLocation(location: string) {
     setQuery("");
     navigateToRoute({ pathname: "/pantry", params: { type: activeType, location } });
-  }
-
-  function goBack() {
-    if (managerLayer.open) return managerLayer.closeLayer();
-    if (packagePickerLayer.open) return packagePickerLayer.closeLayer();
-    if (selectedLocation) {
-      setQuery("");
-      if (router.canGoBack()) router.back();
-      else replaceWithRoute({ pathname: "/pantry", params: { type: activeType } });
-      return;
-    }
-    router.back();
   }
 
   async function createLocation() {
@@ -165,7 +140,7 @@ export function PantryScreen() {
   }
 
   return (
-    <ModuleScreen title="Spiżarnia" onBack={goBack}>
+    <ModuleScreen title="Spiżarnia">
       <AddDepletedPrompt products={shoppingPromptItems} onClose={() => { setShoppingPromptItems([]); setDepletedPromptBarcodes([]); }} onDeclined={declineShoppingPrompt} onAdded={() => setQuickMessage("Produkt dodano do listy zakupów.")} />
       {!!message && <Text style={styles.message}>{message}</Text>}
       {!!quickMessage && <Text style={styles.quickMessage}>{quickMessage}</Text>}
@@ -195,7 +170,7 @@ export function PantryScreen() {
         />
       </> : <>
         <View style={styles.locationHeader}>
-          <Pressable onPress={goBack} style={styles.locationsBack}><Text style={styles.locationsBackText}>‹ Lokalizacje</Text></Pressable>
+          <Pressable onPress={appNavigation.goBack} style={styles.locationsBack}><Text style={styles.locationsBackText}>‹ Lokalizacje</Text></Pressable>
           <Text style={styles.locationTitle}>{selectedLocation === UNASSIGNED ? "Nieprzypisane" : selectedLocation}</Text>
         </View>
         <TextInput value={query} onChangeText={setQuery} placeholder="Szukaj produktu..." autoCorrect={false} style={styles.search} />

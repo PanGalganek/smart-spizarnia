@@ -33,6 +33,8 @@ type LayerDescriptor = {
 
 const HISTORY_STATE_KEY = "__smartPantryNavigation";
 const NAVIGATION_HASH_KEY = "smart-pantry-layer";
+const HISTORY_GUARD_KEY = "__smartPantryBackGuard";
+const EXIT_PROMPT_MS = 2200;
 
 const layers = new Map<string, LayerDescriptor>();
 const appStack: AppNavigationState[] = [];
@@ -43,6 +45,8 @@ let currentState: AppNavigationState | null = null;
 let layerCounter = 0;
 let layerOrderCounter = 0;
 let applyingSystemBack = false;
+let lastExitPromptAt = 0;
+let exitPromptListener: ((visible: boolean) => void) | null = null;
 
 export function createNavigationLayerId(prefix = "layer") {
   layerCounter += 1;
@@ -84,7 +88,7 @@ export function isNavigationLayerVisible(id: string) {
 export function replaceNavigationState(state: AppNavigationState) {
   const next = cleanStateUrl(mergeRouteState(state));
   currentState = cloneState(next);
-  if (canUseHistory()) window.history.replaceState(withNavigationState(window.history.state, currentState), "", historyUrlForState(currentState));
+  writeCurrentHistoryEntry(currentState);
   notify();
 }
 
@@ -93,7 +97,8 @@ export function pushNavigationState(nextState: AppNavigationState) {
   if (isSameNavigationState(currentState, next)) return false;
   if (currentState) appStack.push(cloneState(currentState));
   currentState = cloneState(next);
-  if (canUseHistory()) window.history.pushState(withNavigationState(window.history.state, currentState), "", historyUrlForState(currentState));
+  if (canUseHistory()) window.history.pushState(withNavigationState(withoutBackGuard(window.history.state), currentState), "", historyUrlForState(currentState));
+  armBackGuard();
   notify();
   return true;
 }
@@ -110,7 +115,7 @@ export function updateNavigationState(patch: Partial<AppNavigationState>, option
   if (options.push) pushNavigationState(next);
   else {
     currentState = cloneState(next);
-    if (canUseHistory()) window.history.replaceState(withNavigationState(window.history.state, currentState), "", historyUrlForState(currentState));
+    writeCurrentHistoryEntry(currentState);
     notify();
   }
 }
@@ -145,22 +150,16 @@ export function unregisterNavigationLayers(ids: string[]) {
   const removed = ids.filter((id) => layers.has(id));
   if (!removed.length) return;
 
-  const shouldPopHistory = !applyingSystemBack && Boolean(currentState?.layerId && removed.includes(currentState.layerId));
   removed.forEach((id) => layers.delete(id));
-
-  if (shouldPopHistory && canUseHistory()) {
-    const depth = Math.max(1, removed.length);
-    window.history.go(-depth);
+  if (currentState?.layerId && removed.includes(currentState.layerId)) {
+    currentState = withoutLayer(currentState);
+    writeCurrentHistoryEntry(currentState);
+    notify();
   }
 }
 
 export function closeNavigationLayer(id: string) {
-  if (currentState?.layerId === id && canUseHistory()) {
-    window.history.go(-layerHistoryDepth(id));
-    return;
-  }
-  unregisterNavigationLayer(id);
-  if (currentState?.layerId === id) updateNavigationState(withoutLayer(currentState));
+  closeLayerById(id, { callOnBack: false });
 }
 
 export function closeTopLayer() {
@@ -177,41 +176,81 @@ export function closeTopLayer() {
 }
 
 export function goBack() {
-  if (closeTopLayer()) return;
-  router.back();
+  handleBackNavigation();
+}
+
+export function handleBackNavigation(rawState?: unknown) {
+  if (!currentState) currentState = readNavigationState(rawState) ?? deriveNavigationState(currentPathname());
+  const state = currentState;
+  const targetState = readNavigationState(rawState);
+  const activeLayer = state.layerId ? layers.get(state.layerId) : topLayer();
+
+  if (activeLayer) {
+    if (targetState?.layerId === activeLayer.id && !isSameNavigationState(targetState, state)) {
+      currentState = cloneState(targetState);
+      restoreStackForState(targetState);
+      writeCurrentHistoryEntry(currentState);
+      notify();
+      return true;
+    }
+    if (!targetState || targetState.layerId === activeLayer.id) {
+      const previousStep = previousStepInsideLayer(activeLayer.id);
+      if (previousStep) {
+        currentState = previousStep;
+        writeCurrentHistoryEntry(currentState);
+        notify();
+        return true;
+      }
+    }
+    return closeLayerById(activeLayer.id, { callOnBack: true, fromBack: true });
+  }
+
+  if (state.modal || state.scanner || state.mode || state.editingProductId) {
+    currentState = withoutLayer(state);
+    writeCurrentHistoryEntry(currentState);
+    notify();
+    return true;
+  }
+
+  if (state.view === "pantryItem") {
+    replaceWithNavigationState(pantryListStateFromItem(state));
+    return true;
+  }
+
+  if (state.view === "pantry" && state.subview) {
+    replaceWithNavigationState({ ...state, path: "/pantry", url: pantryUrl(state.tab), subview: null, barcode: null });
+    return true;
+  }
+
+  const previousTab = previousTabState(state);
+  if (previousTab) {
+    replaceWithNavigationState(previousTab);
+    return true;
+  }
+
+  if (state.view !== "home" && state.view !== "login" && state.view !== "root") {
+    replaceWithNavigationState(baseState("home", "/home", "/home"));
+    return true;
+  }
+
+  if (state.view === "home") {
+    const now = Date.now();
+    if (now - lastExitPromptAt < EXIT_PROMPT_MS) {
+      setExitPrompt(false);
+      lastExitPromptAt = 0;
+      return false;
+    }
+    lastExitPromptAt = now;
+    setExitPrompt(true);
+    armBackGuard();
+    return true;
+  }
+
+  return false;
 }
 
 export function handleSystemBackState(rawState: unknown) {
-  const nextState = readNavigationState(rawState);
-  const activeLayer = currentState?.layerId ? layers.get(currentState.layerId) : topLayer();
-
-  if (activeLayer && nextState?.layerId === activeLayer.id) {
-    currentState = cloneState(nextState);
-    restoreStackForState(nextState);
-    pruneLayersToVisibleStack();
-    notify();
-    return true;
-  }
-
-  if (activeLayer) {
-    applyingSystemBack = true;
-    currentState = nextState ? cloneState(nextState) : withoutLayer(currentState ?? deriveNavigationState(currentPathname()));
-    restoreStackForState(nextState);
-    layers.delete(activeLayer.id);
-    pruneLayersToVisibleStack();
-    activeLayer.onBack?.();
-    notify();
-    window.setTimeout(() => { applyingSystemBack = false; }, 0);
-    return true;
-  }
-
-  if (nextState) {
-    currentState = cloneState(nextState);
-    restoreStackForState(nextState);
-    pruneLayersToVisibleStack();
-    notify();
-  }
-  return false;
+  return handleBackNavigation(rawState);
 }
 
 export function getCurrentNavigationState() {
@@ -224,6 +263,13 @@ export function getNavigationStackSnapshot() {
 
 export function isApplyingSystemBack() {
   return applyingSystemBack;
+}
+
+export function setExitPromptListener(listener: ((visible: boolean) => void) | null) {
+  exitPromptListener = listener;
+  return () => {
+    if (exitPromptListener === listener) exitPromptListener = null;
+  };
 }
 
 function applyLayerToState(base: AppNavigationState, layer: LayerDescriptor): AppNavigationState {
@@ -255,6 +301,107 @@ function withoutLayer(state: AppNavigationState): AppNavigationState {
 
 function topLayer() {
   return [...layers.values()].sort((left, right) => right.order - left.order)[0] ?? null;
+}
+
+function closeLayerById(id: string, options: { callOnBack?: boolean; fromBack?: boolean } = {}) {
+  const layer = layers.get(id);
+  if (!layer) return false;
+  if (options.fromBack) applyingSystemBack = true;
+
+  const nextState = previousStateAfterClosingLayer(id) ?? withoutLayer(currentState ?? deriveNavigationState(currentPathname()));
+  layers.delete(id);
+  currentState = cleanStateUrl(nextState);
+  pruneLayersToVisibleStack();
+  if (options.callOnBack) layer.onBack?.();
+  writeCurrentHistoryEntry(currentState);
+  notify();
+
+  if (options.fromBack && typeof window !== "undefined") {
+    window.setTimeout(() => { applyingSystemBack = false; }, 0);
+  } else {
+    applyingSystemBack = false;
+  }
+  return true;
+}
+
+function previousStateAfterClosingLayer(id: string) {
+  while (appStack.length) {
+    const previous = appStack.pop();
+    if (!previous || previous.layerId === id) continue;
+    return cloneState(previous);
+  }
+  return currentState ? withoutLayer(currentState) : null;
+}
+
+function previousStepInsideLayer(id: string) {
+  while (appStack.length) {
+    const previous = appStack.pop();
+    if (!previous) continue;
+    if (previous.layerId === id) return cloneState(previous);
+    appStack.push(previous);
+    return null;
+  }
+  return null;
+}
+
+function replaceWithNavigationState(state: AppNavigationState) {
+  const next = cleanStateUrl(state);
+  currentState = cloneState(next);
+  appStack.length = 0;
+  pruneLayersToVisibleStack();
+  writeCurrentHistoryEntry(currentState);
+  notify();
+  router.replace(hrefForState(currentState));
+}
+
+function previousTabState(state: AppNavigationState) {
+  if (!state.tab) return null;
+  for (let index = appStack.length - 1; index >= 0; index -= 1) {
+    const candidate = appStack[index];
+    if (
+      candidate.view === state.view &&
+      candidate.path === state.path &&
+      candidate.subview === state.subview &&
+      candidate.tab !== state.tab &&
+      !candidate.layerId
+    ) {
+      appStack.splice(index);
+      return cloneState(candidate);
+    }
+  }
+  return null;
+}
+
+function pantryListStateFromItem(state: AppNavigationState) {
+  return {
+    ...baseState("pantry", "/pantry", pantryUrl(state.tab, state.subview)),
+    tab: state.tab ?? "food",
+    subview: state.subview
+  };
+}
+
+function pantryUrl(tab: string | null, location?: string | null) {
+  const params = new URLSearchParams();
+  if (tab) params.set("type", tab);
+  if (location) params.set("location", location);
+  const query = params.toString();
+  return query ? `/pantry?${query}` : "/pantry";
+}
+
+function hrefForState(state: AppNavigationState): Href {
+  if (state.view === "pantry") {
+    const params: Record<string, string> = {};
+    if (state.tab) params.type = state.tab;
+    if (state.subview) params.location = state.subview;
+    return { pathname: "/pantry", params };
+  }
+  if (state.view === "pantryItem" && state.barcode) {
+    const params: Record<string, string> = { barcode: state.barcode };
+    if (state.tab) params.type = state.tab;
+    if (state.subview) params.location = state.subview;
+    return { pathname: "/pantry/[barcode]", params };
+  }
+  return state.path || "/home";
 }
 
 function restoreStackForState(nextState: AppNavigationState | null) {
@@ -323,11 +470,48 @@ function readNavigationState(rawState: unknown): AppNavigationState | null {
   };
 }
 
+function writeCurrentHistoryEntry(state: AppNavigationState) {
+  if (!canUseHistory()) return;
+  if (historyIsGuardFor(state)) return;
+  window.history.replaceState(withNavigationState(withoutBackGuard(window.history.state), state), "", historyUrlForState(state));
+  armBackGuard();
+}
+
+function armBackGuard() {
+  if (!canUseHistory() || !currentState || !shouldUseBackGuard(currentState)) return;
+  if (historyIsGuardFor(currentState)) return;
+  window.history.pushState(withBackGuard(withNavigationState(withoutBackGuard(window.history.state), currentState)), "", historyUrlForState(currentState));
+}
+
+function historyIsGuardFor(state: AppNavigationState) {
+  if (!canUseHistory()) return false;
+  const rawState = window.history.state;
+  return Boolean(rawState && typeof rawState === "object" && (rawState as Record<string, unknown>)[HISTORY_GUARD_KEY]) &&
+    isSameNavigationState(readNavigationState(rawState), state);
+}
+
+function shouldUseBackGuard(state: AppNavigationState) {
+  return state.view !== "root" && state.view !== "login" && state.view !== "unknown";
+}
+
 function withNavigationState(existingState: unknown, state: AppNavigationState) {
   return {
     ...(existingState && typeof existingState === "object" ? existingState : {}),
     [HISTORY_STATE_KEY]: cloneState(state)
   };
+}
+
+function withBackGuard(state: unknown) {
+  return {
+    ...(state && typeof state === "object" ? state : {}),
+    [HISTORY_GUARD_KEY]: true
+  };
+}
+
+function withoutBackGuard(state: unknown) {
+  if (!state || typeof state !== "object") return state;
+  const { [HISTORY_GUARD_KEY]: _guard, ...rest } = state as Record<string, unknown>;
+  return rest;
 }
 
 function baseState(view: AppView, path: string, url: string): AppNavigationState {
@@ -395,6 +579,10 @@ function mergeRouteState(routeState: AppNavigationState) {
 
 function cleanStateUrl(state: AppNavigationState) {
   return { ...state, url: stripNavigationHash(state.url) };
+}
+
+function setExitPrompt(visible: boolean) {
+  exitPromptListener?.(visible);
 }
 
 function notify() {

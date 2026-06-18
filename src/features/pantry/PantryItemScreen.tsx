@@ -1,4 +1,4 @@
-﻿import { router, useLocalSearchParams } from "expo-router";
+﻿import { useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { DatePickerField } from "@/core/components/DatePickerField";
@@ -98,7 +98,7 @@ export function PantryItemScreen() {
     try {
       setBusy(true);
       await deletePantryItem(barcode);
-      router.replace("/pantry");
+      replaceWithRoute({ pathname: "/pantry" });
     } catch {
       setMessage("Nie udało się usunąć produktu ze spiżarni.");
       setBusy(false);
@@ -148,18 +148,10 @@ export function PantryItemScreen() {
     setDepletedPromptBarcodes([]);
     setItem(null);
     setMessage("Zużyty produkt usunięto ze spiżarni.");
-    router.replace("/pantry");
-  }
-
-  function goBack() {
-    if (router.canGoBack()) {
-      router.back();
-      return;
-    }
     replaceWithRoute({ pathname: "/pantry", params: { ...(returnType ? { type: returnType } : {}), ...(returnLocation ? { location: returnLocation } : {}) } });
   }
 
-  return <ModuleScreen title="Produkt" onBack={goBack}>
+  return <ModuleScreen title="Produkt">
     <AddDepletedPrompt products={shoppingPromptItems} onClose={() => { setShoppingPromptItems([]); setDepletedPromptBarcodes([]); }} onDeclined={declineShoppingPrompt} onAdded={() => setMessage("Produkt dodano do listy zakupów.")} />
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
       {!item ? <Text style={styles.loading}>{message}</Text> : <View style={styles.card}>

@@ -9,6 +9,15 @@ vi.mock("expo-router", () => ({
 }));
 
 type HistoryEntry = { state: unknown; url: string };
+const GUARD_STATE_KEY = "__smartPantryBackGuard";
+
+function isGuardEntry(entry: HistoryEntry) {
+  return Boolean(entry.state && typeof entry.state === "object" && (entry.state as Record<string, unknown>)[GUARD_STATE_KEY]);
+}
+
+function nonGuardEntries(entries: HistoryEntry[]) {
+  return entries.filter((entry) => !isGuardEntry(entry));
+}
 
 function installWindow(url = "/scanner") {
   const entries: HistoryEntry[] = [{ state: {}, url }];
@@ -55,15 +64,17 @@ describe("navigationManager", () => {
     vi.clearAllMocks();
   });
 
-  it("replaces the initial route state without adding history entries", async () => {
+  it("replaces the initial route state and arms one Android back guard", async () => {
     const { entries, history } = installWindow("/scanner");
     const { deriveNavigationState, replaceNavigationState } = await import("./navigationManager");
 
     replaceNavigationState(deriveNavigationState("/scanner", {}, "/scanner"));
 
-    expect(entries).toHaveLength(1);
+    expect(entries).toHaveLength(2);
+    expect(nonGuardEntries(entries)).toHaveLength(1);
+    expect(isGuardEntry(entries[1])).toBe(true);
     expect(history.replaceState).toHaveBeenCalledTimes(1);
-    expect(history.pushState).not.toHaveBeenCalled();
+    expect(history.pushState).toHaveBeenCalledTimes(1);
   });
 
   it("keeps navigation snapshots referentially stable until state changes", async () => {
@@ -84,11 +95,11 @@ describe("navigationManager", () => {
     replaceNavigationState(deriveNavigationState("/scanner", {}, "/scanner"));
     registerNavigationLayer("scanner-layer", { kind: "scanner", name: "scanner-camera", onBack });
 
-    expect(entries).toHaveLength(2);
-    expect(entries[1].url).toBe("/scanner#smart-pantry-layer=scanner-layer");
+    expect(entries).toHaveLength(4);
+    expect(nonGuardEntries(entries).map((entry) => entry.url)).toEqual(["/scanner", "/scanner#smart-pantry-layer=scanner-layer"]);
     expect(getCurrentNavigationState()?.scanner).toBe(true);
 
-    handleSystemBackState(entries[0].state);
+    handleSystemBackState(entries[2].state);
 
     expect(onBack).toHaveBeenCalledTimes(1);
     expect(getCurrentNavigationState()?.scanner).toBe(false);
@@ -104,18 +115,20 @@ describe("navigationManager", () => {
     registerNavigationLayer("scanner-layer", { kind: "scanner", name: "scanner-camera", onBack });
     registerNavigationLayer("scanner-layer", { kind: "scanner", name: "scanner-camera", onBack });
 
-    expect(entries).toHaveLength(2);
+    expect(nonGuardEntries(entries)).toHaveLength(2);
   });
 
-  it("pops the layer history entry when a layer is closed manually", async () => {
+  it("closes a layer manually without calling browser history back", async () => {
     const { history } = installWindow("/scanner");
-    const { deriveNavigationState, registerNavigationLayer, replaceNavigationState, unregisterNavigationLayer } = await import("./navigationManager");
+    const { deriveNavigationState, getCurrentNavigationState, registerNavigationLayer, replaceNavigationState, unregisterNavigationLayer } = await import("./navigationManager");
 
     replaceNavigationState(deriveNavigationState("/scanner", {}, "/scanner"));
     registerNavigationLayer("scanner-layer", { kind: "scanner", name: "scanner-camera", onBack: vi.fn() });
     unregisterNavigationLayer("scanner-layer");
 
-    expect(history.go).toHaveBeenCalledWith(-1);
+    expect(history.go).not.toHaveBeenCalled();
+    expect(getCurrentNavigationState()?.layerId).toBeNull();
+    expect(getCurrentNavigationState()?.scanner).toBe(false);
   });
 
   it("restores the previous step inside the same layer before closing it", async () => {
@@ -127,16 +140,16 @@ describe("navigationManager", () => {
     openNavigationLayer("meal-layer", { kind: "modal", name: "meal-creator", onBack }, { modal: "meal-creator", mode: "meal-type" });
     updateNavigationState({ mode: "meal-products" }, { push: true });
 
-    expect(entries).toHaveLength(3);
+    expect(nonGuardEntries(entries)).toHaveLength(3);
     expect(getCurrentNavigationState()?.mode).toBe("meal-products");
 
-    handleSystemBackState(entries[1].state);
+    handleSystemBackState(entries[4].state);
 
     expect(onBack).not.toHaveBeenCalled();
     expect(getCurrentNavigationState()?.layerId).toBe("meal-layer");
     expect(getCurrentNavigationState()?.mode).toBe("meal-type");
 
-    handleSystemBackState(entries[0].state);
+    handleSystemBackState(entries[2].state);
 
     expect(onBack).toHaveBeenCalledTimes(1);
     expect(getCurrentNavigationState()?.layerId).toBeNull();
@@ -150,16 +163,18 @@ describe("navigationManager", () => {
     openNavigationLayer("saved-product", { kind: "modal", name: "saved-product" }, { modal: "saved-product", mode: "saved-details", selectedId: "590" });
     openNavigationLayer("location-picker", { kind: "modal", name: "location-picker" }, { modal: "location-picker" });
 
-    expect(entries[0].url).toBe("/saved");
-    expect(entries[1].url).toBe("/saved#smart-pantry-layer=saved-product");
-    expect(entries[2].url).toBe("/saved#smart-pantry-layer=location-picker");
+    expect(nonGuardEntries(entries).map((entry) => entry.url)).toEqual([
+      "/saved",
+      "/saved#smart-pantry-layer=saved-product",
+      "/saved#smart-pantry-layer=location-picker"
+    ]);
     expect(getCurrentNavigationState()?.layerId).toBe("location-picker");
     expect(getCurrentNavigationState()?.selectedId).toBe("590");
     expect(getCurrentNavigationState()?.mode).toBe("saved-details");
     expect(isNavigationLayerVisible("saved-product")).toBe(true);
     expect(isNavigationLayerVisible("location-picker")).toBe(true);
 
-    handleSystemBackState(entries[1].state);
+    handleSystemBackState(entries[4].state);
 
     expect(getCurrentNavigationState()?.layerId).toBe("saved-product");
     expect(getCurrentNavigationState()?.selectedId).toBe("590");
@@ -175,12 +190,11 @@ describe("navigationManager", () => {
     replaceNavigationState(deriveNavigationState("/saved", {}, "/saved"));
     openNavigationLayer("saved-product", { kind: "modal", name: "saved-product", onBack }, { modal: "saved-product", mode: "saved-details", selectedId: "590" });
 
-    expect(entries).toHaveLength(2);
-    expect(entries[0].url).toBe("/saved");
-    expect(entries[1].url).toBe("/saved#smart-pantry-layer=saved-product");
+    expect(nonGuardEntries(entries)).toHaveLength(2);
+    expect(nonGuardEntries(entries).map((entry) => entry.url)).toEqual(["/saved", "/saved#smart-pantry-layer=saved-product"]);
     expect(getCurrentNavigationState()?.selectedId).toBe("590");
 
-    const handled = handleSystemBackState(entries[0].state);
+    const handled = handleSystemBackState(entries[2].state);
 
     expect(handled).toBe(true);
     expect(onBack).toHaveBeenCalledTimes(1);
@@ -196,7 +210,7 @@ describe("navigationManager", () => {
     replaceNavigationState(deriveNavigationState("/saved", {}, "/saved#smart-pantry-layer=old-modal"));
 
     expect(getCurrentNavigationState()?.url).toBe("/saved");
-    expect(entries[0].url).toBe("/saved");
+    expect(nonGuardEntries(entries)[0].url).toBe("/saved");
   });
 
   it("cleans hidden layer history when the browser jumps back several entries", async () => {
@@ -207,7 +221,7 @@ describe("navigationManager", () => {
     openNavigationLayer("saved-product", { kind: "modal", name: "saved-product" }, { modal: "saved-product", mode: "saved-details", selectedId: "590" });
     updateNavigationState({ mode: "saved-edit" }, { push: true });
 
-    expect(entries).toHaveLength(3);
+    expect(nonGuardEntries(entries)).toHaveLength(3);
     expect(isNavigationLayerVisible("saved-product")).toBe(true);
 
     handleSystemBackState(entries[0].state);
@@ -217,9 +231,9 @@ describe("navigationManager", () => {
     expect(isNavigationLayerVisible("saved-product")).toBe(false);
   });
 
-  it("closes all history entries belonging to the same layer", async () => {
+  it("closes all in-app states belonging to the same layer", async () => {
     const { history } = installWindow("/meals");
-    const { closeNavigationLayer, deriveNavigationState, openNavigationLayer, replaceNavigationState, updateNavigationState } = await import("./navigationManager");
+    const { closeNavigationLayer, deriveNavigationState, getCurrentNavigationState, openNavigationLayer, replaceNavigationState, updateNavigationState } = await import("./navigationManager");
 
     replaceNavigationState(deriveNavigationState("/meals", {}, "/meals"));
     openNavigationLayer("meal-layer", { kind: "modal", name: "meal-creator" }, { modal: "meal-creator", mode: "meal-type" });
@@ -227,6 +241,7 @@ describe("navigationManager", () => {
 
     closeNavigationLayer("meal-layer");
 
-    expect(history.go).toHaveBeenCalledWith(-2);
+    expect(history.go).not.toHaveBeenCalled();
+    expect(getCurrentNavigationState()?.layerId).toBeNull();
   });
 });

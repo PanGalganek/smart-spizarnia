@@ -1,17 +1,19 @@
-import { Redirect, router } from "expo-router";
+import { Redirect } from "expo-router";
 import { PropsWithChildren } from "react";
 import { ActivityIndicator, Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
 import { useAuth } from "@/core/auth/AuthProvider";
+import { useAppNavigation } from "@/core/navigation/useAppNavigation";
 import { colors } from "@/core/theme";
 
 export function ModuleScreen({ title, children, onBack }: PropsWithChildren<{ title: string; onBack?: () => void }>) {
   const { user, loading, isActive } = useAuth();
+  const appNavigation = useAppNavigation();
   if (loading) return <View style={styles.loading}><ActivityIndicator color={colors.primary} /></View>;
   if (!user || !isActive) return <Redirect href="/login" />;
   return (
     <SafeAreaView style={styles.page}>
       <View style={styles.header}>
-        <Pressable onPress={onBack ?? (() => router.back())} style={styles.back}>
+        <Pressable onPress={onBack ?? appNavigation.goBack} style={styles.back}>
           <Text style={styles.backText}>Wstecz</Text>
         </Pressable>
         <Text style={styles.title}>{title}</Text>
