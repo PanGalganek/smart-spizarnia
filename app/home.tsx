@@ -12,6 +12,8 @@ const tiles = [
   { title: "Lista zakupów", subtitle: "Produkty do kupienia", icon: "cart-outline", route: "/shopping", color: "#AD5A00" }
 ] as const;
 
+const APP_VERSION = "0.11.3";
+
 export default function HomeScreen() {
   const { user, signOut } = useAuth();
   const { width } = useWindowDimensions();
@@ -21,7 +23,7 @@ export default function HomeScreen() {
   return (
     <ScrollView style={styles.page} contentContainerStyle={[styles.content, compact && styles.compactContent]}>
       <View style={styles.header}>
-        <View style={styles.heading}><Text style={[styles.title, compact && styles.compactTitle]}>Smart Spiżarnia</Text><Text style={styles.subtitle}>Co chcesz dziś zrobić? · wersja 0.9.6</Text></View>
+        <View style={styles.heading}><Text style={[styles.title, compact && styles.compactTitle]}>Smart Spiżarnia</Text><Text style={styles.subtitle}>Co chcesz dziś zrobić? · wersja {APP_VERSION}</Text></View>
         <Pressable onPress={signOut} style={styles.logout}><Text>Wyloguj</Text></Pressable>
       </View>
       <View style={styles.grid}>

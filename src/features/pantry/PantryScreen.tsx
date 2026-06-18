@@ -33,7 +33,7 @@ export function PantryScreen() {
 
   const refresh = useCallback(async () => {
     try {
-      const [pantryItems, locations] = await Promise.all([listPantry(true), listLocations()]);
+      const [pantryItems, locations] = await Promise.all([listPantry(), listLocations()]);
       setItems(pantryItems);
       setConfiguredLocations(locations);
       setMessage("");
