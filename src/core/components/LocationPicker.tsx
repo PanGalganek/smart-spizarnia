@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useBrowserBackLayer } from "@/core/hooks/useBrowserBackLayer";
 import { colors } from "@/core/theme";
 import { ProductType } from "@/domain/product";
 import { displayLocationName, listLocations } from "@/services/locationRepository";
@@ -10,6 +11,7 @@ export function LocationPicker({ value, onChange, label = "Lokalizacja", product
   const displayedValue = displayLocationName(value);
   const [locations, setLocations] = useState<string[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
+  useBrowserBackLayer(pickerOpen, () => setPickerOpen(false));
 
   useEffect(() => { void listLocations(productType).then(setLocations); }, [productType]);
 

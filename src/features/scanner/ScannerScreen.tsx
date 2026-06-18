@@ -5,6 +5,7 @@ import { ModuleScreen } from "@/core/components/ModuleScreen";
 import { DatePickerField } from "@/core/components/DatePickerField";
 import { ConsumerPicker } from "@/core/components/ConsumerPicker";
 import { LocationPicker } from "@/core/components/LocationPicker";
+import { useBrowserBackLayer } from "@/core/hooks/useBrowserBackLayer";
 import { colors } from "@/core/theme";
 import { ChemicalLevel, Product, ProductType, Unit } from "@/domain/product";
 import { Consumer } from "@/domain/meal";
@@ -42,6 +43,8 @@ export function ScannerScreen() {
   const [depletedProducts, setDepletedProducts] = useState<Product[]>([]);
   const [consumer, setConsumer] = useState<Consumer | null>(null);
   const [chemicalLevel, setChemicalLevel] = useState<ChemicalLevel>("full");
+  useBrowserBackLayer(cameraOpen, () => setCameraOpen(false));
+  useBrowserBackLayer(manualOpen, () => setManualOpen(false));
 
   useEffect(() => {
     if (params.autoScan === "1") setCameraOpen(true);

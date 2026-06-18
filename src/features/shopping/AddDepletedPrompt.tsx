@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { useBrowserBackLayer } from "@/core/hooks/useBrowserBackLayer";
 import { colors } from "@/core/theme";
 import { Product } from "@/domain/product";
 import { addProductToShoppingList } from "@/services/shoppingRepository";
@@ -7,6 +8,7 @@ import { addProductToShoppingList } from "@/services/shoppingRepository";
 export function AddDepletedPrompt({ products, onClose, onAdded, onDeclined }: { products: Product[]; onClose: () => void; onAdded?: () => void; onDeclined?: () => void | Promise<void> }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  useBrowserBackLayer(products.length > 0, onClose);
   if (!products.length) return null;
   const names = products.map((product) => product.name).join(", ");
 

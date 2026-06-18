@@ -2,6 +2,7 @@ import { router, useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
+import { useBrowserBackStack } from "@/core/hooks/useBrowserBackLayer";
 import { colors } from "@/core/theme";
 import { ShoppingItem } from "@/domain/shopping";
 import { Unit } from "@/domain/product";
@@ -20,6 +21,10 @@ export function ShoppingScreen() {
   const [purchaseUnit, setPurchaseUnit] = useState<Unit>("szt");
   const [purchaseError, setPurchaseError] = useState("");
   const [purchaseBusy, setPurchaseBusy] = useState(false);
+  useBrowserBackStack(selected ? purchaseStepDepth(purchaseStep) : 0, () => {
+    if (purchaseStep === "same-product") setSelected(null);
+    else setPurchaseStep("same-product");
+  });
   const active = useMemo(() => items.filter((item) => item.status === "active"), [items]);
   const purchased = useMemo(() => items.filter((item) => item.status === "purchased"), [items]);
 
@@ -145,6 +150,10 @@ function sourceLabel(item: ShoppingItem) {
   if (item.source === "depleted") return "Dodano po zużyciu produktu";
   if (item.source === "saved") return item.productBarcode ? `Zapisany produkt · ${item.productBarcode}` : "Zapisany produkt";
   return "Wpisano ręcznie";
+}
+
+function purchaseStepDepth(step: PurchaseStep) {
+  return step === "same-product" ? 1 : 2;
 }
 
 const styles = StyleSheet.create({

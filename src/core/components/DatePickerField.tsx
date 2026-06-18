@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { useBrowserBackLayer } from "@/core/hooks/useBrowserBackLayer";
 import { colors } from "@/core/theme";
 
 type Props = { value: string; onChange: (value: string) => void; label?: string };
@@ -10,6 +11,7 @@ export function DatePickerField({ value, onChange, label = "Data ważności (opc
   const [open, setOpen] = useState(false);
   const [visibleMonth, setVisibleMonth] = useState(() => selected ?? new Date());
   const days = useMemo(() => calendarDays(visibleMonth), [visibleMonth]);
+  useBrowserBackLayer(open, () => setOpen(false));
 
   function show() {
     setVisibleMonth(selected ?? new Date());

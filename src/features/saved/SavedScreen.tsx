@@ -6,6 +6,7 @@ import { ModuleScreen } from "@/core/components/ModuleScreen";
 import { ConsumerPicker } from "@/core/components/ConsumerPicker";
 import { DatePickerField } from "@/core/components/DatePickerField";
 import { LocationPicker } from "@/core/components/LocationPicker";
+import { useBrowserBackStack } from "@/core/hooks/useBrowserBackLayer";
 import { colors } from "@/core/theme";
 import { Consumer } from "@/domain/meal";
 import { ChemicalLevel, Product, ProductType, Unit } from "@/domain/product";
@@ -47,6 +48,14 @@ export function SavedScreen() {
     salt: "",
     packageAmount: "",
     quickUseAmount: ""
+  });
+  useBrowserBackStack(selected ? (actionMode === "details" ? 1 : 2) : 0, () => {
+    if (actionMode !== "details") {
+      setActionMode("details");
+      setError("");
+    } else {
+      setSelected(null);
+    }
   });
 
   const refresh = useCallback(async () => {

@@ -2,6 +2,7 @@ import { useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { FlatList, GestureResponderEvent, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
+import { useBrowserBackStack } from "@/core/hooks/useBrowserBackLayer";
 import { colors } from "@/core/theme";
 import { Consumer, DailySummary, Meal, MealIngredient, MealType } from "@/domain/meal";
 import { Nutrients, PantryItem } from "@/domain/product";
@@ -45,6 +46,10 @@ export function MealsScreen() {
   const [consumers, setConsumers] = useState<Consumer[]>([]);
   const [consumer, setConsumer] = useState<Consumer | null>(null);
   const [newConsumer, setNewConsumer] = useState("");
+  useBrowserBackStack(creatorOpen ? stepDepth(step) : 0, () => {
+    if (step === "type") setCreatorOpen(false);
+    else setStep(step === "amount" ? "products" : step === "review" ? "products" : "type");
+  });
 
   const refresh = useCallback(async () => {
     try {
@@ -271,6 +276,7 @@ function parseAmount(value?: string) { const number = Number((value ?? "").repla
 function parseServings(value?: string) { const number = Number(value); return Number.isInteger(number) && number >= 1 && number <= 100 ? number : 0; }
 function stepLabel(step: Step) { return step === "type" ? "KROK 1 Z 3" : step === "review" ? "KROK 3 Z 3" : "KROK 2 Z 3"; }
 function stepTitle(step: Step, item: PantryItem | null) { if (step === "type") return "Jaki to posiłek?"; if (step === "products") return "Wybierz produkty"; if (step === "amount") return `Podaj ilość: ${item?.product.name ?? "produkt"}`; return "Sprawdź posiłek"; }
+function stepDepth(step: Step) { if (step === "type") return 1; if (step === "products") return 2; return 3; }
 function formatToday() { return new Date().toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long" }); }
 
 const styles = StyleSheet.create({

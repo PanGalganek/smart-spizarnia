@@ -4,6 +4,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { DatePickerField } from "@/core/components/DatePickerField";
 import { LocationPicker } from "@/core/components/LocationPicker";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
+import { useBrowserBackLayer } from "@/core/hooks/useBrowserBackLayer";
 import { colors } from "@/core/theme";
 import { ChemicalLevel, PantryItem, Unit } from "@/domain/product";
 import { AddDepletedPrompt } from "@/features/shopping/AddDepletedPrompt";
@@ -34,6 +35,10 @@ export function PantryItemScreen() {
   const chemical = item ? isChemical(item.product) : false;
   const quickAmount = item?.product.quickUseAmount ?? (item?.product.packageAmount ? 1 : undefined);
   const quickUnit = item?.product.quickUseUnit ?? (item?.product.packageAmount ? "szt" : undefined);
+  useBrowserBackLayer(consumeOpen || confirmDelete, () => {
+    if (consumeOpen) setConsumeOpen(false);
+    else setConfirmDelete(false);
+  });
 
   useEffect(() => {
     if (!barcode) return setMessage("Brak kodu produktu.");

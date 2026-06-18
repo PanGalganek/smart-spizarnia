@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useAuth } from "@/core/auth/AuthProvider";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
+import { useBrowserBackStack } from "@/core/hooks/useBrowserBackLayer";
 import { colors } from "@/core/theme";
 import { accountStatusLabel, UserProfile } from "@/domain/userProfile";
 import { deleteUserProfileAndData, getUserProfilePreview, listUserProfiles, setUserStatus, UserProfilePreview } from "@/services/adminRepository";
@@ -16,6 +17,10 @@ export function AdminScreen() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  useBrowserBackStack(selected ? (confirmDelete ? 2 : 1) : 0, () => {
+    if (confirmDelete) setConfirmDelete(false);
+    else setSelected(null);
+  });
 
   const refresh = useCallback(async () => {
     if (!isAdmin) return;

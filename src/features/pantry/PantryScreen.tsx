@@ -1,9 +1,10 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useFocusEffect, useLocalSearchParams, useNavigation } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { formatPolishDate } from "@/core/components/DatePickerField";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
+import { useBrowserBackLayer } from "@/core/hooks/useBrowserBackLayer";
 import { colors } from "@/core/theme";
 import { PantryItem, PantryPackage, ProductType } from "@/domain/product";
 import { AddDepletedPrompt } from "@/features/shopping/AddDepletedPrompt";
@@ -21,8 +22,6 @@ const UNASSIGNED = "__unassigned__";
 export function PantryScreen() {
   const navigation = useNavigation();
   const params = useLocalSearchParams<{ location?: string; type?: ProductType }>();
-  const selectedLocationRef = useRef<string | null>(null);
-  const pushedLocationHistoryRef = useRef(false);
   const [activeType, setActiveType] = useState<ProductType>("food");
   const [items, setItems] = useState<PantryItem[]>([]);
   const [configuredLocations, setConfiguredLocations] = useState<string[]>([]);
@@ -36,6 +35,12 @@ export function PantryScreen() {
   const [depletedPromptBarcodes, setDepletedPromptBarcodes] = useState<string[]>([]);
   const [packagePickerItem, setPackagePickerItem] = useState<PantryItem | null>(null);
   const [quickMessage, setQuickMessage] = useState("");
+  useBrowserBackLayer(!!selectedLocation, () => {
+    setSelectedLocation(null);
+    setQuery("");
+  });
+  useBrowserBackLayer(managerOpen, () => setManagerOpen(false));
+  useBrowserBackLayer(!!packagePickerItem, () => setPackagePickerItem(null));
 
   const refresh = useCallback(async () => {
     try {
@@ -50,23 +55,6 @@ export function PantryScreen() {
   useEffect(() => {
     if (params.type === "food" || params.type === "household_chemical") setActiveType(params.type);
   }, [params.type]);
-
-  useEffect(() => {
-    selectedLocationRef.current = selectedLocation;
-  }, [selectedLocation]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const onPopState = () => {
-      if (!selectedLocationRef.current) return;
-      selectedLocationRef.current = null;
-      pushedLocationHistoryRef.current = false;
-      setSelectedLocation(null);
-      setQuery("");
-    };
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
-  }, []);
 
   function changeType(type: ProductType) {
     setActiveType(type);
@@ -102,24 +90,14 @@ export function PantryScreen() {
 
   function openLocation(location: string) {
     setQuery("");
-    selectedLocationRef.current = location;
     setSelectedLocation(location);
-    if (typeof window !== "undefined") {
-      window.history.pushState({ smartPantrySubscreen: "location" }, "", window.location.href);
-      pushedLocationHistoryRef.current = true;
-    }
   }
 
   function goBack() {
     if (managerOpen) return setManagerOpen(false);
     if (selectedLocation) {
-      selectedLocationRef.current = null;
       setSelectedLocation(null);
       setQuery("");
-      if (typeof window !== "undefined" && pushedLocationHistoryRef.current) {
-        pushedLocationHistoryRef.current = false;
-        window.history.back();
-      }
       return;
     }
     router.back();
