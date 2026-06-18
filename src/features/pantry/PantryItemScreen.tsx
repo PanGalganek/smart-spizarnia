@@ -10,6 +10,7 @@ import { AddDepletedPrompt } from "@/features/shopping/AddDepletedPrompt";
 import { getExpiryWarning } from "@/services/expiry";
 import { changePantryQuantity, deletePantryItem, getPantryItem, savePantryItem } from "@/services/inventoryRepository";
 import { packageSummary } from "@/services/pantryPackages";
+import { capConsumptionToAvailable } from "@/services/pantryUnits";
 import { shouldAskToBuyAgain } from "@/services/shoppingPrompt";
 
 export function PantryItemScreen() {
@@ -86,13 +87,14 @@ export function PantryItemScreen() {
     setConsumeOpen(true);
   }
 
-  async function consumeSelected(amount: number, unit: Unit) {
+  async function consumeSelected(amount: number, unit: Unit, capToAvailable = false) {
     if (!item) return;
     try {
       setBusy(true);
       setMessage("");
       if (!Number.isFinite(amount) || amount <= 0) throw new Error("Wpisz prawidłową ilość.");
-      await changePantryQuantity(item.product, -amount, unit);
+      const consumption = capToAvailable ? capConsumptionToAvailable(item.product, item.quantity, item.unit, amount, unit) : { amount, unit, capped: false };
+      await changePantryQuantity(item.product, -consumption.amount, consumption.unit);
       const refreshed = await getPantryItem(item.barcode);
       if (refreshed) {
         itemRef.current = refreshed;
@@ -103,7 +105,7 @@ export function PantryItemScreen() {
         }
       }
       setConsumeOpen(false);
-      setMessage(`Zużyto ${amount} ${unit}. Pozostało: ${refreshed?.quantity ?? 0} ${refreshed?.unit ?? item.unit}.`);
+      setMessage(consumption.capped ? `Zużyto resztę: ${consumption.amount} ${consumption.unit}.` : `Zużyto ${consumption.amount} ${consumption.unit}. Pozostało: ${refreshed?.quantity ?? 0} ${refreshed?.unit ?? item.unit}.`);
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : "Nie udało się zużyć produktu.");
     } finally {
@@ -140,7 +142,7 @@ export function PantryItemScreen() {
         <LocationPicker value={location} onChange={changeLocation} />
         {!!message && <Text style={message.startsWith("Nie") ? styles.error : styles.success}>{message}</Text>}
         {item.quantity > 0 && <View style={styles.consumeActions}>
-          {quickAmount && quickUnit && <Pressable disabled={busy} onPress={() => void consumeSelected(quickAmount, quickUnit)} style={[styles.quickButton, busy && styles.disabled]}><Text style={styles.white}>Szybko zużyj: {quickAmount} {quickUnit}</Text></Pressable>}
+          {quickAmount && quickUnit && <Pressable disabled={busy} onPress={() => void consumeSelected(quickAmount, quickUnit, true)} style={[styles.quickButton, busy && styles.disabled]}><Text style={styles.white}>Szybko zużyj: {quickAmount} {quickUnit}</Text></Pressable>}
           <Pressable disabled={busy} onPress={openConsumption} style={[styles.consumeButton, busy && styles.disabled]}><Text style={styles.white}>Zużyj inną ilość</Text></Pressable>
         </View>}
         <View style={styles.dangerZone}>

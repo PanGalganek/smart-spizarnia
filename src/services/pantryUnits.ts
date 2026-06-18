@@ -22,6 +22,12 @@ export function canUseWholePackage(product: Product) {
   return Boolean(product.packageAmount && product.packageUnit);
 }
 
+export function capConsumptionToAvailable(product: Product, availableAmount: number, pantryUnit: Unit, requestedAmount: number, requestedUnit: Unit) {
+  const requestedInPantryUnit = convertPantryAmount(product, requestedAmount, requestedUnit, pantryUnit);
+  if (requestedInPantryUnit > availableAmount) return { amount: availableAmount, unit: pantryUnit, capped: true };
+  return { amount: requestedAmount, unit: requestedUnit, capped: false };
+}
+
 function round(value: number) {
   return Math.round(value * 100) / 100;
 }

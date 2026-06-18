@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Product } from "@/domain/product";
-import { convertPantryAmount, preferredPantryUnit } from "@/services/pantryUnits";
+import { capConsumptionToAvailable, convertPantryAmount, preferredPantryUnit } from "@/services/pantryUnits";
 
 const cream: Product = {
   barcode: "1", name: "Śmietana", packageAmount: 200, packageUnit: "ml", defaultUnit: "ml",
@@ -19,5 +19,8 @@ describe("przeliczanie opakowań w spiżarni", () => {
 
   it("blokuje przeliczenie bez znanej gramatury", () => {
     expect(() => convertPantryAmount({ ...cream, packageAmount: undefined }, 1, "szt", "ml")).toThrow("Nie można przeliczyć");
+  });
+  it("przycina szybkie zużycie do pozostałej ilości produktu", () => {
+    expect(capConsumptionToAvailable(cream, 60, "ml", 80, "ml")).toEqual({ amount: 60, unit: "ml", capped: true });
   });
 });

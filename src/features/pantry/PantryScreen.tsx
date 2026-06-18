@@ -11,6 +11,7 @@ import { getExpiryWarning } from "@/services/expiry";
 import { addLocation, displayLocationName, listLocations, removeLocation } from "@/services/locationRepository";
 import { changePantryQuantity, deletePantryItem, listPantry } from "@/services/inventoryRepository";
 import { packageSummary } from "@/services/pantryPackages";
+import { capConsumptionToAvailable } from "@/services/pantryUnits";
 import { shouldAskToBuyAgain } from "@/services/shoppingPrompt";
 import { stockPercentage } from "@/services/stockLevel";
 
@@ -106,14 +107,17 @@ export function PantryScreen() {
   }
 
   async function quickConsume(item: PantryItem, packageId?: string) {
-    const amount = item.product.quickUseAmount ?? (item.product.packageAmount ? 1 : 0);
-    const unit = item.product.quickUseUnit ?? (item.product.packageAmount ? "szt" : item.unit);
+    const requestedAmount = item.product.quickUseAmount ?? (item.product.packageAmount ? 1 : 0);
+    const requestedUnit = item.product.quickUseUnit ?? (item.product.packageAmount ? "szt" : item.unit);
+    const cappedConsumption = requestedAmount && requestedUnit ? capConsumptionToAvailable(item.product, item.quantity, item.unit, requestedAmount, requestedUnit) : null;
+    const amount = cappedConsumption?.amount ?? 0;
+    const unit = cappedConsumption?.unit ?? item.unit;
     if (!amount || !unit) return setQuickMessage("Najpierw ustaw szybkie zużycie w kafelku Zapisane.");
     try {
       const updated = await changePantryQuantity(item.product, -amount, unit, { packageId });
-      setItems((current) => current.map((entry) => entry.barcode === updated.barcode ? updated : entry));
+      setItems((current) => updated.quantity <= 0 ? current.filter((entry) => entry.barcode !== updated.barcode) : current.map((entry) => entry.barcode === updated.barcode ? updated : entry));
       setPackagePickerItem(null);
-      setQuickMessage(`Zużyto ${amount} ${unit}: ${item.product.name}.`);
+      setQuickMessage(cappedConsumption?.capped ? `Zużyto resztę: ${amount} ${unit}.` : `Zużyto ${amount} ${unit}: ${item.product.name}.`);
       if (shouldAskToBuyAgain(item, updated)) {
         setShoppingPromptItems([updated.product]);
         setDepletedPromptBarcodes(updated.quantity <= 0 ? [updated.barcode] : []);
