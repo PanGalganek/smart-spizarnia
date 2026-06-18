@@ -66,6 +66,16 @@ describe("navigationManager", () => {
     expect(history.pushState).not.toHaveBeenCalled();
   });
 
+  it("keeps navigation snapshots referentially stable until state changes", async () => {
+    installWindow("/scanner");
+    const { deriveNavigationState, getNavigationSnapshot, replaceNavigationState } = await import("./navigationManager");
+
+    expect(getNavigationSnapshot()).toBe(getNavigationSnapshot());
+
+    replaceNavigationState(deriveNavigationState("/scanner", {}, "/scanner"));
+    expect(getNavigationSnapshot()).toBe(getNavigationSnapshot());
+  });
+
   it("pushes a scanner layer and closes it from system popstate", async () => {
     const { entries } = installWindow("/scanner");
     const { deriveNavigationState, handleSystemBackState, registerNavigationLayer, replaceNavigationState, getCurrentNavigationState } = await import("./navigationManager");

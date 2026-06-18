@@ -36,6 +36,7 @@ const HISTORY_STATE_KEY = "__smartPantryNavigation";
 const layers = new Map<string, LayerDescriptor>();
 const appStack: AppNavigationState[] = [];
 const listeners = new Set<() => void>();
+const fallbackNavigationState = baseState("root", "/", "");
 
 let currentState: AppNavigationState | null = null;
 let layerCounter = 0;
@@ -71,7 +72,7 @@ export function subscribeNavigation(listener: () => void) {
 }
 
 export function getNavigationSnapshot() {
-  return currentState ? cloneState(currentState) : baseState("root", "/", "");
+  return currentState ?? fallbackNavigationState;
 }
 
 export function replaceNavigationState(state: AppNavigationState) {
