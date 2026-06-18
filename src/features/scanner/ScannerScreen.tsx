@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
 import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
@@ -6,25 +6,27 @@ import { DatePickerField } from "@/core/components/DatePickerField";
 import { ConsumerPicker } from "@/core/components/ConsumerPicker";
 import { LocationPicker } from "@/core/components/LocationPicker";
 import { colors } from "@/core/theme";
-import { Product, Unit } from "@/domain/product";
+import { ChemicalLevel, Product, ProductType, Unit } from "@/domain/product";
 import { Consumer } from "@/domain/meal";
 import { ManualProductForm } from "@/features/scanner/ManualProductForm";
 import { BarcodeCamera } from "@/features/scanner/BarcodeCamera";
 import { AddDepletedPrompt } from "@/features/shopping/AddDepletedPrompt";
 import { getProductByBarcode } from "@/services/openFoodFacts";
-import { changePantryQuantity, createUntrackedMeal, getPantryItem, getSavedProduct, saveProduct } from "@/services/inventoryRepository";
+import { changePantryQuantity, createUntrackedMeal, getPantryItem, getSavedProduct, saveChemicalPantryItem, saveProduct } from "@/services/inventoryRepository";
 import { createUntrackedMealIngredient } from "@/services/nutrition";
 import { canUseWholePackage, convertPantryAmount, preferredPantryUnit } from "@/services/pantryUnits";
 import { shouldAskToBuyAgain } from "@/services/shoppingPrompt";
+import { chemicalLevelLabel, chemicalLevels, isChemical, productTypes, withProductType } from "@/services/productTypes";
 import { searchUsdaFoods, UsdaFoodResult } from "@/services/usdaFoodData";
 
 export function ScannerScreen() {
   const params = useLocalSearchParams<{ autoScan?: string }>();
+  const [activeType, setActiveType] = useState<ProductType>("food");
   const [barcode, setBarcode] = useState("");
   const [product, setProduct] = useState<Product | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
-  const [message, setMessage] = useState("Zeskanuj kod lub wpisz go ręcznie.");
+  const [message, setMessage] = useState("Zeskanuj kod lub wpisz go rÄ™cznie.");
   const [stockAmount, setStockAmount] = useState("1");
   const [stockUnit, setStockUnit] = useState<Unit>("szt");
   const [expiryDate, setExpiryDate] = useState("");
@@ -39,6 +41,7 @@ export function ScannerScreen() {
   const [usdaMessage, setUsdaMessage] = useState("");
   const [depletedProducts, setDepletedProducts] = useState<Product[]>([]);
   const [consumer, setConsumer] = useState<Consumer>({ id: "bartek", name: "Bartek" });
+  const [chemicalLevel, setChemicalLevel] = useState<ChemicalLevel>("full");
 
   useEffect(() => {
     if (params.autoScan === "1") setCameraOpen(true);
@@ -52,8 +55,9 @@ export function ScannerScreen() {
     try {
       const saved = await getSavedProduct(normalized);
       if (saved) {
-        setProduct(saved);
-        setStockUnit(canUseWholePackage(saved) ? "szt" : saved.defaultUnit ?? "szt");
+        const typedSaved = withProductType(saved, activeType);
+        setProduct(typedSaved);
+        setStockUnit(canUseWholePackage(typedSaved) ? "szt" : typedSaved.defaultUnit ?? "szt");
         setStockAmount("1");
         setPackageDates([]);
         setActionMessage("");
@@ -62,17 +66,18 @@ export function ScannerScreen() {
         return;
       }
       const result = await getProductByBarcode(normalized);
-      setProduct(result);
-      if (result) {
-        setStockUnit(canUseWholePackage(result) ? "szt" : result.defaultUnit ?? "szt");
+      const typedResult = result ? withProductType(result, activeType) : null;
+      setProduct(typedResult);
+      if (typedResult) {
+        setStockUnit(canUseWholePackage(typedResult) ? "szt" : typedResult.defaultUnit ?? "szt");
         setStockAmount("1");
         setPackageDates([]);
       }
       setActionMessage("");
       setManualOpen(false);
-      setMessage(result ? "Produkt znaleziony." : "Nie znaleziono tego produktu w bazie Open Food Facts. Możesz dodać go ręcznie.");
+      setMessage(result ? "Produkt znaleziony." : "Nie znaleziono tego produktu w bazie Open Food Facts. MoĹĽesz dodaÄ‡ go rÄ™cznie.");
     } catch {
-      setMessage("Nie udało się połączyć z Open Food Facts.");
+      setMessage("Nie udaĹ‚o siÄ™ poĹ‚Ä…czyÄ‡ z Open Food Facts.");
     }
   }
 
@@ -82,13 +87,13 @@ export function ScannerScreen() {
 
   async function searchByName() {
     const query = foodName.trim();
-    if (!query) return setUsdaMessage("Wpisz nazwę produktu, np. pomidor.");
+    if (!query) return setUsdaMessage("Wpisz nazwÄ™ produktu, np. pomidor.");
     try {
       setUsdaBusy(true); setUsdaMessage("Wyszukiwanie w bazie USDA..."); setUsdaResults([]);
       const results = await searchUsdaFoods(query);
       setUsdaResults(results);
-      setUsdaMessage(results.length ? "Wybierz produkt najbardziej pasujący do Twojego." : "USDA nie znalazło produktu z danymi kalorycznymi.");
-    } catch { setUsdaMessage("Nie udało się połączyć z USDA FoodData Central."); }
+      setUsdaMessage(results.length ? "Wybierz produkt najbardziej pasujÄ…cy do Twojego." : "USDA nie znalazĹ‚o produktu z danymi kalorycznymi.");
+    } catch { setUsdaMessage("Nie udaĹ‚o siÄ™ poĹ‚Ä…czyÄ‡ z USDA FoodData Central."); }
     finally { setUsdaBusy(false); }
   }
 
@@ -99,7 +104,7 @@ export function ScannerScreen() {
     setStockUnit("g");
     setPackageDates([]);
     setUsdaResults([]);
-    setUsdaMessage(`Wybrano: ${result.description}. Podaj ilość i dodaj produkt do spiżarni.`);
+    setUsdaMessage(`Wybrano: ${result.description}. Podaj iloĹ›Ä‡ i dodaj produkt do spiĹĽarni.`);
     setMessage("Produkt bez kodu pobrany z USDA.");
     setActionMessage("");
   }
@@ -116,23 +121,35 @@ export function ScannerScreen() {
     setActionMessage("");
     setActionError(false);
     if (!Number.isFinite(amount) || amount <= 0) {
-      setActionError(true); setActionMessage("Wpisz prawidłową ilość."); return;
+      setActionError(true); setActionMessage("Wpisz prawidĹ‚owÄ… iloĹ›Ä‡."); return;
     }
     if (direction > 0 && !location.trim()) {
-      setActionError(true); setActionMessage("Przed dodaniem wybierz lokalizację. Data ważności jest opcjonalna."); return;
+      setActionError(true); setActionMessage("Przed dodaniem wybierz lokalizacjÄ™. Data waĹĽnoĹ›ci jest opcjonalna."); return;
+    }
+    if (direction > 0 && isChemical(product)) {
+      try {
+        setBusy(true);
+        const updated = await saveChemicalPantryItem(product, chemicalLevel, { location: location.trim() || undefined });
+        setActionMessage(`Dodano ${product.name}. Stan: ${chemicalLevelLabel(updated.chemicalLevel)}.`);
+        setMessage("Produkt chemiczny dodany do spiżarni.");
+      } catch (error) {
+        setActionError(true);
+        setActionMessage(error instanceof Error ? error.message : "Nie udało się dodać produktu chemicznego.");
+      } finally { setBusy(false); }
+      return;
     }
     try {
       setBusy(true);
       const before = direction < 0 ? await getPantryItem(product.barcode) : null;
       const packageExpiryDates = direction > 0 ? buildPackageDates(product, amount, stockUnit, expiryDate, packageDates) : undefined;
       const updated = await changePantryQuantity(product, amount * direction, stockUnit, { expiryDate: expiryDate.trim() || undefined, location: location.trim() || undefined, packageExpiryDates });
-      const operation = direction > 0 ? "Dodano" : "Odjęto";
+      const operation = direction > 0 ? "Dodano" : "OdjÄ™to";
       setActionMessage(`${operation} ${amount} ${stockUnit}. Stan: ${updated.quantity} ${updated.unit}.`);
-      setMessage(direction > 0 ? "Produkt dodany do spiżarni." : "Produkt odjęty ze spiżarni.");
+      setMessage(direction > 0 ? "Produkt dodany do spiĹĽarni." : "Produkt odjÄ™ty ze spiĹĽarni.");
       if (direction < 0 && before && shouldAskToBuyAgain(before, updated)) setDepletedProducts([product]);
     } catch (error) {
       setActionError(true);
-      setActionMessage(error instanceof Error ? error.message : "Nie udało się zmienić stanu.");
+      setActionMessage(error instanceof Error ? error.message : "Nie udaĹ‚o siÄ™ zmieniÄ‡ stanu.");
     } finally { setBusy(false); }
   }
 
@@ -157,26 +174,27 @@ export function ScannerScreen() {
       const nutritionAmount = nutritionUnit === stockUnit ? amount : convertPantryAmount(product, amount, stockUnit, nutritionUnit);
       const ingredient = createUntrackedMealIngredient(product, nutritionAmount, nutritionUnit);
       await saveProduct(product);
-      await createUntrackedMeal(`Przekąska: ${product.name}`, "snack", ingredient, Date.now(), consumer);
-      setActionMessage(`Dodano do bilansu osoby ${consumer.name}: ${amount} ${stockUnit}, ${ingredient.nutrients.energyKcal ?? 0} kcal. Stan spiżarni nie został zmieniony.`);
+      await createUntrackedMeal(`PrzekÄ…ska: ${product.name}`, "snack", ingredient, Date.now(), consumer);
+      setActionMessage(`Dodano do bilansu osoby ${consumer.name}: ${amount} ${stockUnit}, ${ingredient.nutrients.energyKcal ?? 0} kcal. Stan spiĹĽarni nie zostaĹ‚ zmieniony.`);
       setMessage("Produkt zapisany w dzisiejszym bilansie.");
     } catch (error) {
       setActionError(true);
-      setActionMessage(error instanceof Error ? error.message : "Nie udało się zapisać produktu w bilansie.");
+      setActionMessage(error instanceof Error ? error.message : "Nie udaĹ‚o siÄ™ zapisaÄ‡ produktu w bilansie.");
     } finally { setBusy(false); }
   }
 
   return (
     <ModuleScreen title="Skaner">
-      <AddDepletedPrompt products={depletedProducts} onClose={() => setDepletedProducts([])} onAdded={() => setActionMessage("Produkt zużyty i dodany do listy zakupów.")} />
+      <AddDepletedPrompt products={depletedProducts} onClose={() => setDepletedProducts([])} onAdded={() => setActionMessage("Produkt zuĹĽyty i dodany do listy zakupĂłw.")} />
       {manualOpen ? (
         <ManualProductForm
           barcode={barcode}
+          productType={activeType}
           onCancel={() => setManualOpen(false)}
           onSaved={(savedProduct) => {
             setProduct(savedProduct);
             setManualOpen(false);
-            setMessage("Produkt został zapisany ręcznie.");
+            setMessage("Produkt zostaĹ‚ zapisany rÄ™cznie.");
           }}
         />
       ) : cameraOpen ? (
@@ -191,15 +209,16 @@ export function ScannerScreen() {
           showsVerticalScrollIndicator
         >
         <View style={styles.card}>
+          <View style={styles.tabs}>{productTypes.map((item) => <Pressable key={item.type} onPress={() => { setActiveType(item.type); setProduct(null); setActionMessage(""); }} style={[styles.tab, activeType === item.type && styles.tabActive]}><Text style={activeType === item.type ? styles.tabTextActive : styles.tabText}>{item.label}</Text></Pressable>)}</View>
           <View style={styles.row}>
             <TextInput keyboardType="number-pad" value={barcode} onChangeText={setBarcode} placeholder="Kod kreskowy" style={styles.input} />
-            <Pressable onPress={() => void search()} style={styles.button}><Text style={styles.white}>Sprawdź</Text></Pressable>
+            <Pressable onPress={() => void search()} style={styles.button}><Text style={styles.white}>SprawdĹş</Text></Pressable>
             <Pressable onPress={openCamera} style={styles.scan}><Text style={styles.white}>Skanuj</Text></Pressable>
           </View>
           <Text style={styles.message}>{message}</Text>
-          <View style={styles.usdaPanel}>
+          {activeType === "food" && <View style={styles.usdaPanel}>
             <Text style={styles.usdaTitle}>Produkt bez kodu kreskowego</Text>
-            <Text style={styles.usdaHint}>Wpisz np. pomidor, marchew lub jabłko. Dane odżywcze pobierzemy z USDA.</Text>
+            <Text style={styles.usdaHint}>Wpisz np. pomidor, marchew lub jabĹ‚ko. Dane odĹĽywcze pobierzemy z USDA.</Text>
             <View style={styles.row}>
               <TextInput value={foodName} onChangeText={setFoodName} onSubmitEditing={() => void searchByName()} placeholder="Nazwa produktu, np. pomidor" style={styles.input} />
               <Pressable disabled={usdaBusy} onPress={() => void searchByName()} style={[styles.usdaButton, usdaBusy && styles.disabled]}><Text style={styles.white}>{usdaBusy ? "Szukam..." : "Szukaj USDA"}</Text></Pressable>
@@ -209,29 +228,32 @@ export function ScannerScreen() {
               <View style={styles.usdaResultText}><Text style={styles.usdaName}>{result.description}</Text><Text style={styles.muted}>{result.dataType}</Text></View>
               <View style={styles.usdaNutrition}><Text style={styles.usdaKcal}>{result.product.nutrientsPer100g.energyKcal ?? 0} kcal</Text><Text style={styles.muted}>B {result.product.nutrientsPer100g.proteins ?? 0} | W {result.product.nutrientsPer100g.carbohydrates ?? 0} | T {result.product.nutrientsPer100g.fat ?? 0}</Text></View>
             </Pressable>)}
-          </View>
-          {!product && <Pressable onPress={() => setManualOpen(true)} style={styles.manual}><Text style={styles.white}>Dodaj produkt ręcznie</Text></Pressable>}
+          </View>}
+          {!product && <Pressable onPress={() => setManualOpen(true)} style={styles.manual}><Text style={styles.white}>Dodaj produkt rÄ™cznie</Text></Pressable>}
           {product && (
-            <View style={styles.product}>
-              <Text style={styles.name}>{product.name}</Text>
+            <View style={styles.product}>              <Text style={styles.name}>{product.name}</Text>
               <Text>{product.brand}</Text>
-              <Text style={styles.package}>{product.source === "usda" ? "Produkt bez kodu - wartości na 100 g" : `Gramatura opakowania: ${product.packageAmount ? `${product.packageAmount} ${product.packageUnit}` : product.servingSize || "brak danych"}`}</Text>
-              <Text>{product.nutrientsPer100g.energyKcal ?? "-"} kcal / 100 g</Text>
-              <Text>B: {product.nutrientsPer100g.proteins ?? "-"} g  W: {product.nutrientsPer100g.carbohydrates ?? "-"} g  T: {product.nutrientsPer100g.fat ?? "-"} g</Text>
-              <Text style={styles.micro}>Potas: {product.nutrientsPer100g.potassium ?? "-"} mg  Wapń: {product.nutrientsPer100g.calcium ?? "-"} mg  Żelazo: {product.nutrientsPer100g.iron ?? "-"} mg  Magnez: {product.nutrientsPer100g.magnesium ?? "-"} mg</Text>
-              <View style={styles.row}><DatePickerField value={expiryDate} onChange={setExpiryDate} /><LocationPicker value={location} onChange={setLocation} label="Lokalizacja w spiżarni" /></View>
-              <PackageDateFields product={product} amount={stockAmount} unit={stockUnit} packageDates={packageDates} fallbackDate={expiryDate} onChange={changePackageDate} />
-              {canUseWholePackage(product) && <View style={styles.packageHint}><Text style={styles.packageHintTitle}>Jedno opakowanie: {product.packageAmount} {product.packageUnit}</Text><Text style={styles.muted}>Przy dodawaniu wpisz liczbę opakowań, np. 4 szt. Możesz też odejmować później gramy, ml albo 1 sztukę.</Text></View>}
-              <ConsumerPicker value={consumer} onChange={setConsumer} label="Dla kogo liczyć po wybraniu „Zjedz teraz”?" />
+              {isChemical(product) ? <><Text style={styles.package}>Produkt chemiczny, niespożywczy</Text><View style={styles.levelGrid}>{chemicalLevels.map((level) => <Pressable key={level.value} onPress={() => setChemicalLevel(level.value)} style={[styles.levelButton, chemicalLevel === level.value && styles.levelActive]}><Text style={chemicalLevel === level.value ? styles.white : styles.levelText}>{level.label}</Text></Pressable>)}</View></> : <>
+                <Text style={styles.package}>{product.source === "usda" ? "Produkt bez kodu - wartości na 100 g" : `Gramatura opakowania: ${product.packageAmount ? `${product.packageAmount} ${product.packageUnit}` : product.servingSize || "brak danych"}`}</Text>
+                <Text>{product.nutrientsPer100g.energyKcal ?? "-"} kcal / 100 g</Text>
+                <Text>B: {product.nutrientsPer100g.proteins ?? "-"} g  W: {product.nutrientsPer100g.carbohydrates ?? "-"} g  T: {product.nutrientsPer100g.fat ?? "-"} g</Text>
+                <Text style={styles.micro}>Potas: {product.nutrientsPer100g.potassium ?? "-"} mg  Wapń: {product.nutrientsPer100g.calcium ?? "-"} mg  Żelazo: {product.nutrientsPer100g.iron ?? "-"} mg  Magnez: {product.nutrientsPer100g.magnesium ?? "-"} mg</Text>
+              </>}
+              <View style={styles.row}>{!isChemical(product) && <DatePickerField value={expiryDate} onChange={setExpiryDate} />}<LocationPicker value={location} onChange={setLocation} label="Lokalizacja w spiżarni" productType={activeType} /></View>
+              {!isChemical(product) && <PackageDateFields product={product} amount={stockAmount} unit={stockUnit} packageDates={packageDates} fallbackDate={expiryDate} onChange={changePackageDate} />}
+              {!isChemical(product) && canUseWholePackage(product) && <View style={styles.packageHint}><Text style={styles.packageHintTitle}>Jedno opakowanie: {product.packageAmount} {product.packageUnit}</Text><Text style={styles.muted}>Przy dodawaniu wpisz liczbę opakowań, np. 4 szt. Możesz też odejmować później gramy, ml albo 1 sztukę.</Text></View>}
+              {!isChemical(product) && <ConsumerPicker value={consumer} onChange={setConsumer} label="Dla kogo liczyć po wybraniu Zjedz teraz?" />}
               <View style={styles.actions}>
-                <TextInput value={stockAmount} onChangeText={setStockAmount} keyboardType="decimal-pad" style={styles.amount} />
-                {(["g", "ml", "szt"] as Unit[]).map((unit) => <Pressable key={unit} onPress={() => setStockUnit(unit)} style={[styles.unitChoice, stockUnit === unit && styles.unitActive]}><Text style={stockUnit === unit ? styles.white : undefined}>{unit}</Text></Pressable>)}
+                {!isChemical(product) && <>
+                  <TextInput value={stockAmount} onChangeText={setStockAmount} keyboardType="decimal-pad" style={styles.amount} />
+                  {(["g", "ml", "szt"] as Unit[]).map((unit) => <Pressable key={unit} onPress={() => setStockUnit(unit)} style={[styles.unitChoice, stockUnit === unit && styles.unitActive]}><Text style={stockUnit === unit ? styles.white : undefined}>{unit}</Text></Pressable>)}
+                </>}
                 <Pressable disabled={busy} onPress={() => void update(1)} style={[styles.button, busy && styles.disabled]}><Text style={styles.white}>{busy ? "Zapisywanie..." : "+ Dodaj"}</Text></Pressable>
-                <Pressable disabled={busy} onPress={() => void update(-1)} style={[styles.remove, busy && styles.disabled]}><Text style={styles.white}>- Odejmij</Text></Pressable>
-                <Pressable disabled={busy} onPress={() => void eatNow()} style={[styles.eat, busy && styles.disabled]}><Text style={styles.white}>Zjedz teraz - tylko do bilansu</Text></Pressable>
+                {!isChemical(product) && <Pressable disabled={busy} onPress={() => void update(-1)} style={[styles.remove, busy && styles.disabled]}><Text style={styles.white}>- Odejmij</Text></Pressable>}
+                {!isChemical(product) && <Pressable disabled={busy} onPress={() => void eatNow()} style={[styles.eat, busy && styles.disabled]}><Text style={styles.white}>Zjedz teraz - tylko do bilansu</Text></Pressable>}
               </View>
               {!!actionMessage && <Text style={[styles.actionMessage, actionError ? styles.actionError : styles.actionSuccess]}>{actionMessage}</Text>}
-              {product.nutrientsPer100g.energyKcal === undefined && <Pressable onPress={() => setManualOpen(true)} style={styles.manual}><Text style={styles.white}>Uzupełnij kalorie ręcznie</Text></Pressable>}
+              {product.nutrientsPer100g.energyKcal === undefined && <Pressable onPress={() => setManualOpen(true)} style={styles.manual}><Text style={styles.white}>UzupeĹ‚nij kalorie rÄ™cznie</Text></Pressable>}
             </View>
           )}
         </View>
@@ -257,8 +279,8 @@ function PackageDateFields({ product, amount, unit, packageDates, fallbackDate, 
   const count = packageDateCount(product, amount, unit);
   if (!count) return null;
   return <View style={styles.packageDates}>
-    <Text style={styles.packageDatesTitle}>Daty dla poszczególnych opakowań (opcjonalne)</Text>
-    <Text style={styles.muted}>Puste pola użyją daty ogólnej albo zostaną bez daty.</Text>
+    <Text style={styles.packageDatesTitle}>Daty dla poszczegĂłlnych opakowaĹ„ (opcjonalne)</Text>
+    <Text style={styles.muted}>Puste pola uĹĽyjÄ… daty ogĂłlnej albo zostanÄ… bez daty.</Text>
     {Array.from({ length: count }, (_, index) => <DatePickerField key={index} label={`Opakowanie ${index + 1}`} value={packageDates[index] ?? fallbackDate} onChange={(value) => onChange(index, value)} />)}
   </View>;
 }
@@ -268,6 +290,11 @@ const styles = StyleSheet.create({
   webScroll: { overflow: "scroll" },
   scrollContent: { flexGrow: 1, paddingBottom: 36 },
   card: { backgroundColor: colors.surface, padding: 24, borderRadius: 20 },
+  tabs: { flexDirection: "row", gap: 8, marginBottom: 14 },
+  tab: { flex: 1, backgroundColor: colors.background, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 10, alignItems: "center", borderWidth: 1, borderColor: colors.border },
+  tabActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  tabText: { color: colors.text, fontWeight: "800", textAlign: "center" },
+  tabTextActive: { color: "white", fontWeight: "900", textAlign: "center" },
   row: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   input: { flex: 1, backgroundColor: colors.background, padding: 16, borderRadius: 12, fontSize: 18 },
   button: { backgroundColor: colors.primary, paddingHorizontal: 24, justifyContent: "center", borderRadius: 12 },
@@ -286,6 +313,10 @@ const styles = StyleSheet.create({
   packageHintTitle: { color: colors.primary, fontWeight: "900", fontSize: 16 },
   packageDates: { backgroundColor: colors.background, borderRadius: 12, padding: 12, gap: 8 },
   packageDatesTitle: { fontWeight: "900", fontSize: 16 },
+  levelGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  levelButton: { backgroundColor: colors.background, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11, borderWidth: 1, borderColor: colors.border },
+  levelActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  levelText: { color: colors.text, fontWeight: "800" },
   micro: { color: colors.muted, lineHeight: 20 },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 12 },
   amount: { width: 80, backgroundColor: colors.background, borderRadius: 10, padding: 12, textAlign: "center" },

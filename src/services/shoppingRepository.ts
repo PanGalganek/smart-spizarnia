@@ -4,6 +4,7 @@ import { PantryItem, Product, Unit } from "@/domain/product";
 import { ShoppingItem, ShoppingItemSource } from "@/domain/shopping";
 import { manualShoppingItemId, productShoppingItemId } from "@/services/shopping";
 import { convertPantryAmount, preferredPantryUnit } from "@/services/pantryUnits";
+import { isChemical } from "@/services/productTypes";
 
 const shoppingList = collection(db, "shoppingList");
 const pantry = collection(db, "pantry");
@@ -67,6 +68,25 @@ export async function purchaseKnownProduct(item: ShoppingItem, amount: number, i
   const pantryRef = doc(pantry, product.barcode);
   const productRef = doc(products, product.barcode);
   const now = Date.now();
+
+  if (isChemical(product)) {
+    const next: PantryItem = {
+      barcode: product.barcode,
+      product: { ...product, type: "household_chemical", nutrientsPer100g: {}, defaultUnit: "szt" },
+      quantity: 100,
+      capacity: 100,
+      unit: "szt",
+      chemicalLevel: "full",
+      status: "active",
+      updatedAt: now
+    };
+    await runTransaction(db, async (transaction) => {
+      transaction.set(pantryRef, withoutUndefined(next), { merge: true });
+      transaction.set(productRef, withoutUndefined(next.product), { merge: true });
+      transaction.set(shoppingRef, { status: "purchased", purchasedAt: now, updatedAt: now }, { merge: true });
+    });
+    return;
+  }
 
   await runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(pantryRef);

@@ -12,7 +12,7 @@ const tiles = [
   { title: "Lista zakupów", subtitle: "Produkty do kupienia", icon: "cart-outline", route: "/shopping", color: "#AD5A00" }
 ] as const;
 
-const APP_VERSION = "0.11.5";
+const APP_VERSION = "0.11.6";
 
 export default function HomeScreen() {
   const { user, signOut } = useAuth();

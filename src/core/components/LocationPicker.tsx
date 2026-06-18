@@ -1,16 +1,17 @@
 import { useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { colors } from "@/core/theme";
+import { ProductType } from "@/domain/product";
 import { displayLocationName, listLocations } from "@/services/locationRepository";
 
-type Props = { value: string; onChange: (value: string) => void; label?: string };
+type Props = { value: string; onChange: (value: string) => void; label?: string; productType?: ProductType };
 
-export function LocationPicker({ value, onChange, label = "Lokalizacja" }: Props) {
+export function LocationPicker({ value, onChange, label = "Lokalizacja", productType = "food" }: Props) {
   const displayedValue = displayLocationName(value);
   const [locations, setLocations] = useState<string[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  useEffect(() => { void listLocations().then(setLocations); }, []);
+  useEffect(() => { void listLocations(productType).then(setLocations); }, [productType]);
 
   return <View style={styles.field}>
     <Text style={styles.label}>{label}</Text>

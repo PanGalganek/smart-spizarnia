@@ -5,13 +5,14 @@ import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, Vi
 import { formatPolishDate } from "@/core/components/DatePickerField";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
 import { colors } from "@/core/theme";
-import { PantryItem, PantryPackage } from "@/domain/product";
+import { PantryItem, PantryPackage, ProductType } from "@/domain/product";
 import { AddDepletedPrompt } from "@/features/shopping/AddDepletedPrompt";
 import { getExpiryWarning } from "@/services/expiry";
 import { addLocation, displayLocationName, listLocations, removeLocation } from "@/services/locationRepository";
 import { changePantryQuantity, deletePantryItem, listPantry } from "@/services/inventoryRepository";
 import { packageSummary } from "@/services/pantryPackages";
 import { capConsumptionToAvailable } from "@/services/pantryUnits";
+import { chemicalLevelLabel, isChemical, productType, productTypes } from "@/services/productTypes";
 import { shouldAskToBuyAgain } from "@/services/shoppingPrompt";
 import { stockPercentage } from "@/services/stockLevel";
 
@@ -19,6 +20,7 @@ const UNASSIGNED = "__unassigned__";
 
 export function PantryScreen() {
   const navigation = useNavigation();
+  const [activeType, setActiveType] = useState<ProductType>("food");
   const [items, setItems] = useState<PantryItem[]>([]);
   const [configuredLocations, setConfiguredLocations] = useState<string[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
@@ -34,13 +36,20 @@ export function PantryScreen() {
 
   const refresh = useCallback(async () => {
     try {
-      const [pantryItems, locations] = await Promise.all([listPantry(), listLocations()]);
-      setItems(pantryItems);
+      const [pantryItems, locations] = await Promise.all([listPantry(), listLocations(activeType)]);
+      setItems(pantryItems.filter((item) => productType(item.product) === activeType));
       setConfiguredLocations(locations);
       setMessage("");
     } catch { setMessage("Nie udało się pobrać stanu spiżarni."); }
-  }, []);
+  }, [activeType]);
   useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
+
+  function changeType(type: ProductType) {
+    setActiveType(type);
+    setSelectedLocation(null);
+    setQuery("");
+    setManagerOpen(false);
+  }
 
   useEffect(() => navigation.addListener("beforeRemove", (event) => {
     if (managerOpen) {
@@ -90,7 +99,7 @@ export function PantryScreen() {
     const name = newLocation.trim();
     if (!name) return setManagerMessage("Wpisz nazwę nowej lokalizacji.");
     try {
-      const values = await addLocation(name);
+      const values = await addLocation(name, activeType);
       setConfiguredLocations(values);
       setNewLocation("");
       setManagerMessage(`Dodano lokalizację: ${displayLocationName(name)}.`);
@@ -101,7 +110,7 @@ export function PantryScreen() {
     const assignedCount = items.filter((item) => displayLocationName(item.location?.trim() ?? "") === location).length;
     if (assignedCount > 0) return setManagerMessage(`Nie można usunąć lokalizacji „${location}”. Najpierw przenieś ${assignedCount} ${productCountLabel(assignedCount)}.`);
     try {
-      setConfiguredLocations(await removeLocation(location));
+      setConfiguredLocations(await removeLocation(location, activeType));
       setManagerMessage(`Usunięto lokalizację: ${location}.`);
     } catch { setManagerMessage("Nie udało się usunąć lokalizacji."); }
   }
@@ -146,6 +155,9 @@ export function PantryScreen() {
       <AddDepletedPrompt products={shoppingPromptItems} onClose={() => { setShoppingPromptItems([]); setDepletedPromptBarcodes([]); }} onDeclined={declineShoppingPrompt} onAdded={() => setQuickMessage("Produkt dodano do listy zakupów.")} />
       {!!message && <Text style={styles.message}>{message}</Text>}
       {!!quickMessage && <Text style={styles.quickMessage}>{quickMessage}</Text>}
+      <View style={styles.tabs}>
+        {productTypes.map((item) => <Pressable key={item.type} onPress={() => changeType(item.type)} style={[styles.tab, activeType === item.type && styles.tabActive]}><Text style={activeType === item.type ? styles.tabTextActive : styles.tabText}>{item.label}</Text></Pressable>)}
+      </View>
       {!selectedLocation ? <>
         {urgentExpiryCount > 0 && <Text style={styles.expirySummary}>Uwaga: {urgentExpiryCount} produktów ma termin najpóźniej jutro lub jest po terminie.</Text>}
         <FlatList
@@ -203,24 +215,27 @@ export function PantryScreen() {
 }
 
 function ProductCard({ item, onQuickConsume }: { item: PantryItem; onQuickConsume: (item: PantryItem) => void }) {
-  const warning = item.quantity > 0 ? getExpiryWarning(item.expiryDate) : null;
+  const chemical = isChemical(item.product);
+  const warning = item.quantity > 0 && !chemical ? getExpiryWarning(item.expiryDate) : null;
   const percentage = stockPercentage(item);
   const summary = packageSummary(item);
   const dateLabel = summary.activeExpiryDate ?? item.expiryDate;
   const quickAmount = item.product.quickUseAmount ?? (item.product.packageAmount ? 1 : undefined);
   const quickUnit = item.product.quickUseUnit ?? (item.product.packageAmount ? "szt" : undefined);
+  const quantityText = chemical ? chemicalLevelLabel(item.chemicalLevel) : summary.text;
+  const detailText = chemical ? "Produkt niespożywczy" : `Łącznie: ${item.quantity} ${item.unit}`;
   return (
     <Pressable onPress={() => router.push({ pathname: "/pantry/[barcode]", params: { barcode: item.barcode } })} style={({ pressed }) => [styles.card, item.quantity === 0 && styles.consumed, pressed && styles.pressed]}>
       <View style={styles.header}>
         <Text style={styles.name}>{item.product.name}</Text>
-        <Text style={styles.qty}>{summary.text}</Text>
+        <Text style={styles.qty}>{quantityText}</Text>
       </View>
-      <Text style={styles.packageDetails}>Łącznie: {item.quantity} {item.unit}</Text>
+      <Text style={styles.packageDetails}>{detailText}</Text>
       <View style={styles.meta}>
         <Text>{dateLabel ? `Ważne do: ${formatPolishDate(dateLabel)}` : "Brak daty ważności"}</Text>
         {item.quantity === 0 && <Text style={styles.used}>ZUŻYTY</Text>}
       </View>
-      <View style={styles.stockRow}><View style={styles.battery}><View style={[styles.batteryFill, { width: `${percentage}%` }, percentage <= 20 && styles.batteryLow]} /></View><View style={styles.batteryTip} /><Text style={styles.stockText}>{percentage}%</Text>{quickAmount && quickUnit && item.quantity > 0 && <Pressable onPress={(event) => { event.stopPropagation(); onQuickConsume(item); }} style={styles.quickUseButton}><Text style={styles.quickUseText}>Zużyj {quickAmount} {quickUnit}</Text></Pressable>}</View>
+      <View style={styles.stockRow}><View style={styles.battery}><View style={[styles.batteryFill, { width: `${percentage}%` }, percentage <= 20 && styles.batteryLow]} /></View><View style={styles.batteryTip} /><Text style={styles.stockText}>{percentage}%</Text>{!chemical && quickAmount && quickUnit && item.quantity > 0 && <Pressable onPress={(event) => { event.stopPropagation(); onQuickConsume(item); }} style={styles.quickUseButton}><Text style={styles.quickUseText}>Zużyj {quickAmount} {quickUnit}</Text></Pressable>}</View>
       {warning && <Text style={[styles.expiryWarning, warning.level === "soon" ? styles.expirySoon : styles.expiryUrgent]}>{warning.label}</Text>}
       <Text style={styles.open}>Otwórz szczegóły ›</Text>
     </Pressable>
@@ -263,6 +278,11 @@ function locationIcon(location: string): keyof typeof MaterialCommunityIcons.gly
 }
 
 const styles = StyleSheet.create({
+  tabs: { flexDirection: "row", gap: 8, marginBottom: 12 },
+  tab: { flex: 1, backgroundColor: colors.surface, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 10, alignItems: "center", borderWidth: 1, borderColor: colors.border },
+  tabActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  tabText: { color: colors.text, fontWeight: "800", textAlign: "center" },
+  tabTextActive: { color: "white", fontWeight: "900", textAlign: "center" },
   tilesHeader: { marginBottom: 14, gap: 10 }, hint: { color: colors.muted, fontSize: 16 }, manageButton: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 7, backgroundColor: "#E8F5E9", borderWidth: 1, borderColor: colors.primary, borderRadius: 11, paddingHorizontal: 13, paddingVertical: 10 }, manageButtonText: { color: colors.primary, fontWeight: "800" }, tiles: { paddingBottom: 30 }, tileColumns: { gap: 12 }, tile: { flex: 1, minWidth: 0, minHeight: 150, backgroundColor: colors.surface, borderRadius: 18, padding: 18, marginBottom: 12, justifyContent: "center", borderWidth: 1, borderColor: colors.border }, unassignedTile: { backgroundColor: "#FFF8E8", borderColor: "#F2C879" }, tileName: { fontSize: 20, fontWeight: "900", marginTop: 10 }, tileCount: { color: colors.muted, marginTop: 4 }, tileWarning: { color: "#8A4B00", fontWeight: "800", fontSize: 12, marginTop: 8 },
   locationHeader: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12, marginBottom: 12 }, locationsBack: { backgroundColor: colors.surface, borderRadius: 10, paddingHorizontal: 13, paddingVertical: 10 }, locationsBackText: { color: colors.primary, fontWeight: "800" }, locationTitle: { flex: 1, minWidth: 150, fontSize: 24, fontWeight: "900" }, search: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 13, paddingHorizontal: 16, paddingVertical: 14, fontSize: 17, marginBottom: 12 },
   list: { paddingBottom: 30 }, emptyList: { flexGrow: 1 }, card: { backgroundColor: colors.surface, borderRadius: 16, padding: 18, marginBottom: 12, gap: 10 }, consumed: { opacity: 0.65 }, pressed: { opacity: 0.72 }, header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }, name: { flex: 1, fontWeight: "800", fontSize: 18 }, qty: { flexShrink: 1, textAlign: "right", fontWeight: "800", fontSize: 19, color: colors.primary }, packageDetails: { color: colors.muted, fontWeight: "700" }, meta: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 8 }, active: { color: colors.primary, fontWeight: "800" }, used: { color: colors.danger, fontWeight: "800" }, open: { color: colors.primary, fontWeight: "800" },

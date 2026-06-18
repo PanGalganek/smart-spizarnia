@@ -5,6 +5,7 @@ import { PantryItem, Product, Unit } from "@/domain/product";
 import { addNutrients, dateKey, scaleNutrients, sumNutrients } from "@/services/nutrition";
 import { addPackages, consumePackages, normalizePackages, packageCapacity, packageTotal, packageUnit } from "@/services/pantryPackages";
 import { capacityForPackage, stockCapacity } from "@/services/stockLevel";
+import { chemicalLevelQuantity, isChemical, normalizeChemicalItem } from "@/services/productTypes";
 
 const products = collection(db, "products");
 const pantry = collection(db, "pantry");
@@ -16,6 +17,7 @@ function withoutUndefined<T>(value: T): T {
 }
 
 function normalizePantryItem(item: PantryItem): PantryItem {
+  if (isChemical(item.product)) return normalizeChemicalItem(item);
   const unit = item.unit ?? item.product.defaultUnit ?? "szt";
   const packages = normalizePackages({ ...item, unit });
   const quantity = packageTotal(packages);
@@ -49,12 +51,12 @@ function normalizeMeal(meal: Meal): Meal {
 }
 
 export async function saveProduct(product: Product) {
-  await setDoc(doc(products, product.barcode), withoutUndefined(product), { merge: true });
+  await setDoc(doc(products, product.barcode), withoutUndefined({ ...product, type: product.type ?? "food" }), { merge: true });
 }
 
 export async function getSavedProduct(barcode: string): Promise<Product | null> {
   const snapshot = await getDoc(doc(products, barcode));
-  return snapshot.exists() ? snapshot.data() as Product : null;
+  return snapshot.exists() ? { ...snapshot.data() as Product, type: (snapshot.data() as Product).type ?? "food" } : null;
 }
 
 export async function updateProductDetails(product: Product): Promise<Product> {
@@ -93,7 +95,25 @@ export async function updateProductPackage(product: Product, packageAmount: numb
 export async function savePantryItem(item: PantryItem) {
   const normalized = normalizePantryItem({ ...item, updatedAt: Date.now() });
   await setDoc(doc(pantry, item.barcode), withoutUndefined(normalized), { merge: true });
+  await saveProduct(normalized.product);
+}
+
+export async function saveChemicalPantryItem(product: Product, chemicalLevel: PantryItem["chemicalLevel"], metadata?: { location?: string }) {
+  const level = chemicalLevel ?? "full";
+  const item: PantryItem = {
+    barcode: product.barcode,
+    product: { ...product, type: "household_chemical", nutrientsPer100g: {}, defaultUnit: "szt" },
+    quantity: chemicalLevelQuantity(level),
+    capacity: 100,
+    chemicalLevel: level,
+    unit: "szt",
+    location: metadata?.location,
+    status: level === "empty" ? "consumed" : "active",
+    updatedAt: Date.now()
+  };
+  await setDoc(doc(pantry, product.barcode), withoutUndefined(item), { merge: true });
   await saveProduct(item.product);
+  return item;
 }
 
 export async function changePantryQuantity(
@@ -152,7 +172,7 @@ export async function deletePantryItem(barcode: string) {
 
 export async function listSavedProducts(): Promise<Product[]> {
   const snapshot = await getDocs(products);
-  return snapshot.docs.map((item) => item.data() as Product);
+  return snapshot.docs.map((item) => ({ ...item.data() as Product, type: (item.data() as Product).type ?? "food" }));
 }
 
 export async function createMeal(

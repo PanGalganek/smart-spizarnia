@@ -35,12 +35,13 @@ service cloud.firestore {
           "barcode", "name", "brand", "imageUrl", "servingSize",
           "netWeightGrams", "packageAmount", "packageUnit",
           "quickUseAmount", "quickUseUnit", "defaultUnit",
-          "nutritionBasis", "nutrientsPer100g", "source", "updatedAt"
+          "nutritionBasis", "nutrientsPer100g", "source", "type", "updatedAt"
         ])
         && data.barcode is string
         && data.name is string
         && data.nutrientsPer100g is map
         && data.source in ["open-food-facts", "usda", "manual"]
+        && (!("type" in data) || data.type in ["food", "household_chemical"])
         && data.updatedAt is number
         && optionalString(data, "brand")
         && optionalString(data, "imageUrl")
@@ -57,7 +58,7 @@ service cloud.firestore {
     function validPantryItem(data) {
       return data.keys().hasOnly([
           "barcode", "product", "quantity", "capacity", "packages",
-          "unit", "expiryDate", "location", "status", "updatedAt"
+          "unit", "expiryDate", "location", "status", "chemicalLevel", "updatedAt"
         ])
         && data.barcode is string
         && data.product is map
@@ -67,6 +68,7 @@ service cloud.firestore {
         && optionalList(data, "packages")
         && optionalString(data, "expiryDate")
         && optionalString(data, "location")
+        && (!("chemicalLevel" in data) || data.chemicalLevel in ["full", "more_than_half", "half", "less_than_half", "empty"])
         && (!("status" in data) || data.status in ["active", "consumed"])
         && optionalNumber(data, "updatedAt");
     }
@@ -156,12 +158,14 @@ service cloud.firestore {
       allow create, update: if isOwner() && validConsumer(request.resource.data);
     }
 
-    match /settings/storageLocations {
+    match /settings/{settingsId} {
       allow read, delete: if isOwner();
       allow create, update: if isOwner()
-        && request.resource.data.keys().hasOnly(["values", "updatedAt"])
+        && settingsId in ["storageLocations", "storageLocations_household_chemical"]
+        && request.resource.data.keys().hasOnly(["values", "updatedAt", "type"])
         && request.resource.data.values is list
-        && request.resource.data.updatedAt is number;
+        && request.resource.data.updatedAt is number
+        && (!("type" in request.resource.data) || request.resource.data.type in ["food", "household_chemical"]);
     }
 
     match /{document=**} {

@@ -11,6 +11,7 @@ import { createMeal, getDailySummary, listMeals, listPantry } from "@/services/i
 import { addConsumer, defaultConsumers, listConsumers } from "@/services/consumerRepository";
 import { createMealIngredient, dateKey, scaleNutrients, sumNutrients } from "@/services/nutrition";
 import { canUseWholePackage, convertPantryAmount } from "@/services/pantryUnits";
+import { productType } from "@/services/productTypes";
 import { shouldAskToBuyAgain } from "@/services/shoppingPrompt";
 
 const mealTypes: { value: MealType; label: string; description: string }[] = [
@@ -48,7 +49,7 @@ export function MealsScreen() {
   const refresh = useCallback(async () => {
     try {
       const [nextPantry, nextMeals, nextSummary, nextConsumers] = await Promise.all([listPantry(), listMeals(), getDailySummary(dateKey(), consumer), listConsumers()]);
-      setPantry(nextPantry);
+      setPantry(nextPantry.filter((item) => productType(item.product) === "food"));
       setMeals(nextMeals);
       setDailySummary(nextSummary);
       setConsumers(nextConsumers);
