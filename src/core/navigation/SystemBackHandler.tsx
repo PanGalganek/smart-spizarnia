@@ -19,11 +19,16 @@ export function SystemBackHandler() {
     if (Platform.OS !== "web" || typeof window === "undefined") return;
 
     function onPopState(event: PopStateEvent) {
-      handleSystemBackState(event.state);
+      const handledInsideApp = handleSystemBackState(event.state);
+      if (handledInsideApp) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+      }
     }
 
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
+    window.addEventListener("popstate", onPopState, { capture: true });
+    return () => window.removeEventListener("popstate", onPopState, { capture: true });
   }, []);
 
   return null;

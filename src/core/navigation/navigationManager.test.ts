@@ -180,8 +180,9 @@ describe("navigationManager", () => {
     expect(entries[1].url).toBe("/saved#smart-pantry-layer=saved-product");
     expect(getCurrentNavigationState()?.selectedId).toBe("590");
 
-    handleSystemBackState(entries[0].state);
+    const handled = handleSystemBackState(entries[0].state);
 
+    expect(handled).toBe(true);
     expect(onBack).toHaveBeenCalledTimes(1);
     expect(getCurrentNavigationState()?.view).toBe("saved");
     expect(getCurrentNavigationState()?.layerId).toBeNull();
