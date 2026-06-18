@@ -62,12 +62,12 @@ export function ScannerScreen() {
         return;
       }
       const result = await getProductByBarcode(normalized);
-        setProduct(result);
-        if (result) {
-          setStockUnit(canUseWholePackage(result) ? "szt" : result.defaultUnit ?? "szt");
-          setStockAmount("1");
-          setPackageDates([]);
-        }
+      setProduct(result);
+      if (result) {
+        setStockUnit(canUseWholePackage(result) ? "szt" : result.defaultUnit ?? "szt");
+        setStockAmount("1");
+        setPackageDates([]);
+      }
       setActionMessage("");
       setManualOpen(false);
       setMessage(result ? "Produkt znaleziony." : "Nie znaleziono tego produktu w bazie Open Food Facts. Możesz dodać go ręcznie.");

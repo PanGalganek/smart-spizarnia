@@ -43,8 +43,8 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: colors.background, alignItems: "center", justifyContent: "center" },
-  card: { width: 420, backgroundColor: colors.surface, padding: 32, borderRadius: 24, gap: 14, elevation: 4 },
+  page: { flex: 1, backgroundColor: colors.background, alignItems: "center", justifyContent: "center", padding: 18 },
+  card: { width: "100%", maxWidth: 420, backgroundColor: colors.surface, padding: 32, borderRadius: 24, gap: 14, elevation: 4 },
   title: { fontSize: 32, fontWeight: "800", color: colors.text },
   subtitle: { color: colors.muted, marginBottom: 10 },
   input: { backgroundColor: colors.background, borderRadius: 12, padding: 16, fontSize: 16 },

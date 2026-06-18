@@ -14,6 +14,7 @@ const barcodeTypes = [
 export function BarcodeCamera({ onCancel, onScanned }: Props) {
   const [permission, requestPermission] = useCameraPermissions();
   const permissionRequested = useRef(false);
+  const scannedRef = useRef(false);
   const [torch, setTorch] = useState(false);
   const [ready, setReady] = useState(false);
 
@@ -24,7 +25,10 @@ export function BarcodeCamera({ onCancel, onScanned }: Props) {
   }, [permission, requestPermission]);
 
   function handleScan(result: BarcodeScanningResult) {
-    if (result.data.trim()) onScanned(result.data.trim());
+    const value = result.data.trim();
+    if (!value || scannedRef.current) return;
+    scannedRef.current = true;
+    onScanned(value);
   }
 
   if (!permission) {
@@ -46,7 +50,7 @@ export function BarcodeCamera({ onCancel, onScanned }: Props) {
       <CameraView
         style={styles.camera}
         facing="back"
-        autofocus="off"
+        autofocus="on"
         zoom={0}
         ratio="4:3"
         enableTorch={torch}

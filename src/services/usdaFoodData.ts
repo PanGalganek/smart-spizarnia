@@ -1,4 +1,5 @@
 import { Nutrients, Product } from "@/domain/product";
+import { fetchWithTimeout } from "@/services/fetchWithTimeout";
 
 const API_URL = "https://api.nal.usda.gov/fdc/v1/foods/search";
 const API_KEY = "DEMO_KEY";
@@ -32,7 +33,7 @@ export async function searchUsdaFoods(query: string): Promise<UsdaFoodResult[]> 
     pageSize: "10",
     dataType: "Foundation,SR Legacy"
   });
-  const response = await fetch(`${API_URL}?${params.toString()}`);
+  const response = await fetchWithTimeout(`${API_URL}?${params.toString()}`);
   if (!response.ok) throw new Error("USDA FoodData Central is unavailable");
   const data = await response.json() as SearchResponse;
   return (data.foods ?? [])

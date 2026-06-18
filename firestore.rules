@@ -1,9 +1,171 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if request.auth != null
+    function isOwner() {
+      return request.auth != null
         && request.auth.uid == "xFkLT9w6iWhSgzTyUy1QUj3d26R2";
+    }
+
+    function optionalString(data, field) {
+      return !(field in data) || data[field] is string;
+    }
+
+    function optionalNumber(data, field) {
+      return !(field in data) || data[field] is number || data[field] == null;
+    }
+
+    function optionalBool(data, field) {
+      return !(field in data) || data[field] is bool;
+    }
+
+    function optionalList(data, field) {
+      return !(field in data) || data[field] is list;
+    }
+
+    function optionalMap(data, field) {
+      return !(field in data) || data[field] is map;
+    }
+
+    function isUnit(value) {
+      return value in ["g", "ml", "szt"];
+    }
+
+    function validProduct(data) {
+      return data.keys().hasOnly([
+          "barcode", "name", "brand", "imageUrl", "servingSize",
+          "netWeightGrams", "packageAmount", "packageUnit",
+          "quickUseAmount", "quickUseUnit", "defaultUnit",
+          "nutritionBasis", "nutrientsPer100g", "source", "updatedAt"
+        ])
+        && data.barcode is string
+        && data.name is string
+        && data.nutrientsPer100g is map
+        && data.source in ["open-food-facts", "usda", "manual"]
+        && data.updatedAt is number
+        && optionalString(data, "brand")
+        && optionalString(data, "imageUrl")
+        && optionalString(data, "servingSize")
+        && optionalNumber(data, "netWeightGrams")
+        && optionalNumber(data, "packageAmount")
+        && (!("packageUnit" in data) || isUnit(data.packageUnit))
+        && optionalNumber(data, "quickUseAmount")
+        && (!("quickUseUnit" in data) || isUnit(data.quickUseUnit))
+        && (!("defaultUnit" in data) || isUnit(data.defaultUnit))
+        && (!("nutritionBasis" in data) || data.nutritionBasis in ["per100", "perUnit"]);
+    }
+
+    function validPantryItem(data) {
+      return data.keys().hasOnly([
+          "barcode", "product", "quantity", "capacity", "packages",
+          "unit", "expiryDate", "location", "status", "updatedAt"
+        ])
+        && data.barcode is string
+        && data.product is map
+        && data.quantity is number
+        && isUnit(data.unit)
+        && optionalNumber(data, "capacity")
+        && optionalList(data, "packages")
+        && optionalString(data, "expiryDate")
+        && optionalString(data, "location")
+        && (!("status" in data) || data.status in ["active", "consumed"])
+        && optionalNumber(data, "updatedAt");
+    }
+
+    function validMeal(data) {
+      return data.keys().hasOnly([
+          "id", "name", "type", "ingredients", "servings",
+          "recipeTotals", "totals", "dateKey", "createdAt",
+          "consumerId", "consumerName"
+        ])
+        && data.id is string
+        && data.name is string
+        && data.type in ["breakfast", "lunch", "dinner", "snack", "custom"]
+        && data.ingredients is list
+        && data.totals is map
+        && data.dateKey is string
+        && data.createdAt is number
+        && optionalNumber(data, "servings")
+        && optionalMap(data, "recipeTotals")
+        && optionalString(data, "consumerId")
+        && optionalString(data, "consumerName");
+    }
+
+    function validDailySummary(data) {
+      return data.keys().hasOnly([
+          "dateKey", "totals", "mealCount", "updatedAt",
+          "consumerId", "consumerName"
+        ])
+        && data.dateKey is string
+        && data.totals is map
+        && data.mealCount is number
+        && data.updatedAt is number
+        && optionalString(data, "consumerId")
+        && optionalString(data, "consumerName");
+    }
+
+    function validShoppingItem(data) {
+      return data.keys().hasOnly([
+          "id", "name", "productBarcode", "product", "source",
+          "status", "createdAt", "updatedAt", "purchasedAt"
+        ])
+        && data.id is string
+        && data.name is string
+        && data.source in ["depleted", "saved", "manual"]
+        && data.status in ["active", "purchased"]
+        && data.createdAt is number
+        && data.updatedAt is number
+        && optionalString(data, "productBarcode")
+        && optionalMap(data, "product")
+        && optionalNumber(data, "purchasedAt");
+    }
+
+    function validConsumer(data) {
+      return data.keys().hasOnly(["id", "name", "protected"])
+        && data.id is string
+        && data.name is string
+        && optionalBool(data, "protected");
+    }
+
+    match /products/{barcode} {
+      allow read, delete: if isOwner();
+      allow create, update: if isOwner() && validProduct(request.resource.data);
+    }
+
+    match /pantry/{barcode} {
+      allow read, delete: if isOwner();
+      allow create, update: if isOwner() && validPantryItem(request.resource.data);
+    }
+
+    match /meals/{mealId} {
+      allow read, delete: if isOwner();
+      allow create, update: if isOwner() && validMeal(request.resource.data);
+    }
+
+    match /dailySummaries/{summaryId} {
+      allow read, delete: if isOwner();
+      allow create, update: if isOwner() && validDailySummary(request.resource.data);
+    }
+
+    match /shoppingList/{itemId} {
+      allow read, delete: if isOwner();
+      allow create, update: if isOwner() && validShoppingItem(request.resource.data);
+    }
+
+    match /consumers/{consumerId} {
+      allow read, delete: if isOwner();
+      allow create, update: if isOwner() && validConsumer(request.resource.data);
+    }
+
+    match /settings/storageLocations {
+      allow read, delete: if isOwner();
+      allow create, update: if isOwner()
+        && request.resource.data.keys().hasOnly(["values", "updatedAt"])
+        && request.resource.data.values is list
+        && request.resource.data.updatedAt is number;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

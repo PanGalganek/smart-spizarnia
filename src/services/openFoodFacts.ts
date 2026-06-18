@@ -1,4 +1,5 @@
 import { Product } from "@/domain/product";
+import { fetchWithTimeout } from "@/services/fetchWithTimeout";
 
 const API_URL = "https://world.openfoodfacts.org/api/v2/product";
 
@@ -33,7 +34,7 @@ function convertPackageSize(amount: number, unit: string): PackageSize | undefin
 }
 
 export async function getProductByBarcode(barcode: string): Promise<Product | null> {
-  const response = await fetch(`${API_URL}/${encodeURIComponent(barcode)}.json`);
+  const response = await fetchWithTimeout(`${API_URL}/${encodeURIComponent(barcode)}.json`);
   if (response.status === 404) return null;
   if (!response.ok) throw new Error("Open Food Facts is unavailable");
 
