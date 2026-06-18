@@ -1,6 +1,7 @@
 import { router, useGlobalSearchParams, usePathname } from "expo-router";
 import { useEffect, useMemo, useRef } from "react";
 import { Platform } from "react-native";
+import { runTopBackLayer, setBackGuardEnsurer } from "@/core/navigation/backRegistry";
 
 const HOME_PATH = "/home";
 const LOGIN_PATH = "/login";
@@ -22,31 +23,33 @@ export function SystemBackHandler() {
 
   useEffect(() => {
     if (Platform.OS !== "web" || typeof window === "undefined") return;
-    if (!shouldGuardPath(pathname)) return;
-
-    const guardUrl = `${window.location.pathname}${window.location.search}`;
-    const state = window.history.state ?? {};
-    if (state.smartPantryBackGuard === true && state.smartPantryBackUrl === guardUrl) return;
-
-    window.history.pushState({ ...state, smartPantryBackGuard: true, smartPantryBackUrl: guardUrl }, "", guardUrl);
+    ensureBackGuard(pathname);
   }, [pathname, routeKey]);
 
   useEffect(() => {
     if (Platform.OS !== "web" || typeof window === "undefined") return;
+    setBackGuardEnsurer(() => ensureBackGuard(pathnameRef.current));
 
     function onPopState() {
       const currentPath = pathnameRef.current;
       if (!shouldGuardPath(currentPath) || handlingBackRef.current) return;
 
       handlingBackRef.current = true;
-      performLogicalBack(currentPath, paramsRef.current);
+      if (runTopBackLayer()) {
+        window.setTimeout(() => ensureBackGuard(pathnameRef.current), 0);
+      } else {
+        performLogicalBack(currentPath, paramsRef.current);
+      }
       window.setTimeout(() => {
         handlingBackRef.current = false;
       }, 250);
     }
 
     window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
+    return () => {
+      setBackGuardEnsurer(null);
+      window.removeEventListener("popstate", onPopState);
+    };
   }, []);
 
   return null;
@@ -54,6 +57,14 @@ export function SystemBackHandler() {
 
 function shouldGuardPath(pathname: string) {
   return pathname !== HOME_PATH && pathname !== LOGIN_PATH && pathname !== "/";
+}
+
+function ensureBackGuard(pathname: string) {
+  if (!shouldGuardPath(pathname)) return;
+  const guardUrl = `${window.location.pathname}${window.location.search}`;
+  const state = window.history.state ?? {};
+  if (state.smartPantryBackGuard === true && state.smartPantryBackUrl === guardUrl) return;
+  window.history.pushState({ ...state, smartPantryBackGuard: true, smartPantryBackUrl: guardUrl }, "", guardUrl);
 }
 
 function performLogicalBack(pathname: string, params: SearchParams) {

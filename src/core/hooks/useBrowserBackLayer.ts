@@ -1,14 +1,27 @@
-import { useEffect } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import { registerBackLayer, unregisterBackLayer } from "@/core/navigation/backRegistry";
 
-export function useBrowserBackLayer(_active: boolean, _onBack: () => void) {
-  // Browser/system back is intentionally left to Expo Router.
-  // Previous versions pushed custom window.history entries for modals and
-  // substeps, which corrupted PWA back navigation after several screen changes.
-  useEffect(() => undefined, [_active, _onBack]);
+export function useBrowserBackLayer(active: boolean, onBack: () => void) {
+  const id = useRef(Symbol("browser-back-layer"));
+
+  useEffect(() => {
+    if (!active) {
+      unregisterBackLayer(id.current);
+      return;
+    }
+    registerBackLayer(id.current, onBack);
+    return () => unregisterBackLayer(id.current);
+  }, [active, onBack]);
 }
 
-export function useBrowserBackStack(_depth: number, _onBack: () => void) {
-  // Kept as a no-op compatibility hook for screens that still expose internal
-  // modal steps. Those steps should be closed by visible in-app controls.
-  useEffect(() => undefined, [_depth, _onBack]);
+export function useBrowserBackStack(depth: number, onBack: () => void) {
+  const ids = useMemo(() => Array.from({ length: 5 }, () => Symbol("browser-back-stack-layer")), []);
+
+  useEffect(() => {
+    ids.forEach((id, index) => {
+      if (index < depth) registerBackLayer(id, onBack);
+      else unregisterBackLayer(id);
+    });
+    return () => ids.forEach(unregisterBackLayer);
+  }, [depth, ids, onBack]);
 }
