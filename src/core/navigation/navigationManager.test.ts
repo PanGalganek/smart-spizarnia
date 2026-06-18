@@ -85,6 +85,7 @@ describe("navigationManager", () => {
     registerNavigationLayer("scanner-layer", { kind: "scanner", name: "scanner-camera", onBack });
 
     expect(entries).toHaveLength(2);
+    expect(entries[1].url).toBe("/scanner#smart-pantry-layer=scanner-layer");
     expect(getCurrentNavigationState()?.scanner).toBe(true);
 
     handleSystemBackState(entries[0].state);
@@ -149,6 +150,9 @@ describe("navigationManager", () => {
     openNavigationLayer("saved-product", { kind: "modal", name: "saved-product" }, { modal: "saved-product", mode: "saved-details", selectedId: "590" });
     openNavigationLayer("location-picker", { kind: "modal", name: "location-picker" }, { modal: "location-picker" });
 
+    expect(entries[0].url).toBe("/saved");
+    expect(entries[1].url).toBe("/saved#smart-pantry-layer=saved-product");
+    expect(entries[2].url).toBe("/saved#smart-pantry-layer=location-picker");
     expect(getCurrentNavigationState()?.layerId).toBe("location-picker");
     expect(getCurrentNavigationState()?.selectedId).toBe("590");
     expect(getCurrentNavigationState()?.mode).toBe("saved-details");
@@ -161,6 +165,37 @@ describe("navigationManager", () => {
     expect(getCurrentNavigationState()?.selectedId).toBe("590");
     expect(isNavigationLayerVisible("saved-product")).toBe(true);
     expect(isNavigationLayerVisible("location-picker")).toBe(false);
+  });
+
+  it("keeps saved product details as a separate Android back step", async () => {
+    const { entries } = installWindow("/saved");
+    const { deriveNavigationState, getCurrentNavigationState, handleSystemBackState, openNavigationLayer, replaceNavigationState } = await import("./navigationManager");
+    const onBack = vi.fn();
+
+    replaceNavigationState(deriveNavigationState("/saved", {}, "/saved"));
+    openNavigationLayer("saved-product", { kind: "modal", name: "saved-product", onBack }, { modal: "saved-product", mode: "saved-details", selectedId: "590" });
+
+    expect(entries).toHaveLength(2);
+    expect(entries[0].url).toBe("/saved");
+    expect(entries[1].url).toBe("/saved#smart-pantry-layer=saved-product");
+    expect(getCurrentNavigationState()?.selectedId).toBe("590");
+
+    handleSystemBackState(entries[0].state);
+
+    expect(onBack).toHaveBeenCalledTimes(1);
+    expect(getCurrentNavigationState()?.view).toBe("saved");
+    expect(getCurrentNavigationState()?.layerId).toBeNull();
+    expect(getCurrentNavigationState()?.selectedId).toBeNull();
+  });
+
+  it("strips navigation hashes from stored state urls", async () => {
+    const { entries } = installWindow("/saved#smart-pantry-layer=old-modal");
+    const { deriveNavigationState, getCurrentNavigationState, replaceNavigationState } = await import("./navigationManager");
+
+    replaceNavigationState(deriveNavigationState("/saved", {}, "/saved#smart-pantry-layer=old-modal"));
+
+    expect(getCurrentNavigationState()?.url).toBe("/saved");
+    expect(entries[0].url).toBe("/saved");
   });
 
   it("cleans hidden layer history when the browser jumps back several entries", async () => {

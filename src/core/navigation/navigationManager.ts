@@ -32,6 +32,7 @@ type LayerDescriptor = {
 };
 
 const HISTORY_STATE_KEY = "__smartPantryNavigation";
+const NAVIGATION_HASH_KEY = "smart-pantry-layer";
 
 const layers = new Map<string, LayerDescriptor>();
 const appStack: AppNavigationState[] = [];
@@ -49,21 +50,22 @@ export function createNavigationLayerId(prefix = "layer") {
 }
 
 export function deriveNavigationState(pathname: string, params: SearchParams = {}, url = currentUrl()): AppNavigationState {
+  const cleanUrl = stripNavigationHash(url);
   const type = firstParam(params.type) ?? "food";
   const location = firstParam(params.location) ?? null;
   const barcode = firstParam(params.barcode) ?? segmentAfter(pathname, "/pantry/");
 
-  if (pathname === "/" || pathname === "") return baseState("root", pathname, url);
-  if (pathname === "/login") return baseState("login", pathname, url);
-  if (pathname === "/home") return baseState("home", pathname, url);
-  if (pathname === "/scanner") return baseState("scanner", pathname, url);
-  if (pathname === "/meals") return baseState("meals", pathname, url);
-  if (pathname === "/saved") return baseState("saved", pathname, url);
-  if (pathname === "/shopping") return baseState("shopping", pathname, url);
-  if (pathname === "/admin") return baseState("admin", pathname, url);
-  if (pathname.startsWith("/pantry/")) return { ...baseState("pantryItem", pathname, url), tab: type, subview: location, barcode };
-  if (pathname === "/pantry") return { ...baseState("pantry", pathname, url), tab: type, subview: location };
-  return baseState("unknown", pathname, url);
+  if (pathname === "/" || pathname === "") return baseState("root", pathname, cleanUrl);
+  if (pathname === "/login") return baseState("login", pathname, cleanUrl);
+  if (pathname === "/home") return baseState("home", pathname, cleanUrl);
+  if (pathname === "/scanner") return baseState("scanner", pathname, cleanUrl);
+  if (pathname === "/meals") return baseState("meals", pathname, cleanUrl);
+  if (pathname === "/saved") return baseState("saved", pathname, cleanUrl);
+  if (pathname === "/shopping") return baseState("shopping", pathname, cleanUrl);
+  if (pathname === "/admin") return baseState("admin", pathname, cleanUrl);
+  if (pathname.startsWith("/pantry/")) return { ...baseState("pantryItem", pathname, cleanUrl), tab: type, subview: location, barcode };
+  if (pathname === "/pantry") return { ...baseState("pantry", pathname, cleanUrl), tab: type, subview: location };
+  return baseState("unknown", pathname, cleanUrl);
 }
 
 export function subscribeNavigation(listener: () => void) {
@@ -80,17 +82,18 @@ export function isNavigationLayerVisible(id: string) {
 }
 
 export function replaceNavigationState(state: AppNavigationState) {
-  const next = mergeRouteState(state);
+  const next = cleanStateUrl(mergeRouteState(state));
   currentState = cloneState(next);
-  if (canUseHistory()) window.history.replaceState(withNavigationState(window.history.state, currentState), "", currentState.url);
+  if (canUseHistory()) window.history.replaceState(withNavigationState(window.history.state, currentState), "", historyUrlForState(currentState));
   notify();
 }
 
 export function pushNavigationState(nextState: AppNavigationState) {
-  if (isSameNavigationState(currentState, nextState)) return false;
+  const next = cleanStateUrl(nextState);
+  if (isSameNavigationState(currentState, next)) return false;
   if (currentState) appStack.push(cloneState(currentState));
-  currentState = cloneState(nextState);
-  if (canUseHistory()) window.history.pushState(withNavigationState(window.history.state, currentState), "", currentState.url);
+  currentState = cloneState(next);
+  if (canUseHistory()) window.history.pushState(withNavigationState(window.history.state, currentState), "", historyUrlForState(currentState));
   notify();
   return true;
 }
@@ -103,11 +106,11 @@ export function navigateTo(nextState: AppNavigationState, href: Href, options: {
 
 export function updateNavigationState(patch: Partial<AppNavigationState>, options: { push?: boolean } = {}) {
   const base = currentState ?? deriveNavigationState(currentPathname());
-  const next = { ...base, ...patch };
+  const next = cleanStateUrl({ ...base, ...patch });
   if (options.push) pushNavigationState(next);
   else {
     currentState = cloneState(next);
-    if (canUseHistory()) window.history.replaceState(withNavigationState(window.history.state, currentState), "", currentState.url);
+    if (canUseHistory()) window.history.replaceState(withNavigationState(window.history.state, currentState), "", historyUrlForState(currentState));
     notify();
   }
 }
@@ -390,6 +393,10 @@ function mergeRouteState(routeState: AppNavigationState) {
   };
 }
 
+function cleanStateUrl(state: AppNavigationState) {
+  return { ...state, url: stripNavigationHash(state.url) };
+}
+
 function notify() {
   listeners.forEach((listener) => listener());
 }
@@ -405,6 +412,27 @@ function currentPathname() {
 function currentUrl() {
   if (typeof window === "undefined") return "";
   return `${window.location.pathname}${window.location.search}${window.location.hash}`;
+}
+
+function historyUrlForState(state: AppNavigationState) {
+  const cleanUrl = stripNavigationHash(state.url);
+  if (!state.layerId) return cleanUrl;
+  const separator = cleanUrl.includes("#") ? "&" : "#";
+  return `${cleanUrl}${separator}${NAVIGATION_HASH_KEY}=${encodeURIComponent(state.layerId)}`;
+}
+
+function stripNavigationHash(url: string) {
+  const hashIndex = url.indexOf("#");
+  if (hashIndex < 0) return url;
+
+  const beforeHash = url.slice(0, hashIndex);
+  const hash = url.slice(hashIndex + 1);
+  const nextHash = hash
+    .split("&")
+    .filter((part) => !part.startsWith(`${NAVIGATION_HASH_KEY}=`))
+    .join("&");
+
+  return nextHash ? `${beforeHash}#${nextHash}` : beforeHash;
 }
 
 function firstParam(value: string | string[] | undefined) {
