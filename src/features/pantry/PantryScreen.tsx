@@ -21,7 +21,7 @@ const UNASSIGNED = "__unassigned__";
 
 export function PantryScreen() {
   const navigation = useNavigation();
-  const params = useLocalSearchParams<{ location?: string; type?: ProductType }>();
+  const params = useLocalSearchParams<{ location?: string | string[]; type?: ProductType | ProductType[] }>();
   const [activeType, setActiveType] = useState<ProductType>("food");
   const [items, setItems] = useState<PantryItem[]>([]);
   const [configuredLocations, setConfiguredLocations] = useState<string[]>([]);
@@ -35,10 +35,6 @@ export function PantryScreen() {
   const [depletedPromptBarcodes, setDepletedPromptBarcodes] = useState<string[]>([]);
   const [packagePickerItem, setPackagePickerItem] = useState<PantryItem | null>(null);
   const [quickMessage, setQuickMessage] = useState("");
-  useBrowserBackLayer(!!selectedLocation, () => {
-    setSelectedLocation(null);
-    setQuery("");
-  });
   useBrowserBackLayer(managerOpen, () => setManagerOpen(false));
   useBrowserBackLayer(!!packagePickerItem, () => setPackagePickerItem(null));
 
@@ -53,8 +49,15 @@ export function PantryScreen() {
   useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
 
   useEffect(() => {
-    if (params.type === "food" || params.type === "household_chemical") setActiveType(params.type);
+    const type = firstParam(params.type);
+    if (type === "food" || type === "household_chemical") setActiveType(type);
   }, [params.type]);
+
+  useEffect(() => {
+    const location = firstParam(params.location) ?? null;
+    setSelectedLocation(location);
+    setQuery("");
+  }, [params.location]);
 
   function changeType(type: ProductType) {
     setActiveType(type);
@@ -91,6 +94,7 @@ export function PantryScreen() {
   function openLocation(location: string) {
     setQuery("");
     setSelectedLocation(location);
+    router.push({ pathname: "/pantry", params: { type: activeType, location } });
   }
 
   function goBack() {
@@ -98,6 +102,7 @@ export function PantryScreen() {
     if (selectedLocation) {
       setSelectedLocation(null);
       setQuery("");
+      router.replace({ pathname: "/pantry", params: { type: activeType } });
       return;
     }
     router.back();
@@ -283,6 +288,10 @@ function locationIcon(location: string): keyof typeof MaterialCommunityIcons.gly
   if (value.includes("szaf")) return "cupboard-outline";
   if (value.includes("pół")) return "bookshelf";
   return "archive-outline";
+}
+
+function firstParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
 }
 
 const styles = StyleSheet.create({
