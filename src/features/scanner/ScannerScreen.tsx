@@ -40,7 +40,7 @@ export function ScannerScreen() {
   const [usdaBusy, setUsdaBusy] = useState(false);
   const [usdaMessage, setUsdaMessage] = useState("");
   const [depletedProducts, setDepletedProducts] = useState<Product[]>([]);
-  const [consumer, setConsumer] = useState<Consumer>({ id: "bartek", name: "Bartek" });
+  const [consumer, setConsumer] = useState<Consumer | null>(null);
   const [chemicalLevel, setChemicalLevel] = useState<ChemicalLevel>("full");
 
   useEffect(() => {
@@ -166,6 +166,11 @@ export function ScannerScreen() {
     const amount = Number(stockAmount.replace(",", "."));
     setActionMessage("");
     setActionError(false);
+    if (!consumer) {
+      setActionError(true);
+      setActionMessage("Najpierw dodaj i wybierz profil osoby w zakładce Posiłki.");
+      return;
+    }
     try {
       setBusy(true);
       const nutritionUnit = stockUnit === "szt" && canUseWholePackage(product) && product.nutritionBasis !== "perUnit"

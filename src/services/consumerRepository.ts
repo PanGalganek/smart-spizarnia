@@ -2,15 +2,10 @@ import { deleteDoc, getDocs, setDoc } from "firebase/firestore";
 import { Consumer } from "@/domain/meal";
 import { userCollection, userDoc } from "@/services/userData";
 
-export const defaultConsumers: Consumer[] = [
-  { id: "bartek", name: "Bartek", protected: true },
-  { id: "natalia", name: "Natalia", protected: true }
-];
-
 export async function listConsumers(): Promise<Consumer[]> {
   const snapshot = await getDocs(userCollection("consumers"));
-  const custom = snapshot.docs.map((entry) => entry.data() as Consumer);
-  return [...defaultConsumers, ...custom.filter((item) => !defaultConsumers.some((base) => base.id === item.id))]
+  return snapshot.docs
+    .map((entry) => entry.data() as Consumer)
     .sort((left, right) => left.name.localeCompare(right.name, "pl"));
 }
 
@@ -25,6 +20,6 @@ export async function addConsumer(name: string) {
 }
 
 export async function removeConsumer(consumer: Consumer) {
-  if (consumer.protected) throw new Error("Bartka i Natalii nie można usunąć.");
+  if (consumer.protected) throw new Error("Tego profilu nie można usunąć.");
   await deleteDoc(userDoc("consumers", consumer.id));
 }

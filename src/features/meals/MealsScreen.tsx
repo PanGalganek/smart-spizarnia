@@ -8,7 +8,7 @@ import { Nutrients, PantryItem } from "@/domain/product";
 import { MealHistory } from "@/features/meals/MealHistory";
 import { AddDepletedPrompt } from "@/features/shopping/AddDepletedPrompt";
 import { createMeal, getDailySummary, listMeals, listPantry } from "@/services/inventoryRepository";
-import { addConsumer, defaultConsumers, listConsumers } from "@/services/consumerRepository";
+import { addConsumer, listConsumers } from "@/services/consumerRepository";
 import { createMealIngredient, dateKey, scaleNutrients, sumNutrients } from "@/services/nutrition";
 import { canUseWholePackage, convertPantryAmount } from "@/services/pantryUnits";
 import { productType } from "@/services/productTypes";
@@ -42,17 +42,23 @@ export function MealsScreen() {
   const [depletedProducts, setDepletedProducts] = useState<PantryItem["product"][]>([]);
   const [modalMessage, setModalMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  const [consumers, setConsumers] = useState<Consumer[]>(defaultConsumers);
-  const [consumer, setConsumer] = useState<Consumer>(defaultConsumers[0]);
+  const [consumers, setConsumers] = useState<Consumer[]>([]);
+  const [consumer, setConsumer] = useState<Consumer | null>(null);
   const [newConsumer, setNewConsumer] = useState("");
 
   const refresh = useCallback(async () => {
     try {
-      const [nextPantry, nextMeals, nextSummary, nextConsumers] = await Promise.all([listPantry(), listMeals(), getDailySummary(dateKey(), consumer), listConsumers()]);
+      const [nextPantry, nextMeals, savedConsumers] = await Promise.all([listPantry(), listMeals(), listConsumers()]);
+      const nextConsumers = mergeConsumers(savedConsumers, consumersFromMeals(nextMeals));
+      const selectedConsumer = consumer ?? nextConsumers[0] ?? null;
+      const nextSummary = selectedConsumer
+        ? await getDailySummary(dateKey(), selectedConsumer)
+        : { dateKey: dateKey(), totals: {}, mealCount: 0, updatedAt: Date.now() };
       setPantry(nextPantry.filter((item) => productType(item.product) === "food"));
       setMeals(nextMeals);
       setDailySummary(nextSummary);
       setConsumers(nextConsumers);
+      if (!consumer && selectedConsumer) setConsumer(selectedConsumer);
     } catch { setMessage("Nie udało się pobrać danych."); }
   }, [consumer]);
   useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
@@ -125,6 +131,7 @@ export function MealsScreen() {
 
   async function saveMeal() {
     if (!type || !mealName || !ingredientResult.ingredients.length) return;
+    if (!consumer) return setModalMessage("Najpierw dodaj i wybierz profil osoby.");
     if (!servingCount) return setModalMessage("Podaj liczbę porcji od 1 do 100.");
     try {
       setBusy(true);
@@ -164,12 +171,12 @@ export function MealsScreen() {
         </View>
         <View style={styles.consumerPanel}>
           <Text style={styles.consumerTitle}>Czyj bilans pokazujemy?</Text>
-          <View style={styles.consumerRow}>{consumers.map((item) => <Pressable key={item.id} onPress={() => setConsumer(item)} style={[styles.consumerChip, consumer.id === item.id && styles.consumerChipActive]}><Text style={consumer.id === item.id ? styles.white : styles.consumerChipText}>{item.name}</Text></Pressable>)}</View>
-          <View style={styles.addConsumerRow}><TextInput value={newConsumer} onChangeText={setNewConsumer} placeholder="Dodaj kolejną osobę" style={styles.addConsumerInput} /><Pressable onPress={() => void createConsumer()} style={styles.addConsumerButton}><Text style={styles.white}>+ Dodaj</Text></Pressable></View>
+          {consumers.length ? <View style={styles.consumerRow}>{consumers.map((item) => <Pressable key={item.id} onPress={() => setConsumer(item)} style={[styles.consumerChip, consumer?.id === item.id && styles.consumerChipActive]}><Text style={consumer?.id === item.id ? styles.white : styles.consumerChipText}>{item.name}</Text></Pressable>)}</View> : <Text style={styles.emptyConsumers}>Brak profili. Dodaj pierwszą osobę, aby liczyć kalorie.</Text>}
+          <View style={styles.addConsumerRow}><TextInput value={newConsumer} onChangeText={setNewConsumer} placeholder="Dodaj osobę" style={styles.addConsumerInput} /><Pressable onPress={() => void createConsumer()} style={styles.addConsumerButton}><Text style={styles.white}>+ Dodaj</Text></Pressable></View>
         </View>
         <DailyNutritionSummary summary={dailySummary} />
         {!!message && <Text style={styles.successBanner}>{message}</Text>}
-        <MealHistory meals={meals.filter((meal) => (meal.consumerId ?? "bartek") === consumer.id)} onChanged={refresh} />
+        <MealHistory meals={consumer ? meals.filter((meal) => meal.consumerId === consumer.id) : []} onChanged={refresh} />
       </ScrollView>
 
       <Modal visible={creatorOpen} transparent animationType="fade" onRequestClose={() => setCreatorOpen(false)}>
@@ -183,7 +190,7 @@ export function MealsScreen() {
             {step === "type" && <TypeStep type={type} customName={customName} onType={chooseType} onCustomName={setCustomName} />}
             {step === "products" && <ProductsStep pantry={pantry} amounts={amounts} onEdit={editAmount} onRemove={removeIngredient} />}
             {step === "amount" && editedItem && <AmountStep item={editedItem} value={amountDraft} onChange={setAmountDraft} />}
-            {step === "review" && <ReviewStep name={`${mealName} - ${consumer.name}`} ingredients={ingredientResult.ingredients} totals={totals} portionTotals={portionTotals} servings={servings} onServings={setServings} />}
+            {step === "review" && consumer && <ReviewStep name={`${mealName} - ${consumer.name}`} ingredients={ingredientResult.ingredients} totals={totals} portionTotals={portionTotals} servings={servings} onServings={setServings} />}
 
             {!!modalMessage && <Text style={styles.errorBanner}>{modalMessage}</Text>}
             {(step !== "type" || type === "custom") && <View style={[styles.modalActions, compact && styles.compactModalActions]}>
@@ -247,6 +254,18 @@ function DailyNutritionSummary({ summary }: { summary: DailySummary }) {
 }
 
 function PrimaryButton({ label, onPress, disabled }: { label: string; onPress: () => void; disabled?: boolean }) { return <Pressable disabled={disabled} onPress={onPress} style={[styles.primary, disabled && styles.disabled]}><Text style={styles.white}>{label}</Text></Pressable>; }
+function consumersFromMeals(meals: Meal[]): Consumer[] {
+  const byId = new Map<string, Consumer>();
+  meals.forEach((meal) => {
+    if (meal.consumerId && meal.consumerName) byId.set(meal.consumerId, { id: meal.consumerId, name: meal.consumerName });
+  });
+  return [...byId.values()];
+}
+function mergeConsumers(saved: Consumer[], derived: Consumer[]): Consumer[] {
+  const byId = new Map<string, Consumer>();
+  [...saved, ...derived].forEach((consumer) => byId.set(consumer.id, consumer));
+  return [...byId.values()].sort((left, right) => left.name.localeCompare(right.name, "pl"));
+}
 function buildIngredients(pantry: PantryItem[], amounts: Record<string, string>) { const ingredients: MealIngredient[] = []; let error = ""; for (const item of pantry) { const amount = parseAmount(amounts[item.barcode]); if (amount <= 0) continue; try { ingredients.push(createMealIngredient(item, amount)); } catch (cause) { error = cause instanceof Error ? cause.message : "Nieprawidłowa ilość."; } } return { ingredients, error }; }
 function parseAmount(value?: string) { const number = Number((value ?? "").replace(",", ".")); return Number.isFinite(number) && number > 0 ? Math.round(number * 100) / 100 : 0; }
 function parseServings(value?: string) { const number = Number(value); return Number.isInteger(number) && number >= 1 && number <= 100 ? number : 0; }
@@ -256,7 +275,7 @@ function formatToday() { return new Date().toLocaleDateString("pl-PL", { weekday
 
 const styles = StyleSheet.create({
   pageScroll: { flex: 1, minHeight: 0 }, pageContent: { paddingBottom: 36 }, pageHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 14, marginBottom: 14 }, compactPageHeader: { alignItems: "stretch", flexDirection: "column" }, pageHeading: { flex: 1, minWidth: 0 }, pageTitle: { fontSize: 22, fontWeight: "800" }, muted: { color: colors.muted, fontSize: 13, flexShrink: 1 }, newButton: { backgroundColor: colors.primary, paddingHorizontal: 22, paddingVertical: 14, borderRadius: 12 }, compactNewButton: { alignItems: "center", width: "100%" }, white: { color: "white", fontWeight: "800" },
-  consumerPanel: { backgroundColor: colors.surface, borderRadius: 16, padding: 14, gap: 10, marginBottom: 12 }, consumerTitle: { fontSize: 17, fontWeight: "900" }, consumerRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 }, consumerChip: { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 }, consumerChipActive: { backgroundColor: colors.primary, borderColor: colors.primary }, consumerChipText: { fontWeight: "800" }, addConsumerRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 }, addConsumerInput: { flex: 1, minWidth: 170, backgroundColor: colors.background, borderRadius: 10, padding: 11 }, addConsumerButton: { backgroundColor: "#1565C0", borderRadius: 10, paddingHorizontal: 16, justifyContent: "center" },
+  consumerPanel: { backgroundColor: colors.surface, borderRadius: 16, padding: 14, gap: 10, marginBottom: 12 }, consumerTitle: { fontSize: 17, fontWeight: "900" }, consumerRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 }, consumerChip: { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 }, consumerChipActive: { backgroundColor: colors.primary, borderColor: colors.primary }, consumerChipText: { fontWeight: "800" }, emptyConsumers: { color: colors.muted, fontWeight: "700" }, addConsumerRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 }, addConsumerInput: { flex: 1, minWidth: 170, backgroundColor: colors.background, borderRadius: 10, padding: 11 }, addConsumerButton: { backgroundColor: "#1565C0", borderRadius: 10, paddingHorizontal: 16, justifyContent: "center" },
   dailyPanel: { backgroundColor: colors.surface, borderRadius: 18, padding: 15, marginBottom: 12 }, dailyHeading: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 9 }, dailyTitle: { fontSize: 19, fontWeight: "900" }, dailyCount: { color: colors.muted, fontWeight: "700" }, dailyGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 }, dailyItem: { flexGrow: 1, flexBasis: 90, minWidth: 90, backgroundColor: colors.background, borderRadius: 11, padding: 10 }, dailyValue: { fontSize: 15, fontWeight: "900", color: colors.text }, dailyKcal: { color: colors.primary, fontSize: 19 }, dailyLabel: { color: colors.muted, fontSize: 12, marginTop: 2 },
   successBanner: { color: "#1B5E20", backgroundColor: "#E8F5E9", borderRadius: 10, padding: 12, fontWeight: "700", marginBottom: 12 }, backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.48)", alignItems: "center", justifyContent: "center", padding: 24 }, compactBackdrop: { padding: 8 }, modalCard: { width: "90%", maxWidth: 900, height: "86%", backgroundColor: colors.surface, borderRadius: 22, padding: 22 }, compactModalCard: { width: "100%", height: "100%", borderRadius: 16, padding: 14 },
   modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 8, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: colors.border }, modalHeading: { flex: 1, minWidth: 0 }, stepLabel: { color: colors.primary, fontWeight: "800", fontSize: 12 }, modalTitle: { fontSize: 25, fontWeight: "900", marginTop: 3 }, compactModalTitle: { fontSize: 21 }, close: { padding: 10 }, closeText: { color: colors.muted, fontWeight: "700" }, stepScroll: { flex: 1, minHeight: 0 }, stepContent: { paddingVertical: 16, gap: 10 },

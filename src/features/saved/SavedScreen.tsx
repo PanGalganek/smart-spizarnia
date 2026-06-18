@@ -32,7 +32,7 @@ export function SavedScreen() {
   const [expiryDate, setExpiryDate] = useState("");
   const [packageDates, setPackageDates] = useState<string[]>([]);
   const [chemicalLevel, setChemicalLevel] = useState<ChemicalLevel>("full");
-  const [consumer, setConsumer] = useState<Consumer>({ id: "bartek", name: "Bartek" });
+  const [consumer, setConsumer] = useState<Consumer | null>(null);
   const [actionMode, setActionMode] = useState<ActionMode>("details");
   const [editName, setEditName] = useState("");
   const [editBrand, setEditBrand] = useState("");
@@ -217,6 +217,7 @@ export function SavedScreen() {
 
   async function addToToday() {
     if (!selected) return;
+    if (!consumer) return setError("Najpierw dodaj i wybierz profil osoby w zakładce Posiłki.");
     const value = parseAmount(amount);
     if (!value) return setError("Wpisz prawidłową ilość.");
     try {

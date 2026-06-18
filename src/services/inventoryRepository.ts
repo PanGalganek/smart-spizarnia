@@ -34,8 +34,8 @@ function normalizeMeal(meal: Meal): Meal {
     type: meal.type ?? "custom",
     dateKey: meal.dateKey ?? dateKey(meal.createdAt),
     servings,
-    consumerId: meal.consumerId ?? "bartek",
-    consumerName: meal.consumerName ?? "Bartek",
+    consumerId: meal.consumerId ?? "legacy",
+    consumerName: meal.consumerName ?? "Nieprzypisane",
     recipeTotals: meal.recipeTotals ?? (servings === 1 ? meal.totals : undefined),
     ingredients: meal.ingredients.map((item) => ({
       ...item,
@@ -177,14 +177,14 @@ export async function createMeal(
   ingredients: MealIngredient[],
   servings = 1,
   createdAt = Date.now(),
-  consumer: Consumer = { id: "bartek", name: "Bartek" }
+  consumer: Consumer | null = null
 ): Promise<Meal> {
   if (!ingredients.length) throw new Error("Dodaj przynajmniej jeden składnik.");
   if (!Number.isInteger(servings) || servings < 1 || servings > 100) throw new Error("Podaj liczbę porcji od 1 do 100.");
+  if (!consumer) throw new Error("Najpierw wybierz profil osoby.");
   const mealRef = doc(userCollection("meals"));
   const day = dateKey(createdAt);
   const summaryRef = userDoc("dailySummaries", summaryId(day, consumer.id));
-  const legacySummaryRef = userDoc("dailySummaries", day);
   const recipeTotals = sumNutrients(ingredients.map((item) => item.nutrients));
   const meal: Meal = {
     id: mealRef.id,
@@ -204,7 +204,6 @@ export async function createMeal(
     const pantryRefs = ingredients.map((item) => userDoc("pantry", item.barcode));
     const pantrySnapshots = await Promise.all(pantryRefs.map((ref) => transaction.get(ref)));
     const summarySnapshot = await transaction.get(summaryRef);
-    const legacySummarySnapshot = consumer.id === "bartek" ? await transaction.get(legacySummaryRef) : null;
 
     pantrySnapshots.forEach((snapshot, index) => {
       const ingredient = ingredients[index];
@@ -228,8 +227,6 @@ export async function createMeal(
 
     const current = summarySnapshot.exists()
       ? summarySnapshot.data() as DailySummary
-      : legacySummarySnapshot?.exists()
-        ? legacySummarySnapshot.data() as DailySummary
       : { dateKey: day, totals: {}, mealCount: 0, updatedAt: createdAt };
     transaction.set(summaryRef, withoutUndefined({
       dateKey: day,
@@ -250,12 +247,12 @@ export async function createUntrackedMeal(
   type: MealType,
   ingredient: MealIngredient,
   createdAt = Date.now(),
-  consumer: Consumer = { id: "bartek", name: "Bartek" }
+  consumer: Consumer | null = null
 ): Promise<Meal> {
+  if (!consumer) throw new Error("Najpierw wybierz profil osoby.");
   const mealRef = doc(userCollection("meals"));
   const day = dateKey(createdAt);
   const summaryRef = userDoc("dailySummaries", summaryId(day, consumer.id));
-  const legacySummaryRef = userDoc("dailySummaries", day);
   const meal: Meal = {
     id: mealRef.id,
     name,
@@ -270,11 +267,8 @@ export async function createUntrackedMeal(
 
   await runTransaction(db, async (transaction) => {
     const summarySnapshot = await transaction.get(summaryRef);
-    const legacySummarySnapshot = consumer.id === "bartek" ? await transaction.get(legacySummaryRef) : null;
     const current = summarySnapshot.exists()
       ? summarySnapshot.data() as DailySummary
-      : legacySummarySnapshot?.exists()
-        ? legacySummarySnapshot.data() as DailySummary
       : { dateKey: day, totals: {}, mealCount: 0, updatedAt: createdAt };
     transaction.set(summaryRef, withoutUndefined({
       dateKey: day,
@@ -297,7 +291,7 @@ export async function listMeals(day?: string): Promise<Meal[]> {
     .sort((left, right) => right.createdAt - left.createdAt);
 }
 
-export async function getDailySummary(day: string, consumer: Consumer = { id: "bartek", name: "Bartek" }): Promise<DailySummary> {
+export async function getDailySummary(day: string, consumer: Consumer): Promise<DailySummary> {
   const found = await getDoc(userDoc("dailySummaries", summaryId(day, consumer.id)));
   if (found.exists()) return found.data() as DailySummary;
   const dayMeals = (await listMeals(day)).filter((meal) => meal.consumerId === consumer.id);
@@ -318,15 +312,13 @@ export async function renameMeal(mealId: string, name: string) {
 export async function deleteMeal(mealInput: Meal, restoreIngredients = true) {
   const meal = normalizeMeal(mealInput);
   const mealRef = userDoc("meals", meal.id);
-  const summaryRef = userDoc("dailySummaries", summaryId(meal.dateKey, meal.consumerId ?? "bartek"));
-  const legacySummaryRef = userDoc("dailySummaries", meal.dateKey);
+  const summaryRef = userDoc("dailySummaries", summaryId(meal.dateKey, meal.consumerId ?? "legacy"));
 
   await runTransaction(db, async (transaction) => {
     const restorableIngredients = restoreIngredients ? meal.ingredients.filter((item) => item.tracksPantry !== false) : [];
     const pantryRefs = restorableIngredients.map((item) => userDoc("pantry", item.barcode));
     const pantrySnapshots = await Promise.all(pantryRefs.map((ref) => transaction.get(ref)));
     const summarySnapshot = await transaction.get(summaryRef);
-    const legacySummarySnapshot = !summarySnapshot.exists() && (meal.consumerId ?? "bartek") === "bartek" ? await transaction.get(legacySummaryRef) : null;
 
     pantrySnapshots.forEach((snapshot, index) => {
       const ingredient = restorableIngredients[index];
@@ -347,8 +339,8 @@ export async function deleteMeal(mealInput: Meal, restoreIngredients = true) {
       });
     });
 
-    if (summarySnapshot.exists() || legacySummarySnapshot?.exists()) {
-      const current = (summarySnapshot.exists() ? summarySnapshot.data() : legacySummarySnapshot?.data()) as DailySummary;
+    if (summarySnapshot.exists()) {
+      const current = summarySnapshot.data() as DailySummary;
       const mealCount = Math.max(0, (current.mealCount ?? 1) - 1);
       if (mealCount === 0) transaction.delete(summaryRef);
       else transaction.set(summaryRef, withoutUndefined({
