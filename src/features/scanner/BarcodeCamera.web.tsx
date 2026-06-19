@@ -2,6 +2,7 @@ import { BrowserMultiFormatReader, IScannerControls } from "@zxing/browser";
 import { BarcodeFormat, DecodeHintType } from "@zxing/library";
 import { createElement, useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { preferredCameraHeight, preferredCameraIndex, preferredCameraWidth } from "@/features/scanner/cameraPreferences";
 
 type Props = {
   onCancel: () => void;
@@ -17,7 +18,7 @@ export function BarcodeCamera({ onCancel, onScanned }: Props) {
   const [torch, setTorch] = useState(false);
   const [torchAvailable, setTorchAvailable] = useState(false);
   const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
-  const [cameraIndex, setCameraIndex] = useState(0);
+  const [cameraIndex, setCameraIndex] = useState(-1);
 
   useEffect(() => {
     let active = true;
@@ -40,14 +41,14 @@ export function BarcodeCamera({ onCancel, onScanned }: Props) {
         const devices = (await navigator.mediaDevices.enumerateDevices()).filter((device) => device.kind === "videoinput");
         const ordered = orderCameras(devices);
         if (active) setCameras(ordered);
-        const selected = ordered[cameraIndex];
+        const selected = cameraIndex >= 0 ? ordered[cameraIndex] : undefined;
         const controls = await reader.decodeFromConstraints(
           {
             audio: false,
             video: {
               ...(selected?.deviceId && selected.label ? { deviceId: { exact: selected.deviceId } } : { facingMode: { ideal: "environment" } }),
-              width: { ideal: 2560 },
-              height: { ideal: 1440 },
+              width: { ideal: preferredCameraWidth },
+              height: { ideal: preferredCameraHeight },
               frameRate: { ideal: 30 }
             }
           },
@@ -62,7 +63,14 @@ export function BarcodeCamera({ onCancel, onScanned }: Props) {
         const capabilities = track?.getCapabilities() as ExtendedCapabilities | undefined;
         if (track && capabilities) await improveCameraTrack(track, capabilities);
         const refreshed = (await navigator.mediaDevices.enumerateDevices()).filter((device) => device.kind === "videoinput");
-        if (active) setCameras(orderCameras(refreshed));
+        const refreshedOrdered = orderCameras(refreshed);
+        if (active) setCameras(refreshedOrdered);
+        if (cameraIndex < 0) {
+          controls.stop();
+          controlsRef.current = null;
+          setCameraIndex(preferredCameraIndex(refreshedOrdered.length));
+          return;
+        }
         setTorchAvailable(Boolean(capabilities && "torch" in capabilities));
         const settings = track?.getSettings();
         const resolution = settings?.width && settings?.height ? ` (${settings.width}x${settings.height})` : "";
@@ -105,7 +113,7 @@ export function BarcodeCamera({ onCancel, onScanned }: Props) {
     handledRef.current = false;
     setTorch(false);
     setStatus("Zmiana aparatu...");
-    setCameraIndex((current) => (current + 1) % cameras.length);
+    setCameraIndex((current) => ((current < 0 ? 0 : current) + 1) % cameras.length);
   }
 
   return (
@@ -206,8 +214,8 @@ async function improveCameraTrack(track: MediaStreamTrack, capabilities: Extende
   const advanced: Record<string, unknown>[] = [];
   if (capabilities.focusMode?.includes("continuous")) advanced.push({ focusMode: "continuous" });
   const constraints: MediaTrackConstraints = {
-    width: capabilities.width?.max ? { ideal: Math.min(capabilities.width.max, 2560) } : { ideal: 1920 },
-    height: capabilities.height?.max ? { ideal: Math.min(capabilities.height.max, 1440) } : { ideal: 1080 },
+    width: capabilities.width?.max ? { ideal: Math.min(capabilities.width.max, preferredCameraWidth) } : { ideal: preferredCameraWidth },
+    height: capabilities.height?.max ? { ideal: Math.min(capabilities.height.max, preferredCameraHeight) } : { ideal: preferredCameraHeight },
     ...(advanced.length ? { advanced: advanced as MediaTrackConstraintSet[] } : {})
   };
   try { await track.applyConstraints(constraints); } catch { /* Keep the best settings selected by Chrome. */ }

@@ -106,8 +106,7 @@ export function PantryItemScreen() {
       setBusy(true);
       await metadataQueue.current;
       await deletePantryItem(barcode);
-      setItem(null);
-      itemRef.current = null;
+      deleteLayer.closeLayer();
       replaceWithRoute({ pathname: "/pantry", params: { ...(returnType ? { type: returnType } : {}), ...(returnLocation ? { location: returnLocation } : {}) } });
     } catch {
       setMessage("Nie udało się usunąć produktu ze spiżarni.");

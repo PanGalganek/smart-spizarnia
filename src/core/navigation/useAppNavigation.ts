@@ -12,7 +12,6 @@ import {
   navigateTo,
   NavigationLayerKind,
   openNavigationLayer,
-  replaceNavigationState,
   subscribeNavigation,
   updateNavigationState
 } from "@/core/navigation/navigationManager";
@@ -55,7 +54,6 @@ export function navigateToRoute(href: RouteHref) {
 
 export function replaceWithRoute(href: RouteHref) {
   const path = hrefPath(href);
-  replaceNavigationState(deriveNavigationState(path, hrefParams(href), hrefUrl(href)));
   navigateTo(deriveNavigationState(path, hrefParams(href), hrefUrl(href)), href, { replace: true });
 }
 
