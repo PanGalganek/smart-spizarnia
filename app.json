@@ -2,7 +2,7 @@
   "expo": {
     "name": "Smart Spiżarnia",
     "slug": "smart-spizarnia",
-    "version": "0.11.28",
+    "version": "0.11.29",
     "orientation": "default",
     "scheme": "smartspizarnia",
     "userInterfaceStyle": "light",

@@ -1,5 +1,6 @@
 ﻿import { useEffect, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
+import { useRef } from "react";
 import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
 import { DatePickerField } from "@/core/components/DatePickerField";
@@ -11,6 +12,7 @@ import { ChemicalLevel, Product, ProductType, Unit } from "@/domain/product";
 import { Consumer } from "@/domain/meal";
 import { ManualProductForm } from "@/features/scanner/ManualProductForm";
 import { BarcodeCamera } from "@/features/scanner/BarcodeCamera";
+import { shouldAutoStartScanner } from "@/features/scanner/scannerLaunch";
 import { AddDepletedPrompt } from "@/features/shopping/AddDepletedPrompt";
 import { getProductByBarcode } from "@/services/openFoodFacts";
 import { changePantryQuantity, createUntrackedMeal, getPantryItem, getSavedProduct, saveChemicalPantryItem, saveProduct } from "@/services/inventoryRepository";
@@ -21,7 +23,7 @@ import { chemicalLevelLabel, chemicalLevels, isChemical, productTypes, withProdu
 import { searchUsdaFoods, UsdaFoodResult } from "@/services/usdaFoodData";
 
 export function ScannerScreen() {
-  const params = useLocalSearchParams<{ autoScan?: string }>();
+  const params = useLocalSearchParams<{ autoScan?: string | string[] }>();
   const appNavigation = useAppNavigation();
   const cameraLayer = useNavigationLayer("scanner-camera", "scanner", { scanner: true });
   const manualLayer = useNavigationLayer("scanner-manual-product", "form", { modal: "scanner-manual-product", mode: "add-product" });
@@ -45,10 +47,13 @@ export function ScannerScreen() {
   const [depletedProducts, setDepletedProducts] = useState<Product[]>([]);
   const [consumer, setConsumer] = useState<Consumer | null>(null);
   const [chemicalLevel, setChemicalLevel] = useState<ChemicalLevel>("full");
+  const autoScanHandled = useRef(false);
 
   useEffect(() => {
-    if (params.autoScan === "1") cameraLayer.openLayer();
-  }, [params.autoScan]);
+    if (!shouldAutoStartScanner(params.autoScan, appNavigation.state.view, autoScanHandled.current)) return;
+    autoScanHandled.current = true;
+    cameraLayer.openLayer();
+  }, [appNavigation.state.view, params.autoScan]);
 
   async function search(value = barcode) {
     const normalized = value.trim();
