@@ -169,6 +169,7 @@ export function MealsScreen() {
   }
 
   function setCreatorStep(nextStep: Step, selectedId: string | null = null, push = true) {
+    setModalMessage("");
     appNavigation.updateState({ mode: stepMode(nextStep), selectedId }, { push });
   }
 
