@@ -118,6 +118,9 @@ export function ScannerScreen() {
     void search(value);
   }
 
+  const bottomActionLabel = manualLayer.open ? "Anuluj" : cameraLayer.open ? "Zamknij" : "Cofnij";
+  const bottomAction = manualLayer.open ? manualLayer.closeLayer : cameraLayer.open ? cameraLayer.closeLayer : appNavigation.goBack;
+
   async function update(direction: 1 | -1) {
     if (!product) return;
     const amount = Number(stockAmount.replace(",", "."));
@@ -192,7 +195,7 @@ export function ScannerScreen() {
   }
 
   return (
-    <ModuleScreen title="Skaner">
+    <ModuleScreen title="Skaner" actionLabel={bottomActionLabel} onBack={bottomAction}>
       <AddDepletedPrompt products={depletedProducts} onClose={() => setDepletedProducts([])} onAdded={() => setActionMessage("Produkt zużyty i dodany do listy zakupów.")} />
       {manualLayer.open ? (
         <ManualProductForm

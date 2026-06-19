@@ -24,6 +24,7 @@ function installWindow(url = "/scanner") {
   let index = 0;
   const history = {
     get state() { return entries[index]?.state ?? null; },
+    get length() { return entries.length; },
     pushState: vi.fn((state: unknown, _title: string, nextUrl?: string | URL | null) => {
       entries.splice(index + 1);
       entries.push({ state, url: String(nextUrl ?? entries[index].url) });
@@ -49,6 +50,7 @@ function installWindow(url = "/scanner") {
   vi.stubGlobal("window", {
     history,
     location,
+    close: vi.fn(),
     setTimeout: (callback: () => void) => {
       callback();
       return 0;
@@ -77,6 +79,38 @@ describe("navigationManager", () => {
     expect(history.pushState).toHaveBeenCalledTimes(1);
   });
 
+  it("ignores a single Android system back press without changing the app screen", async () => {
+    const { entries, history } = installWindow("/saved");
+    const { deriveNavigationState, getCurrentNavigationState, handleSystemBackPress, openNavigationLayer, replaceNavigationState } = await import("./navigationManager");
+
+    replaceNavigationState(deriveNavigationState("/saved", {}, "/saved"));
+    openNavigationLayer("saved-product", { kind: "modal", name: "saved-product" }, { modal: "saved-product", mode: "saved-details", selectedId: "590" });
+    const before = getCurrentNavigationState();
+
+    const handled = handleSystemBackPress(entries[2].state);
+
+    expect(handled).toBe(true);
+    expect(getCurrentNavigationState()).toEqual(before);
+    expect(history.go).not.toHaveBeenCalled();
+  });
+
+  it("exits on a quick second Android system back press instead of navigating inside the app", async () => {
+    const { entries, history } = installWindow("/saved");
+    const now = vi.spyOn(Date, "now").mockReturnValueOnce(1000).mockReturnValueOnce(1400);
+    const { deriveNavigationState, getCurrentNavigationState, handleSystemBackPress, openNavigationLayer, replaceNavigationState } = await import("./navigationManager");
+
+    replaceNavigationState(deriveNavigationState("/saved", {}, "/saved"));
+    openNavigationLayer("saved-product", { kind: "modal", name: "saved-product" }, { modal: "saved-product", mode: "saved-details", selectedId: "590" });
+    const before = getCurrentNavigationState();
+
+    handleSystemBackPress(entries[2].state);
+    handleSystemBackPress(entries[2].state);
+
+    expect(getCurrentNavigationState()).toEqual(before);
+    expect(history.go).toHaveBeenCalledWith(-entries.length);
+    now.mockRestore();
+  });
+
   it("keeps navigation snapshots referentially stable until state changes", async () => {
     installWindow("/scanner");
     const { deriveNavigationState, getNavigationSnapshot, replaceNavigationState } = await import("./navigationManager");
@@ -87,9 +121,9 @@ describe("navigationManager", () => {
     expect(getNavigationSnapshot()).toBe(getNavigationSnapshot());
   });
 
-  it("pushes a scanner layer and closes it from system popstate", async () => {
+  it("pushes a scanner layer and closes it from the internal back action", async () => {
     const { entries } = installWindow("/scanner");
-    const { deriveNavigationState, handleSystemBackState, registerNavigationLayer, replaceNavigationState, getCurrentNavigationState } = await import("./navigationManager");
+    const { deriveNavigationState, handleBackNavigation, registerNavigationLayer, replaceNavigationState, getCurrentNavigationState } = await import("./navigationManager");
     const onBack = vi.fn();
 
     replaceNavigationState(deriveNavigationState("/scanner", {}, "/scanner"));
@@ -99,7 +133,7 @@ describe("navigationManager", () => {
     expect(nonGuardEntries(entries).map((entry) => entry.url)).toEqual(["/scanner", "/scanner#smart-pantry-layer=scanner-layer"]);
     expect(getCurrentNavigationState()?.scanner).toBe(true);
 
-    handleSystemBackState(entries[2].state);
+    handleBackNavigation(entries[2].state);
 
     expect(onBack).toHaveBeenCalledTimes(1);
     expect(getCurrentNavigationState()?.scanner).toBe(false);
@@ -133,7 +167,7 @@ describe("navigationManager", () => {
 
   it("restores the previous step inside the same layer before closing it", async () => {
     const { entries } = installWindow("/meals");
-    const { deriveNavigationState, getCurrentNavigationState, handleSystemBackState, openNavigationLayer, replaceNavigationState, updateNavigationState } = await import("./navigationManager");
+    const { deriveNavigationState, getCurrentNavigationState, handleBackNavigation, openNavigationLayer, replaceNavigationState, updateNavigationState } = await import("./navigationManager");
     const onBack = vi.fn();
 
     replaceNavigationState(deriveNavigationState("/meals", {}, "/meals"));
@@ -143,13 +177,13 @@ describe("navigationManager", () => {
     expect(nonGuardEntries(entries)).toHaveLength(3);
     expect(getCurrentNavigationState()?.mode).toBe("meal-products");
 
-    handleSystemBackState(entries[4].state);
+    handleBackNavigation(entries[4].state);
 
     expect(onBack).not.toHaveBeenCalled();
     expect(getCurrentNavigationState()?.layerId).toBe("meal-layer");
     expect(getCurrentNavigationState()?.mode).toBe("meal-type");
 
-    handleSystemBackState(entries[2].state);
+    handleBackNavigation(entries[2].state);
 
     expect(onBack).toHaveBeenCalledTimes(1);
     expect(getCurrentNavigationState()?.layerId).toBeNull();
@@ -157,7 +191,7 @@ describe("navigationManager", () => {
 
   it("keeps a parent modal visible when a nested modal is opened and restored", async () => {
     const { entries } = installWindow("/saved");
-    const { deriveNavigationState, getCurrentNavigationState, handleSystemBackState, isNavigationLayerVisible, openNavigationLayer, replaceNavigationState } = await import("./navigationManager");
+    const { deriveNavigationState, getCurrentNavigationState, handleBackNavigation, isNavigationLayerVisible, openNavigationLayer, replaceNavigationState } = await import("./navigationManager");
 
     replaceNavigationState(deriveNavigationState("/saved", {}, "/saved"));
     openNavigationLayer("saved-product", { kind: "modal", name: "saved-product" }, { modal: "saved-product", mode: "saved-details", selectedId: "590" });
@@ -174,7 +208,7 @@ describe("navigationManager", () => {
     expect(isNavigationLayerVisible("saved-product")).toBe(true);
     expect(isNavigationLayerVisible("location-picker")).toBe(true);
 
-    handleSystemBackState(entries[4].state);
+    handleBackNavigation(entries[4].state);
 
     expect(getCurrentNavigationState()?.layerId).toBe("saved-product");
     expect(getCurrentNavigationState()?.selectedId).toBe("590");
@@ -184,7 +218,7 @@ describe("navigationManager", () => {
 
   it("keeps saved product details as a separate Android back step", async () => {
     const { entries } = installWindow("/saved");
-    const { deriveNavigationState, getCurrentNavigationState, handleSystemBackState, openNavigationLayer, replaceNavigationState } = await import("./navigationManager");
+    const { deriveNavigationState, getCurrentNavigationState, handleBackNavigation, openNavigationLayer, replaceNavigationState } = await import("./navigationManager");
     const onBack = vi.fn();
 
     replaceNavigationState(deriveNavigationState("/saved", {}, "/saved"));
@@ -194,7 +228,7 @@ describe("navigationManager", () => {
     expect(nonGuardEntries(entries).map((entry) => entry.url)).toEqual(["/saved", "/saved#smart-pantry-layer=saved-product"]);
     expect(getCurrentNavigationState()?.selectedId).toBe("590");
 
-    const handled = handleSystemBackState(entries[2].state);
+    const handled = handleBackNavigation(entries[2].state);
 
     expect(handled).toBe(true);
     expect(onBack).toHaveBeenCalledTimes(1);
@@ -215,7 +249,7 @@ describe("navigationManager", () => {
 
   it("cleans hidden layer history when the browser jumps back several entries", async () => {
     const { entries } = installWindow("/saved");
-    const { deriveNavigationState, getCurrentNavigationState, getNavigationStackSnapshot, handleSystemBackState, isNavigationLayerVisible, openNavigationLayer, replaceNavigationState, updateNavigationState } = await import("./navigationManager");
+    const { deriveNavigationState, getCurrentNavigationState, getNavigationStackSnapshot, handleBackNavigation, isNavigationLayerVisible, openNavigationLayer, replaceNavigationState, updateNavigationState } = await import("./navigationManager");
 
     replaceNavigationState(deriveNavigationState("/saved", {}, "/saved"));
     openNavigationLayer("saved-product", { kind: "modal", name: "saved-product" }, { modal: "saved-product", mode: "saved-details", selectedId: "590" });
@@ -224,7 +258,7 @@ describe("navigationManager", () => {
     expect(nonGuardEntries(entries)).toHaveLength(3);
     expect(isNavigationLayerVisible("saved-product")).toBe(true);
 
-    handleSystemBackState(entries[0].state);
+    handleBackNavigation(entries[0].state);
 
     expect(getCurrentNavigationState()?.layerId).toBeNull();
     expect(getNavigationStackSnapshot()).toHaveLength(0);

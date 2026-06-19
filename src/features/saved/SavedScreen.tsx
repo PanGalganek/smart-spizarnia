@@ -2,6 +2,7 @@
 import { useCallback, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { BottomActionBar } from "@/core/components/BottomActionBar";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
 import { ConsumerPicker } from "@/core/components/ConsumerPicker";
 import { DatePickerField } from "@/core/components/DatePickerField";
@@ -108,6 +109,15 @@ export function SavedScreen() {
     }
     if (mode === "edit") fillEditForm(selected);
     appNavigation.updateState({ mode: actionModeToMode(mode) }, { push: true });
+  }
+
+  function closeSavedAction() {
+    setError("");
+    if (actionMode === "details") {
+      savedLayer.closeLayer();
+      return;
+    }
+    appNavigation.updateState({ mode: actionModeToMode("details") });
   }
 
   function setEditNumber(key: EditKey, value: string) {
@@ -302,6 +312,7 @@ export function SavedScreen() {
             <Pressable disabled={busy} onPress={() => void removeSavedProduct()} style={[styles.deleteButton, busy && styles.disabled]}><Text style={styles.deleteText}>Usuń z Zapisanych</Text></Pressable>
           </View>}
           {actionMode === "edit" && <View style={styles.actions}><Pressable disabled={busy} onPress={() => void saveEditedProduct()} style={[styles.addButton, busy && styles.disabled]}><Text style={styles.white}>{busy ? "Zapisywanie..." : "Zapisz poprawione dane"}</Text></Pressable></View>}
+          <BottomActionBar label={actionMode === "details" ? "Zamknij" : "Szczegóły"} onPress={closeSavedAction} />
         </View></View>
       </Modal>
     </ModuleScreen>

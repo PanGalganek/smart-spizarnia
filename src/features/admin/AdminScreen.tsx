@@ -2,6 +2,7 @@ import { useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useAuth } from "@/core/auth/AuthProvider";
+import { BottomActionBar } from "@/core/components/BottomActionBar";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
 import { useAppNavigation, useNavigationLayer } from "@/core/navigation/useAppNavigation";
 import { colors } from "@/core/theme";
@@ -131,6 +132,7 @@ export function AdminScreen() {
             </View> : <Pressable disabled={selected?.uid === profile?.uid} onPress={() => appNavigation.updateState({ mode: "admin-delete" }, { push: true })} style={[styles.deleteOutline, selected?.uid === profile?.uid && styles.disabled]}><Text style={styles.deleteText}>Usuń profil użytkownika</Text></Pressable>}
           </View>
         </ScrollView>
+        <BottomActionBar label="Zamknij" onPress={profileLayer.closeLayer} />
       </View></View>
     </Modal>
   </ModuleScreen>;

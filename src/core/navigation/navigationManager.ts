@@ -34,7 +34,7 @@ type LayerDescriptor = {
 const HISTORY_STATE_KEY = "__smartPantryNavigation";
 const NAVIGATION_HASH_KEY = "smart-pantry-layer";
 const HISTORY_GUARD_KEY = "__smartPantryBackGuard";
-const EXIT_PROMPT_MS = 2200;
+const DOUBLE_BACK_EXIT_MS = 2200;
 
 const layers = new Map<string, LayerDescriptor>();
 const appStack: AppNavigationState[] = [];
@@ -45,8 +45,7 @@ let currentState: AppNavigationState | null = null;
 let layerCounter = 0;
 let layerOrderCounter = 0;
 let applyingSystemBack = false;
-let lastExitPromptAt = 0;
-let exitPromptListener: ((visible: boolean) => void) | null = null;
+let lastSystemBackAt = 0;
 
 export function createNavigationLayerId(prefix = "layer") {
   layerCounter += 1;
@@ -95,6 +94,7 @@ export function replaceNavigationState(state: AppNavigationState) {
 export function pushNavigationState(nextState: AppNavigationState) {
   const next = cleanStateUrl(nextState);
   if (isSameNavigationState(currentState, next)) return false;
+  resetSystemBackExitWindow();
   if (currentState) appStack.push(cloneState(currentState));
   currentState = cloneState(next);
   if (canUseHistory()) window.history.pushState(withNavigationState(withoutBackGuard(window.history.state), currentState), "", historyUrlForState(currentState));
@@ -233,24 +233,26 @@ export function handleBackNavigation(rawState?: unknown) {
     return true;
   }
 
-  if (state.view === "home") {
-    const now = Date.now();
-    if (now - lastExitPromptAt < EXIT_PROMPT_MS) {
-      setExitPrompt(false);
-      lastExitPromptAt = 0;
-      return false;
-    }
-    lastExitPromptAt = now;
-    setExitPrompt(true);
-    armBackGuard();
-    return true;
-  }
-
   return false;
 }
 
 export function handleSystemBackState(rawState: unknown) {
-  return handleBackNavigation(rawState);
+  return handleSystemBackPress(rawState);
+}
+
+export function handleSystemBackPress(rawState?: unknown) {
+  if (!currentState) currentState = readNavigationState(rawState) ?? deriveNavigationState(currentPathname());
+
+  const now = Date.now();
+  if (now - lastSystemBackAt < DOUBLE_BACK_EXIT_MS) {
+    lastSystemBackAt = 0;
+    exitApplication();
+    return true;
+  }
+
+  lastSystemBackAt = now;
+  armBackGuard();
+  return true;
 }
 
 export function getCurrentNavigationState() {
@@ -263,13 +265,6 @@ export function getNavigationStackSnapshot() {
 
 export function isApplyingSystemBack() {
   return applyingSystemBack;
-}
-
-export function setExitPromptListener(listener: ((visible: boolean) => void) | null) {
-  exitPromptListener = listener;
-  return () => {
-    if (exitPromptListener === listener) exitPromptListener = null;
-  };
 }
 
 function applyLayerToState(base: AppNavigationState, layer: LayerDescriptor): AppNavigationState {
@@ -482,6 +477,7 @@ function readNavigationState(rawState: unknown): AppNavigationState | null {
 
 function writeCurrentHistoryEntry(state: AppNavigationState) {
   if (!canUseHistory()) return;
+  resetSystemBackExitWindow();
   if (historyIsGuardFor(state)) return;
   window.history.replaceState(withNavigationState(withoutBackGuard(window.history.state), state), "", historyUrlForState(state));
   armBackGuard();
@@ -591,12 +587,26 @@ function cleanStateUrl(state: AppNavigationState) {
   return { ...state, url: stripNavigationHash(state.url) };
 }
 
-function setExitPrompt(visible: boolean) {
-  exitPromptListener?.(visible);
-}
-
 function notify() {
   listeners.forEach((listener) => listener());
+}
+
+function resetSystemBackExitWindow() {
+  lastSystemBackAt = 0;
+}
+
+function exitApplication() {
+  if (typeof window === "undefined") return;
+  try {
+    window.close();
+  } catch {
+    // Some browsers block window.close() for PWA tabs not opened by script.
+  }
+
+  if (typeof window.history?.go === "function") {
+    const length = typeof window.history.length === "number" && window.history.length > 0 ? window.history.length : 1;
+    window.setTimeout(() => window.history.go(-length), 0);
+  }
 }
 
 function canUseHistory() {

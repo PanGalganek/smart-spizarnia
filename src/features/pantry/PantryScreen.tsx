@@ -2,6 +2,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { BottomActionBar } from "@/core/components/BottomActionBar";
 import { formatPolishDate } from "@/core/components/DatePickerField";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
 import { navigateToRoute, useAppNavigation, useNavigationLayer } from "@/core/navigation/useAppNavigation";
@@ -140,7 +141,7 @@ export function PantryScreen() {
   }
 
   return (
-    <ModuleScreen title="Spiżarnia">
+    <ModuleScreen title="Spiżarnia" actionLabel={selectedLocation ? "Lokalizacje" : "Cofnij"}>
       <AddDepletedPrompt products={shoppingPromptItems} onClose={() => { setShoppingPromptItems([]); setDepletedPromptBarcodes([]); }} onDeclined={declineShoppingPrompt} onAdded={() => setQuickMessage("Produkt dodano do listy zakupów.")} />
       {!!message && <Text style={styles.message}>{message}</Text>}
       {!!quickMessage && <Text style={styles.quickMessage}>{quickMessage}</Text>}
@@ -170,7 +171,6 @@ export function PantryScreen() {
         />
       </> : <>
         <View style={styles.locationHeader}>
-          <Pressable onPress={appNavigation.goBack} style={styles.locationsBack}><Text style={styles.locationsBackText}>‹ Lokalizacje</Text></Pressable>
           <Text style={styles.locationTitle}>{selectedLocation === UNASSIGNED ? "Nieprzypisane" : selectedLocation}</Text>
         </View>
         <TextInput value={query} onChangeText={setQuery} placeholder="Szukaj produktu..." autoCorrect={false} style={styles.search} />
@@ -196,6 +196,7 @@ export function PantryScreen() {
             })}
           </ScrollView>
           <Text style={styles.managerHint}>Lokalizację zawierającą produkty można usunąć dopiero po przeniesieniu produktów w inne miejsce.</Text>
+          <BottomActionBar label="Zamknij" onPress={managerLayer.closeLayer} />
         </View></View>
       </Modal>
       <PackagePicker visible={packagePickerLayer.open} item={packagePickerItem} onClose={() => { packagePickerLayer.closeLayer(); setPackagePickerItem(null); }} onSelect={(pack) => packagePickerItem && void quickConsume(packagePickerItem, pack.id)} />
@@ -241,6 +242,7 @@ function PackagePicker({ visible, item, onClose, onSelect }: { visible: boolean;
         <Text style={styles.packageChoiceName}>Opakowanie {index + 1}: {pack.capacity} {pack.unit}</Text>
         <Text style={styles.packageChoiceDate}>{pack.expiryDate ? `Ważne do: ${formatPolishDate(pack.expiryDate)}` : "Brak daty ważności"}</Text>
       </Pressable>)}</View>
+      <BottomActionBar label="Zamknij" onPress={onClose} />
     </View></View>
   </Modal>;
 }
@@ -281,7 +283,7 @@ const styles = StyleSheet.create({
   tabText: { color: colors.text, fontWeight: "800", textAlign: "center" },
   tabTextActive: { color: "white", fontWeight: "900", textAlign: "center" },
   tilesHeader: { marginBottom: 14, gap: 10 }, hint: { color: colors.muted, fontSize: 16 }, manageButton: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 7, backgroundColor: "#E8F5E9", borderWidth: 1, borderColor: colors.primary, borderRadius: 11, paddingHorizontal: 13, paddingVertical: 10 }, manageButtonText: { color: colors.primary, fontWeight: "800" }, tiles: { paddingBottom: 30 }, tileColumns: { gap: 12 }, tile: { flex: 1, minWidth: 0, minHeight: 150, backgroundColor: colors.surface, borderRadius: 18, padding: 18, marginBottom: 12, justifyContent: "center", borderWidth: 1, borderColor: colors.border }, unassignedTile: { backgroundColor: "#FFF8E8", borderColor: "#F2C879" }, tileName: { fontSize: 20, fontWeight: "900", marginTop: 10 }, tileCount: { color: colors.muted, marginTop: 4 }, tileWarning: { color: "#8A4B00", fontWeight: "800", fontSize: 12, marginTop: 8 },
-  locationHeader: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12, marginBottom: 12 }, locationsBack: { backgroundColor: colors.surface, borderRadius: 10, paddingHorizontal: 13, paddingVertical: 10 }, locationsBackText: { color: colors.primary, fontWeight: "800" }, locationTitle: { flex: 1, minWidth: 150, fontSize: 24, fontWeight: "900" }, search: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 13, paddingHorizontal: 16, paddingVertical: 14, fontSize: 17, marginBottom: 12 },
+  locationHeader: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12, marginBottom: 12 }, locationTitle: { flex: 1, minWidth: 150, fontSize: 24, fontWeight: "900" }, search: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 13, paddingHorizontal: 16, paddingVertical: 14, fontSize: 17, marginBottom: 12 },
   list: { paddingBottom: 30 }, emptyList: { flexGrow: 1 }, card: { backgroundColor: colors.surface, borderRadius: 16, padding: 18, marginBottom: 12, gap: 10 }, consumed: { opacity: 0.65 }, pressed: { opacity: 0.72 }, header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }, name: { flex: 1, fontWeight: "800", fontSize: 18 }, qty: { flexShrink: 1, textAlign: "right", fontWeight: "800", fontSize: 19, color: colors.primary }, packageDetails: { color: colors.muted, fontWeight: "700" }, meta: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 8 }, active: { color: colors.primary, fontWeight: "800" }, used: { color: colors.danger, fontWeight: "800" }, open: { color: colors.primary, fontWeight: "800" },
   stockRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6 }, battery: { flex: 1, minWidth: 120, maxWidth: 210, height: 18, borderWidth: 2, borderColor: colors.text, borderRadius: 5, padding: 2, overflow: "hidden" }, batteryFill: { height: "100%", backgroundColor: colors.primary, borderRadius: 2 }, batteryLow: { backgroundColor: colors.danger }, batteryTip: { width: 4, height: 9, backgroundColor: colors.text, borderTopRightRadius: 2, borderBottomRightRadius: 2, marginLeft: -6 }, stockText: { color: colors.muted, fontSize: 12, fontWeight: "800", marginLeft: 2 }, quickUseButton: { backgroundColor: "#EF6C00", borderRadius: 9, paddingHorizontal: 10, paddingVertical: 8 }, quickUseText: { color: "white", fontWeight: "900", fontSize: 12 },
   expirySummary: { color: "#8A4B00", backgroundColor: "#FFF3E0", borderRadius: 11, padding: 12, marginBottom: 12, fontWeight: "800" }, expiryWarning: { alignSelf: "flex-start", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, fontWeight: "900" }, expiryUrgent: { color: colors.danger, backgroundColor: "#FFEBEE" }, expirySoon: { color: "#8A4B00", backgroundColor: "#FFF3E0" }, message: { color: colors.danger, textAlign: "center", marginBottom: 10, fontWeight: "600" }, quickMessage: { color: colors.primary, backgroundColor: "#E8F5E9", borderRadius: 10, padding: 10, marginBottom: 10, fontWeight: "800" }, empty: { textAlign: "center", color: colors.muted, marginTop: 70 },

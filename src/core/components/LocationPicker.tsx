@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { BottomActionBar } from "@/core/components/BottomActionBar";
 import { useNavigationLayer } from "@/core/navigation/useAppNavigation";
 import { colors } from "@/core/theme";
 import { ProductType } from "@/domain/product";
@@ -42,6 +43,7 @@ export function LocationPicker({ value, onChange, label = "Lokalizacja", product
             ))}
           </ScrollView>
           <Pressable onPress={() => selectLocation("")} style={styles.noLocation}><Text style={styles.removeText}>Bez lokalizacji</Text></Pressable>
+          <BottomActionBar label="Zamknij" onPress={pickerLayer.closeLayer} />
         </View>
       </View>
     </Modal>

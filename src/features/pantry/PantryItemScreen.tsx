@@ -1,6 +1,7 @@
 ﻿import { useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { BottomActionBar } from "@/core/components/BottomActionBar";
 import { DatePickerField } from "@/core/components/DatePickerField";
 import { LocationPicker } from "@/core/components/LocationPicker";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
@@ -182,6 +183,7 @@ export function PantryItemScreen() {
       <Text style={styles.muted}>Dostępne: {summary?.text ?? `${item?.quantity ?? 0} ${item?.unit ?? ""}`}</Text>
       <View style={styles.consumeAmountRow}><TextInput autoFocus value={consumeAmount} onChangeText={setConsumeAmount} keyboardType="decimal-pad" placeholder="Wpisz zużytą ilość" style={styles.consumeInput} /><Text style={styles.consumeUnit}>{item?.unit}</Text></View>
       <Pressable disabled={busy} onPress={() => void consume()} style={[styles.useButton, busy && styles.disabled]}><Text style={styles.white}>{busy ? "Zapisywanie..." : "Potwierdź zużycie"}</Text></Pressable>
+      <BottomActionBar label="Zamknij" onPress={consumeLayer.closeLayer} />
     </View></View></Modal>
   </ModuleScreen>;
 }

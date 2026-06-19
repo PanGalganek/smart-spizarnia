@@ -1,6 +1,7 @@
 import { useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { BottomActionBar } from "@/core/components/BottomActionBar";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
 import { navigateToRoute, useAppNavigation, useNavigationLayer } from "@/core/navigation/useAppNavigation";
 import { colors } from "@/core/theme";
@@ -52,6 +53,14 @@ export function ShoppingScreen() {
   function confirmSameProduct() {
     setPurchaseError("");
     appNavigation.updateState({ mode: purchaseStepToMode("quantity") }, { push: true });
+  }
+
+  function closePurchaseAction() {
+    if (purchaseStep === "same-product") {
+      purchaseLayer.closeLayer();
+      return;
+    }
+    appNavigation.updateState({ mode: purchaseStepToMode("same-product") });
   }
 
   async function addPurchasedProduct() {
@@ -134,6 +143,7 @@ export function ShoppingScreen() {
             <Text style={styles.modalText}>{selected?.product ? "Zeskanuj nowy produkt, aby zapisać jego kod i dane w aplikacji." : "Ten ręczny wpis nie ma jeszcze danych produktu. Zeskanuj kod, aby dodać zakup do spiżarni."}</Text>
             <View style={styles.modalActions}><Pressable onPress={() => appNavigation.updateState({ mode: purchaseStepToMode("same-product") })} style={styles.secondary}><Text>Wstecz</Text></Pressable><Pressable onPress={() => void finishWithoutScanner()} style={styles.secondary}><Text>Nie otwieraj</Text></Pressable><Pressable onPress={() => void openScannerForReplacement()} style={styles.primary}><Text style={styles.white}>Otwórz skaner</Text></Pressable></View>
           </>}
+          <BottomActionBar label={purchaseStep === "same-product" ? "Anuluj" : "Wstecz"} onPress={closePurchaseAction} />
         </View></View>
       </Modal>
     </ModuleScreen>

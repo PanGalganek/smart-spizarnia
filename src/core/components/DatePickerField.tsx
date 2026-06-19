@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { BottomActionBar } from "@/core/components/BottomActionBar";
 import { useNavigationLayer } from "@/core/navigation/useAppNavigation";
 import { colors } from "@/core/theme";
 
@@ -32,7 +33,7 @@ export function DatePickerField({ value, onChange, label = "Data ważności (opc
         </View>
         <View style={styles.week}>{weekdays.map((day) => <Text key={day} style={styles.weekday}>{day}</Text>)}</View>
         <View style={styles.days}>{days.map((day, index) => day ? <Pressable key={toIsoDate(day)} onPress={() => { onChange(toIsoDate(day)); pickerLayer.closeLayer(); }} style={[styles.day, value === toIsoDate(day) && styles.selectedDay]}><Text style={value === toIsoDate(day) ? styles.selectedText : undefined}>{day.getDate()}</Text></Pressable> : <View key={`empty-${index}`} style={styles.day} />)}</View>
-        <Pressable onPress={pickerLayer.closeLayer} style={styles.close}><Text>Zamknij</Text></Pressable>
+        <BottomActionBar label="Zamknij" onPress={pickerLayer.closeLayer} />
       </View></View>
     </Modal>
   </View>;
@@ -70,5 +71,5 @@ const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center", padding: 20 }, calendar: { width: "100%", maxWidth: 420, backgroundColor: colors.surface, borderRadius: 18, padding: 18 },
   monthHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, month: { fontSize: 19, fontWeight: "800", textTransform: "capitalize" }, nav: { padding: 10 }, navText: { fontSize: 30, color: colors.primary },
   week: { flexDirection: "row", marginTop: 8 }, weekday: { width: "14.285%", textAlign: "center", color: colors.muted, fontWeight: "700" }, days: { flexDirection: "row", flexWrap: "wrap", marginTop: 6 },
-  day: { width: "14.285%", aspectRatio: 1, alignItems: "center", justifyContent: "center", borderRadius: 22 }, selectedDay: { backgroundColor: colors.primary }, selectedText: { color: "white", fontWeight: "800" }, close: { alignSelf: "flex-end", backgroundColor: colors.background, paddingHorizontal: 18, paddingVertical: 11, borderRadius: 10, marginTop: 12 }
+  day: { width: "14.285%", aspectRatio: 1, alignItems: "center", justifyContent: "center", borderRadius: 22 }, selectedDay: { backgroundColor: colors.primary }, selectedText: { color: "white", fontWeight: "800" }
 });

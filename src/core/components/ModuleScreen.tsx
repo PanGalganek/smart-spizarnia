@@ -1,11 +1,19 @@
 import { Redirect } from "expo-router";
 import { PropsWithChildren } from "react";
-import { ActivityIndicator, Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, SafeAreaView, StyleSheet, Text, View } from "react-native";
 import { useAuth } from "@/core/auth/AuthProvider";
+import { BottomActionBar } from "@/core/components/BottomActionBar";
 import { useAppNavigation } from "@/core/navigation/useAppNavigation";
 import { colors } from "@/core/theme";
 
-export function ModuleScreen({ title, children, onBack }: PropsWithChildren<{ title: string; onBack?: () => void }>) {
+type ModuleScreenProps = PropsWithChildren<{
+  title: string;
+  actionLabel?: string;
+  actionVisible?: boolean;
+  onBack?: () => void;
+}>;
+
+export function ModuleScreen({ title, children, actionLabel = "Cofnij", actionVisible = true, onBack }: ModuleScreenProps) {
   const { user, loading, isActive } = useAuth();
   const appNavigation = useAppNavigation();
   if (loading) return <View style={styles.loading}><ActivityIndicator color={colors.primary} /></View>;
@@ -13,13 +21,12 @@ export function ModuleScreen({ title, children, onBack }: PropsWithChildren<{ ti
   return (
     <SafeAreaView style={styles.page}>
       <View style={styles.header}>
-        <Pressable onPress={onBack ?? appNavigation.goBack} style={styles.back}>
-          <Text style={styles.backText}>Wstecz</Text>
-        </Pressable>
+        <View style={styles.headerSide} />
         <Text style={styles.title}>{title}</Text>
-        <View style={styles.back} />
+        <View style={styles.headerSide} />
       </View>
       <View style={styles.content}>{children}</View>
+      <BottomActionBar visible={actionVisible} label={actionLabel} onPress={onBack ?? appNavigation.goBack} />
     </SafeAreaView>
   );
 }
@@ -27,9 +34,8 @@ export function ModuleScreen({ title, children, onBack }: PropsWithChildren<{ ti
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.background },
   header: { padding: 20, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  back: { width: 76, paddingVertical: 10 },
-  backText: { color: colors.primary, fontWeight: "700" },
+  headerSide: { width: 76 },
   title: { fontSize: 28, fontWeight: "800", color: colors.text },
-  content: { flex: 1, minHeight: 0, paddingHorizontal: 24, paddingBottom: 24 }
+  content: { flex: 1, minHeight: 0, paddingHorizontal: 24, paddingBottom: 12 }
   ,loading: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background }
 });

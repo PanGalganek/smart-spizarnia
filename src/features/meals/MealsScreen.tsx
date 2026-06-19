@@ -1,6 +1,7 @@
 import { useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { FlatList, GestureResponderEvent, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { BottomActionBar } from "@/core/components/BottomActionBar";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
 import { useAppNavigation, useNavigationLayer } from "@/core/navigation/useAppNavigation";
 import { colors } from "@/core/theme";
@@ -212,6 +213,7 @@ export function MealsScreen() {
               {step === "amount" && <PrimaryButton label="Dodaj ilość" onPress={confirmAmount} />}
               {step === "review" && <PrimaryButton label={busy ? "Zapisywanie..." : "Zapisz i odejmij produkty"} onPress={() => void saveMeal()} disabled={busy} />}
             </View>}
+            <BottomActionBar label={step === "type" ? "Zamknij" : "Wstecz"} onPress={step === "type" ? creatorLayer.closeLayer : backInCreator} />
           </View>
         </View>
       </Modal>
