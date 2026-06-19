@@ -14,8 +14,8 @@ import { ManualProductForm } from "@/features/scanner/ManualProductForm";
 import { BarcodeCamera } from "@/features/scanner/BarcodeCamera";
 import { shouldAutoStartScanner } from "@/features/scanner/scannerLaunch";
 import { AddDepletedPrompt } from "@/features/shopping/AddDepletedPrompt";
-import { getProductByBarcode } from "@/services/openFoodFacts";
-import { changePantryQuantity, createUntrackedMeal, getPantryItem, getSavedProduct, saveChemicalPantryItem, saveProduct } from "@/services/inventoryRepository";
+import { getProductByBarcode, withInferredPackageSize } from "@/services/openFoodFacts";
+import { changePantryQuantity, createUntrackedMeal, getPantryItem, getSavedProduct, saveChemicalPantryItem } from "@/services/inventoryRepository";
 import { createUntrackedMealIngredient } from "@/services/nutrition";
 import { canUseWholePackage, convertPantryAmount, preferredPantryUnit } from "@/services/pantryUnits";
 import { shouldAskToBuyAgain } from "@/services/shoppingPrompt";
@@ -63,7 +63,7 @@ export function ScannerScreen() {
     try {
       const saved = await getSavedProduct(normalized);
       if (saved) {
-        const typedSaved = withProductType(saved, activeType);
+        const typedSaved = withProductType(withInferredPackageSize(saved), activeType);
         setProduct(typedSaved);
         setStockUnit(canUseWholePackage(typedSaved) ? "szt" : typedSaved.defaultUnit ?? "szt");
         setStockAmount("1");
@@ -74,7 +74,7 @@ export function ScannerScreen() {
         return;
       }
       const result = await getProductByBarcode(normalized);
-      const typedResult = result ? withProductType(result, activeType) : null;
+      const typedResult = result ? withProductType(withInferredPackageSize(result), activeType) : null;
       setProduct(typedResult);
       if (typedResult) {
         setStockUnit(canUseWholePackage(typedResult) ? "szt" : typedResult.defaultUnit ?? "szt");
@@ -184,13 +184,14 @@ export function ScannerScreen() {
     }
     try {
       setBusy(true);
-      const nutritionUnit = stockUnit === "szt" && canUseWholePackage(product) && product.nutritionBasis !== "perUnit"
-        ? preferredPantryUnit(product, stockUnit)
+      const mealProduct = withInferredPackageSize(product);
+      const nutritionUnit = stockUnit === "szt" && canUseWholePackage(mealProduct) && mealProduct.nutritionBasis !== "perUnit"
+        ? preferredPantryUnit(mealProduct, stockUnit)
         : stockUnit;
-      const nutritionAmount = nutritionUnit === stockUnit ? amount : convertPantryAmount(product, amount, stockUnit, nutritionUnit);
-      const ingredient = createUntrackedMealIngredient(product, nutritionAmount, nutritionUnit);
-      await saveProduct(product);
-      await createUntrackedMeal(`Przekąska: ${product.name}`, "snack", ingredient, Date.now(), consumer);
+      const nutritionAmount = nutritionUnit === stockUnit ? amount : convertPantryAmount(mealProduct, amount, stockUnit, nutritionUnit);
+      const ingredient = createUntrackedMealIngredient(mealProduct, nutritionAmount, nutritionUnit);
+      await createUntrackedMeal(`Przekąska: ${mealProduct.name}`, "snack", ingredient, Date.now(), consumer);
+      setProduct(mealProduct);
       setActionMessage(`Dodano do bilansu osoby ${consumer.name}: ${amount} ${stockUnit}, ${ingredient.nutrients.energyKcal ?? 0} kcal. Stan spiżarni nie został zmieniony.`);
       setMessage("Produkt zapisany w dzisiejszym bilansie.");
     } catch (error) {

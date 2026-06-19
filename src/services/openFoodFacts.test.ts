@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getProductByBarcode, parsePackageSize } from "@/services/openFoodFacts";
+import { getProductByBarcode, parsePackageSize, withInferredPackageSize } from "@/services/openFoodFacts";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -18,6 +18,13 @@ describe("gramatura Open Food Facts", () => {
 
   it("korzysta z pol strukturalnych API", () => {
     expect(parsePackageSize({ product_quantity: 750, product_quantity_unit: "ml" })).toEqual({ amount: 750, unit: "ml" });
+  });
+
+  it("uzupełnia objętość starego produktu z tekstu porcji", () => {
+    expect(withInferredPackageSize({
+      barcode: "1", name: "Napój", servingSize: "330ml", defaultUnit: "szt", nutritionBasis: "per100",
+      nutrientsPer100g: { energyKcal: 42 }, source: "open-food-facts", updatedAt: 1
+    })).toMatchObject({ packageAmount: 330, packageUnit: "ml" });
   });
 });
 

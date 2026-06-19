@@ -74,6 +74,26 @@ export async function getProductByBarcode(barcode: string): Promise<Product | nu
   };
 }
 
+export function withInferredPackageSize(product: Product): Product {
+  const existingUnit = product.packageUnit ?? (product.defaultUnit === "g" || product.defaultUnit === "ml" ? product.defaultUnit : undefined);
+  if (product.packageAmount && product.packageAmount > 0 && existingUnit) {
+    return {
+      ...product,
+      packageUnit: existingUnit,
+      ...(existingUnit === "g" && !product.netWeightGrams ? { netWeightGrams: product.packageAmount } : {})
+    };
+  }
+
+  const inferred = parsePackageSize({ serving_size: product.servingSize });
+  if (!inferred) return product;
+  return {
+    ...product,
+    packageAmount: inferred.amount,
+    packageUnit: inferred.unit,
+    ...(inferred.unit === "g" && !product.netWeightGrams ? { netWeightGrams: inferred.amount } : {})
+  };
+}
+
 async function fetchProductData(urls: string[]): Promise<any | null> {
   let lastError: unknown;
   for (const url of urls) {
