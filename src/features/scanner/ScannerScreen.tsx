@@ -245,7 +245,7 @@ export function ScannerScreen() {
               <View style={styles.usdaNutrition}><Text style={styles.usdaKcal}>{result.product.nutrientsPer100g.energyKcal ?? 0} kcal</Text><Text style={styles.muted}>B {result.product.nutrientsPer100g.proteins ?? 0} | W {result.product.nutrientsPer100g.carbohydrates ?? 0} | T {result.product.nutrientsPer100g.fat ?? 0}</Text></View>
             </Pressable>)}
           </View>}
-          {!product && <Pressable onPress={manualLayer.openLayer} style={styles.manual}><Text style={styles.white}>Dodaj produkt ręcznie</Text></Pressable>}
+          {!product && <Pressable onPress={() => manualLayer.openLayer()} style={styles.manual}><Text style={styles.white}>Dodaj produkt ręcznie</Text></Pressable>}
           {product && (
             <View style={styles.product}>              <Text style={styles.name}>{product.name}</Text>
               <Text>{product.brand}</Text>
@@ -269,7 +269,7 @@ export function ScannerScreen() {
                 {!isChemical(product) && <Pressable disabled={busy} onPress={() => void eatNow()} style={[styles.eat, busy && styles.disabled]}><Text style={styles.white}>Zjedz teraz - tylko do bilansu</Text></Pressable>}
               </View>
               {!!actionMessage && <Text style={[styles.actionMessage, actionError ? styles.actionError : styles.actionSuccess]}>{actionMessage}</Text>}
-              {product.nutrientsPer100g.energyKcal === undefined && <Pressable onPress={manualLayer.openLayer} style={styles.manual}><Text style={styles.white}>Uzupełnij kalorie ręcznie</Text></Pressable>}
+              {product.nutrientsPer100g.energyKcal === undefined && <Pressable onPress={() => manualLayer.openLayer()} style={styles.manual}><Text style={styles.white}>Uzupełnij kalorie ręcznie</Text></Pressable>}
             </View>
           )}
         </View>

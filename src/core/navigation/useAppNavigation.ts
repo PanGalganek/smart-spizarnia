@@ -16,6 +16,7 @@ import {
   subscribeNavigation,
   updateNavigationState
 } from "@/core/navigation/navigationManager";
+import { isNavigationPatch } from "@/core/navigation/navigationPatch";
 
 type RouteHref = Parameters<typeof router.push>[0];
 
@@ -78,10 +79,4 @@ function hrefUrl(href: RouteHref) {
     .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(Array.isArray(value) ? value[0] ?? "" : value)}`)
     .join("&");
   return search ? `${path}?${search}` : path;
-}
-
-function isNavigationPatch(value: unknown): value is Partial<AppNavigationState> {
-  if (!value || typeof value !== "object") return false;
-  return ["view", "path", "url", "tab", "subview", "modal", "scanner", "mode", "editingProductId", "selectedId", "barcode", "layerId", "layerKind", "layerName"]
-    .some((key) => key in value);
 }
