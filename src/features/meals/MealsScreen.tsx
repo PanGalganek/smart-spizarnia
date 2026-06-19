@@ -9,7 +9,7 @@ import { Consumer, DailySummary, Meal, MealIngredient, MealType } from "@/domain
 import { Nutrients, PantryItem } from "@/domain/product";
 import { MealHistory } from "@/features/meals/MealHistory";
 import { AddDepletedPrompt } from "@/features/shopping/AddDepletedPrompt";
-import { createMeal, getDailySummary, listMeals, listPantry, updateProductDetails } from "@/services/inventoryRepository";
+import { createMeal, getDailySummary, listMeals, listPantry } from "@/services/inventoryRepository";
 import { addConsumer, listConsumers, removeConsumer } from "@/services/consumerRepository";
 import { createMealIngredient, dateKey, scaleNutrients, sumNutrients, usesWeightPerPiece } from "@/services/nutrition";
 import { wholePackageConsumptionAmount } from "@/services/pantryUnits";
@@ -39,8 +39,6 @@ export function MealsScreen() {
   const [customName, setCustomName] = useState("");
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [amountDraft, setAmountDraft] = useState("");
-  const [unitWeightDraft, setUnitWeightDraft] = useState("");
-  const [amountSaving, setAmountSaving] = useState(false);
   const [servings, setServings] = useState("1");
   const [message, setMessage] = useState("");
   const [depletedProducts, setDepletedProducts] = useState<PantryItem["product"][]>([]);
@@ -84,7 +82,6 @@ export function MealsScreen() {
     setCustomName("");
     setAmounts({});
     setAmountDraft("");
-    setUnitWeightDraft("");
     setServings("1");
     setModalMessage("");
     creatorLayer.openLayer();
@@ -105,40 +102,22 @@ export function MealsScreen() {
 
   function editAmount(item: PantryItem) {
     setAmountDraft(amounts[item.barcode] ?? "");
-    setUnitWeightDraft(textNumber(item.product.netWeightGrams));
     setModalMessage("");
     setCreatorStep("amount", item.barcode);
   }
 
-  async function confirmAmount() {
+  function confirmAmount() {
     if (!editedItem) return;
     const amount = parseAmount(amountDraft);
     if (amount <= 0) return setModalMessage("Wpisz ilość większą od zera.");
     if (amount > editedItem.quantity) return setModalMessage(`Dostępne jest tylko ${editedItem.quantity} ${editedItem.unit}.`);
-    let itemForMeal = editedItem;
-    if (usesWeightPerPiece(editedItem.product, editedItem.unit)) {
-      const unitWeight = parseAmount(unitWeightDraft);
-      if (unitWeight <= 0) return setModalMessage(`Podaj masę jednej sztuki produktu: ${editedItem.product.name}.`);
-      if (unitWeight !== editedItem.product.netWeightGrams) {
-        try {
-          setAmountSaving(true);
-          const product = await updateProductDetails({ ...editedItem.product, netWeightGrams: unitWeight });
-          itemForMeal = { ...editedItem, product };
-          setPantry((current) => current.map((item) => item.barcode === editedItem.barcode ? itemForMeal : item));
-        } catch {
-          setAmountSaving(false);
-          return setModalMessage("Nie udało się zapisać masy jednej sztuki.");
-        }
-      }
+    if (usesWeightPerPiece(editedItem.product, editedItem.unit) && !editedItem.product.netWeightGrams) {
+      return setModalMessage(`Uzupełnij masę jednej sztuki w Zapisane > ${editedItem.product.name} > Edytuj dane produktu.`);
     }
-    try { createMealIngredient(itemForMeal, amount); }
-    catch (error) {
-      setAmountSaving(false);
-      return setModalMessage(error instanceof Error ? error.message : "Nieprawidłowa ilość.");
-    }
+    try { createMealIngredient(editedItem, amount); }
+    catch (error) { return setModalMessage(error instanceof Error ? error.message : "Nieprawidłowa ilość."); }
     setAmounts((current) => ({ ...current, [editedItem.barcode]: String(amount) }));
     setModalMessage("");
-    setAmountSaving(false);
     setCreatorStep("products", null, false);
   }
 
@@ -266,7 +245,7 @@ export function MealsScreen() {
 
             {step === "type" && <TypeStep type={type} customName={customName} onType={chooseType} onCustomName={setCustomName} />}
             {step === "products" && <ProductsStep pantry={pantry} amounts={amounts} onEdit={editAmount} onRemove={removeIngredient} />}
-            {step === "amount" && editedItem && <AmountStep item={editedItem} value={amountDraft} onChange={(value) => { setAmountDraft(value); setModalMessage(""); }} unitWeight={unitWeightDraft} onUnitWeightChange={(value) => { setUnitWeightDraft(value); setModalMessage(""); }} />}
+            {step === "amount" && editedItem && <AmountStep item={editedItem} value={amountDraft} onChange={(value) => { setAmountDraft(value); setModalMessage(""); }} />}
             {step === "review" && consumer && <ReviewStep name={`${mealName} - ${consumer.name}`} ingredients={ingredientResult.ingredients} totals={totals} portionTotals={portionTotals} servings={servings} onServings={setServings} />}
 
             {!!modalMessage && <Text style={styles.errorBanner}>{modalMessage}</Text>}
@@ -275,7 +254,7 @@ export function MealsScreen() {
               <View style={styles.actionSpacer} />
               {step === "type" && type === "custom" && <PrimaryButton label="Dalej: wybierz produkty" onPress={continueFromType} />}
               {step === "products" && <PrimaryButton label="Dalej: podsumowanie" onPress={continueToReview} />}
-              {step === "amount" && <PrimaryButton label={amountSaving ? "Zapisywanie..." : "Dodaj ilość"} onPress={() => void confirmAmount()} disabled={amountSaving} />}
+              {step === "amount" && <PrimaryButton label="Dodaj ilość" onPress={confirmAmount} />}
               {step === "review" && <PrimaryButton label={busy ? "Zapisywanie..." : "Zapisz i odejmij produkty"} onPress={() => void saveMeal()} disabled={busy} />}
             </View>}
             <BottomActionBar label={step === "type" ? "Zamknij" : "Wstecz"} onPress={step === "type" ? creatorLayer.closeLayer : backInCreator} />
@@ -297,14 +276,13 @@ function ProductsStep({ pantry, amounts, onEdit, onRemove }: { pantry: PantryIte
   }} />;
 }
 
-function AmountStep({ item, value, onChange, unitWeight, onUnitWeightChange }: { item: PantryItem; value: string; onChange: (value: string) => void; unitWeight: string; onUnitWeightChange: (value: string) => void }) {
+function AmountStep({ item, value, onChange }: { item: PantryItem; value: string; onChange: (value: string) => void }) {
   const amount = parseAmount(value);
-  const needsUnitWeight = usesWeightPerPiece(item.product, item.unit);
-  const previewItem = needsUnitWeight ? { ...item, product: { ...item.product, netWeightGrams: parseAmount(unitWeight) || undefined } } : item;
+  const missingUnitWeight = usesWeightPerPiece(item.product, item.unit) && !item.product.netWeightGrams;
   let kcal = 0;
-  try { if (amount > 0) kcal = createMealIngredient(previewItem, Math.min(amount, item.quantity)).nutrients.energyKcal ?? 0; } catch { /* The form below collects the missing data. */ }
+  try { if (amount > 0) kcal = createMealIngredient(item, Math.min(amount, item.quantity)).nutrients.energyKcal ?? 0; } catch { /* A clear instruction is shown below. */ }
   const packageAmount = wholePackageConsumptionAmount(item.product, item.unit);
-  return <View style={styles.amountStep}><Text style={styles.amountProduct}>{item.product.name}</Text><Text style={styles.available}>Dostępne w spiżarni: {item.quantity} {item.unit}</Text>{packageAmount && packageAmount <= item.quantity && <Pressable onPress={() => onChange(String(packageAmount))} style={styles.wholePackage}><Text style={styles.wholePackageText}>Zużyj całe opakowanie: 1 szt. ({item.product.packageAmount} {item.product.packageUnit})</Text></Pressable>}{needsUnitWeight && <View style={styles.unitWeightBox}><Text style={styles.unitWeightLabel}>Masa jednej sztuki (g)</Text><Text style={styles.unitWeightHint}>Podaj masę jednego jajka lub jednej sztuki, a nie całego opakowania.</Text><TextInput value={unitWeight} onChangeText={onUnitWeightChange} keyboardType="decimal-pad" placeholder="Np. 55" style={styles.unitWeightInput} /></View>}<View style={styles.amountEntry}><TextInput autoFocus={!needsUnitWeight || !!unitWeight} selectTextOnFocus value={value} onChangeText={onChange} keyboardType="decimal-pad" placeholder="0" style={styles.amountInput} /><Text style={styles.amountUnit}>{item.unit}</Text></View><Text style={styles.caloriePreview}>{needsUnitWeight && !parseAmount(unitWeight) ? "Podaj masę jednej sztuki, aby policzyć kalorie." : `Wybrana ilość: ${amount || 0} ${item.unit} | ok. ${kcal} kcal`}</Text></View>;
+  return <View style={styles.amountStep}><Text style={styles.amountProduct}>{item.product.name}</Text><Text style={styles.available}>Dostępne w spiżarni: {item.quantity} {item.unit}</Text>{packageAmount && packageAmount <= item.quantity && <Pressable onPress={() => onChange(String(packageAmount))} style={styles.wholePackage}><Text style={styles.wholePackageText}>Zużyj całe opakowanie: 1 szt. ({item.product.packageAmount} {item.product.packageUnit})</Text></Pressable>}<View style={styles.amountEntry}><TextInput autoFocus selectTextOnFocus value={value} onChangeText={onChange} keyboardType="decimal-pad" placeholder="0" style={styles.amountInput} /><Text style={styles.amountUnit}>{item.unit}</Text></View><Text style={[styles.caloriePreview, missingUnitWeight && styles.missingDataText]}>{missingUnitWeight ? "Brak masy jednej sztuki. Uzupełnij ją w edycji produktu w zakładce Zapisane." : `Wybrana ilość: ${amount || 0} ${item.unit} | ok. ${kcal} kcal`}</Text></View>;
 }
 
 function ReviewStep({ name, ingredients, totals, portionTotals, servings, onServings }: { name: string; ingredients: MealIngredient[]; totals: Nutrients; portionTotals: Nutrients; servings: string; onServings: (value: string) => void }) {
@@ -336,7 +314,6 @@ function DailyNutritionSummary({ summary }: { summary: DailySummary }) {
 function PrimaryButton({ label, onPress, disabled }: { label: string; onPress: () => void; disabled?: boolean }) { return <Pressable disabled={disabled} onPress={onPress} style={[styles.primary, disabled && styles.disabled]}><Text style={styles.white}>{label}</Text></Pressable>; }
 function buildIngredients(pantry: PantryItem[], amounts: Record<string, string>) { const ingredients: MealIngredient[] = []; let error = ""; for (const item of pantry) { const amount = parseAmount(amounts[item.barcode]); if (amount <= 0) continue; try { ingredients.push(createMealIngredient(item, amount)); } catch (cause) { error = cause instanceof Error ? cause.message : "Nieprawidłowa ilość."; } } return { ingredients, error }; }
 function parseAmount(value?: string) { const number = Number((value ?? "").replace(",", ".")); return Number.isFinite(number) && number > 0 ? Math.round(number * 100) / 100 : 0; }
-function textNumber(value?: number) { return value === undefined ? "" : String(value); }
 function parseServings(value?: string) { const number = Number(value); return Number.isInteger(number) && number >= 1 && number <= 100 ? number : 0; }
 function stepLabel(step: Step) { return step === "type" ? "KROK 1 Z 3" : step === "review" ? "KROK 3 Z 3" : "KROK 2 Z 3"; }
 function stepTitle(step: Step, item: PantryItem | null) { if (step === "type") return "Jaki to posiłek?"; if (step === "products") return "Wybierz produkty"; if (step === "amount") return `Podaj ilość: ${item?.product.name ?? "produkt"}`; return "Sprawdź posiłek"; }
@@ -357,7 +334,7 @@ const styles = StyleSheet.create({
   modalHeader: { flexDirection: "row", alignItems: "flex-start", gap: 8, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: colors.border }, modalHeading: { flex: 1, minWidth: 0 }, stepLabel: { color: colors.primary, fontWeight: "800", fontSize: 12 }, modalTitle: { fontSize: 25, fontWeight: "900", marginTop: 3 }, compactModalTitle: { fontSize: 21 }, stepScroll: { flex: 1, minHeight: 0 }, stepContent: { paddingVertical: 16, gap: 10 },
   typeHint: { color: colors.primary, fontWeight: "800", marginBottom: 2 }, typeCard: { flexDirection: "row", alignItems: "center", gap: 14, borderWidth: 2, borderColor: colors.border, borderRadius: 14, padding: 15 }, selectedCard: { borderColor: colors.primary, backgroundColor: "#EDF7EE" }, radio: { width: 22, height: 22, borderWidth: 2, borderColor: colors.primary, borderRadius: 11, alignItems: "center", justifyContent: "center" }, radioDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: colors.primary }, typeName: { fontSize: 17, fontWeight: "800" }, customInput: { backgroundColor: colors.background, borderRadius: 12, padding: 14, fontSize: 17 },
   listContent: { paddingVertical: 14, gap: 9 }, productCard: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: colors.border, borderRadius: 13, padding: 15 }, selectedProduct: { borderColor: colors.primary, backgroundColor: "#EDF7EE" }, productText: { flex: 1 }, productName: { fontSize: 17, fontWeight: "800" }, addText: { color: colors.primary, fontWeight: "800" }, selectedAmount: { alignItems: "flex-end", gap: 4 }, selectedAmountText: { color: colors.primary, fontSize: 17, fontWeight: "900" }, removeText: { color: colors.danger, fontWeight: "700", fontSize: 12 }, empty: { color: colors.muted, textAlign: "center", marginTop: 70, lineHeight: 21 },
-  amountStep: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14, paddingHorizontal: 4 }, amountProduct: { fontSize: 26, fontWeight: "900", textAlign: "center" }, available: { color: colors.muted, fontSize: 17, textAlign: "center" }, wholePackage: { backgroundColor: "#E8F5E9", borderWidth: 1, borderColor: colors.primary, borderRadius: 11, paddingHorizontal: 14, paddingVertical: 11 }, wholePackageText: { color: colors.primary, fontWeight: "800", textAlign: "center" }, unitWeightBox: { width: "100%", maxWidth: 360, gap: 7, backgroundColor: "#FFF8E1", borderRadius: 12, padding: 13 }, unitWeightLabel: { fontSize: 17, fontWeight: "900" }, unitWeightHint: { color: colors.muted, fontSize: 13 }, unitWeightInput: { minHeight: 52, backgroundColor: colors.surface, borderWidth: 2, borderColor: colors.primary, borderRadius: 11, paddingHorizontal: 14, fontSize: 20, fontWeight: "800" }, amountEntry: { width: "100%", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12 }, amountInput: { width: "70%", maxWidth: 220, backgroundColor: colors.background, borderWidth: 2, borderColor: colors.primary, borderRadius: 14, padding: 18, fontSize: 30, fontWeight: "900", textAlign: "center" }, amountUnit: { fontSize: 25, fontWeight: "900" }, caloriePreview: { fontSize: 16, color: colors.muted, textAlign: "center" },
+  amountStep: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14, paddingHorizontal: 4 }, amountProduct: { fontSize: 26, fontWeight: "900", textAlign: "center" }, available: { color: colors.muted, fontSize: 17, textAlign: "center" }, wholePackage: { backgroundColor: "#E8F5E9", borderWidth: 1, borderColor: colors.primary, borderRadius: 11, paddingHorizontal: 14, paddingVertical: 11 }, wholePackageText: { color: colors.primary, fontWeight: "800", textAlign: "center" }, amountEntry: { width: "100%", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12 }, amountInput: { width: "70%", maxWidth: 220, backgroundColor: colors.background, borderWidth: 2, borderColor: colors.primary, borderRadius: 14, padding: 18, fontSize: 30, fontWeight: "900", textAlign: "center" }, amountUnit: { fontSize: 25, fontWeight: "900" }, caloriePreview: { fontSize: 16, color: colors.muted, textAlign: "center" }, missingDataText: { color: colors.danger, fontWeight: "700", maxWidth: 360 },
   reviewName: { fontSize: 23, fontWeight: "900" }, servingsBox: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "#EDF7EE", borderRadius: 13, padding: 13 }, servingsText: { flex: 1, minWidth: 0 }, servingsInput: { width: 76, backgroundColor: colors.surface, borderWidth: 2, borderColor: colors.primary, borderRadius: 11, padding: 12, textAlign: "center", fontSize: 22, fontWeight: "900" }, portionTitle: { color: colors.primary, fontSize: 18, fontWeight: "900", marginTop: 4 }, recipeInfo: { color: colors.muted, fontWeight: "700" }, nutritionGrid: { flexDirection: "row", flexWrap: "wrap", gap: 9 }, nutritionCard: { flexGrow: 1, flexBasis: 120, backgroundColor: colors.background, borderRadius: 12, padding: 13 }, nutritionValue: { fontSize: 21, fontWeight: "900", color: colors.primary }, sectionTitle: { fontSize: 18, fontWeight: "800", marginTop: 4 }, reviewRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 12, borderBottomWidth: 1, borderBottomColor: colors.border, paddingVertical: 10 }, reviewProduct: { flex: 1, minWidth: 120, fontWeight: "700" },
   errorBanner: { color: colors.danger, backgroundColor: "#FFEBEE", borderRadius: 10, padding: 12, fontWeight: "700", marginTop: 10 }, modalActions: { flexDirection: "row", alignItems: "center", gap: 8, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 14, marginTop: 8 }, compactModalActions: { flexWrap: "wrap" }, actionSpacer: { flex: 1 }, secondary: { backgroundColor: colors.background, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 14 }, primary: { backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 22, paddingVertical: 14 }, disabled: { opacity: 0.55 }
 });
