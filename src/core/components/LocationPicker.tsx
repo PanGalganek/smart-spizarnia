@@ -32,7 +32,6 @@ export function LocationPicker({ value, onChange, label = "Lokalizacja", product
         <View style={styles.dialog}>
           <View style={styles.dialogHeader}>
             <Text style={styles.dialogTitle}>Wybierz lokalizację</Text>
-            <Pressable onPress={pickerLayer.closeLayer} style={styles.close}><Text style={styles.closeText}>Zamknij</Text></Pressable>
           </View>
           <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
             {!locations.length ? <Text style={styles.empty}>Brak lokalizacji. Dodaj ją w kafelku Spiżarnia.</Text> : locations.map((item) => (
@@ -63,8 +62,6 @@ const styles = StyleSheet.create({
   dialog: { width: "100%", maxWidth: 460, maxHeight: "78%", backgroundColor: colors.surface, borderRadius: 18, padding: 18 },
   dialogHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
   dialogTitle: { flex: 1, fontSize: 21, fontWeight: "900" },
-  close: { padding: 8 },
-  closeText: { color: colors.muted, fontWeight: "700" },
   list: { minHeight: 100, maxHeight: 420 },
   listContent: { paddingVertical: 10, gap: 8 },
   option: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, backgroundColor: colors.background, borderRadius: 11, padding: 15 },

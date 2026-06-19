@@ -110,7 +110,6 @@ export function AdminScreen() {
             <Text style={styles.modalTitle}>{selected?.displayName || selected?.email}</Text>
             <Text style={styles.meta}>{selected?.email}</Text>
           </View>
-          <Pressable onPress={profileLayer.closeLayer}><Text style={styles.close}>Zamknij</Text></Pressable>
         </View>
         <ScrollView contentContainerStyle={styles.preview}>
           <PreviewSection title="Produkty spożywcze" items={preview?.products.filter((item) => productType(item) === "food").map((item) => item.name) ?? []} />
@@ -178,7 +177,6 @@ const styles = StyleSheet.create({
   modalCard: { width: "100%", maxWidth: 640, maxHeight: "92%", backgroundColor: colors.surface, borderRadius: 20, padding: 20 },
   modalHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 },
   modalTitle: { fontSize: 24, fontWeight: "900" },
-  close: { color: colors.muted, fontWeight: "800", padding: 6 },
   preview: { gap: 10, paddingTop: 16, paddingBottom: 6 },
   detailBox: { backgroundColor: colors.background, borderRadius: 12, padding: 13, gap: 4 },
   detailTitle: { color: colors.muted, fontWeight: "900", textTransform: "uppercase", fontSize: 12 },

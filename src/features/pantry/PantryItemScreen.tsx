@@ -179,7 +179,7 @@ export function PantryItemScreen() {
       </View>}
     </ScrollView>
     <Modal visible={consumeLayer.open} transparent animationType="fade" onRequestClose={consumeLayer.closeLayer}><View style={styles.backdrop}><View style={styles.consumeCard}>
-      <View style={styles.consumeHeader}><Text style={styles.consumeTitle}>Zużyj: {item?.product.name}</Text><Pressable onPress={consumeLayer.closeLayer}><Text style={styles.muted}>Zamknij</Text></Pressable></View>
+      <View style={styles.consumeHeader}><Text style={styles.consumeTitle}>Zużyj: {item?.product.name}</Text></View>
       <Text style={styles.muted}>Dostępne: {summary?.text ?? `${item?.quantity ?? 0} ${item?.unit ?? ""}`}</Text>
       <View style={styles.consumeAmountRow}><TextInput autoFocus value={consumeAmount} onChangeText={setConsumeAmount} keyboardType="decimal-pad" placeholder="Wpisz zużytą ilość" style={styles.consumeInput} /><Text style={styles.consumeUnit}>{item?.unit}</Text></View>
       <Pressable disabled={busy} onPress={() => void consume()} style={[styles.useButton, busy && styles.disabled]}><Text style={styles.white}>{busy ? "Zapisywanie..." : "Potwierdź zużycie"}</Text></Pressable>
