@@ -34,7 +34,7 @@ export function createMealIngredient(item: PantryItem, amount: number): MealIngr
 export function createUntrackedMealIngredient(product: Product, amount: number, unit: Unit): MealIngredient {
   if (!Number.isFinite(amount) || amount <= 0) throw new Error("Ilość musi byc większą od zera.");
   if (product.nutrientsPer100g.energyKcal === undefined) throw new Error(`Uzupełnij kalorie produktu: ${product.name}`);
-  if (unit === "szt" && (product.nutritionBasis ?? "per100") === "per100" && !product.netWeightGrams) {
+  if (usesWeightPerPiece(product, unit) && !product.netWeightGrams) {
     throw new Error(`Uzupełnij masę jednej sztuki: ${product.name}`);
   }
   return {
@@ -51,16 +51,16 @@ export function createUntrackedMealIngredient(product: Product, amount: number, 
 export function validateConsumption(item: PantryItem, amount: number) {
   if (!Number.isFinite(amount) || amount <= 0) throw new Error("Ilość musi byc większą od zera.");
   if (amount > item.quantity) throw new Error(`Za malo produktu: ${item.product.name}`);
-  if (
-    item.unit === "szt" &&
-    (item.product.nutritionBasis ?? "per100") === "per100" &&
-    !item.product.netWeightGrams
-  ) {
+  if (usesWeightPerPiece(item.product, item.unit) && !item.product.netWeightGrams) {
     throw new Error(`Uzupełnij masę jednej sztuki: ${item.product.name}`);
   }
   if (item.product.nutrientsPer100g.energyKcal === undefined) {
     throw new Error(`Uzupełnij kalorie produktu: ${item.product.name}`);
   }
+}
+
+export function usesWeightPerPiece(product: Product, unit: Unit) {
+  return unit === "szt" && (product.nutritionBasis ?? "per100") === "per100";
 }
 
 export function consumePantryItem(item: PantryItem, amount: number): PantryItem {

@@ -66,6 +66,15 @@ describe("brak danych kalorycznych", () => {
     });
     expect(() => createMealIngredient(item, 1)).toThrow("Uzupełnij masę jednej sztuki");
   });
+
+  it("liczy jajko po podaniu masy pojedynczej sztuki", () => {
+    const item = pantryItem({
+      unit: "szt",
+      quantity: 2,
+      product: product({ name: "Jajko", defaultUnit: "szt", nutritionBasis: "per100", netWeightGrams: 50, nutrientsPer100g: { energyKcal: 140, proteins: 12 } })
+    });
+    expect(createMealIngredient(item, 1).nutrients).toEqual({ energyKcal: 70, proteins: 6 });
+  });
 });
 
 describe("produkt spożyty bez dodawania do spiżarni", () => {

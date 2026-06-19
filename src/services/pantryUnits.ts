@@ -22,6 +22,13 @@ export function canUseWholePackage(product: Product) {
   return Boolean(product.packageAmount && product.packageUnit);
 }
 
+export function wholePackageConsumptionAmount(product: Product, pantryUnit: Unit) {
+  if (!canUseWholePackage(product)) return undefined;
+  // A package containing pieces (for example 12 eggs) is not one edible piece.
+  if (product.packageUnit === "szt" && pantryUnit === "szt") return undefined;
+  return convertPantryAmount(product, 1, "szt", pantryUnit);
+}
+
 export function capConsumptionToAvailable(product: Product, availableAmount: number, pantryUnit: Unit, requestedAmount: number, requestedUnit: Unit) {
   const requestedInPantryUnit = convertPantryAmount(product, requestedAmount, requestedUnit, pantryUnit);
   if (requestedInPantryUnit > availableAmount) return { amount: availableAmount, unit: pantryUnit, capped: true };
