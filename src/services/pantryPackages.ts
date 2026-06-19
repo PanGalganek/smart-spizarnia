@@ -113,6 +113,13 @@ export function packageSummary(item: PantryItem) {
   };
 }
 
+export function setPackageExpiryDate(item: PantryItem, packageId: string, expiryDate?: string): PantryItem {
+  const packages = normalizePackages(item).map((pack) =>
+    pack.id === packageId ? { ...pack, expiryDate: expiryDate || undefined } : pack
+  );
+  return { ...item, packages, expiryDate: undefined };
+}
+
 function packagesFromQuantity(product: Product, quantityInput: number, unit: Unit, savedCapacity: number) {
   const quantity = round(quantityInput);
   if (quantity <= 0) return [];

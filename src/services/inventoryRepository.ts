@@ -90,7 +90,7 @@ export async function updateProductPackage(product: Product, packageAmount: numb
 
 export async function savePantryItem(item: PantryItem) {
   const normalized = normalizePantryItem({ ...item, updatedAt: Date.now() });
-  await setDoc(userDoc("pantry", item.barcode), withoutUndefined(normalized), { merge: true });
+  await setDoc(userDoc("pantry", item.barcode), withoutUndefined(normalized));
   await saveProduct(normalized.product);
 }
 

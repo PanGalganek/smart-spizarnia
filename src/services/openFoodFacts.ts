@@ -2,6 +2,11 @@ import { Product } from "@/domain/product";
 import { fetchWithTimeout } from "@/services/fetchWithTimeout";
 
 const API_URL = "https://world.openfoodfacts.org/api/v2/product";
+const LEGACY_API_URL = "https://world.openfoodfacts.org/api/v0/product";
+const PRODUCT_FIELDS = [
+  "code", "status", "product_name_pl", "product_name", "brands", "image_front_url",
+  "serving_size", "product_quantity", "product_quantity_unit", "quantity", "nutriments"
+].join(",");
 
 type PackageSize = { amount: number; unit: "g" | "ml" };
 
@@ -34,17 +39,20 @@ function convertPackageSize(amount: number, unit: string): PackageSize | undefin
 }
 
 export async function getProductByBarcode(barcode: string): Promise<Product | null> {
-  const response = await fetchWithTimeout(`${API_URL}/${encodeURIComponent(barcode)}.json`);
-  if (response.status === 404) return null;
-  if (!response.ok) throw new Error("Open Food Facts is unavailable");
-
-  const data = await response.json();
+  const normalized = barcode.trim();
+  if (!normalized) return null;
+  const encoded = encodeURIComponent(normalized);
+  const data = await fetchProductData([
+    `${API_URL}/${encoded}.json?fields=${encodeURIComponent(PRODUCT_FIELDS)}`,
+    `${LEGACY_API_URL}/${encoded}.json`
+  ]);
+  if (!data) return null;
   if (data.status !== 1 || !data.product) return null;
 
   const item = data.product;
   const packageSize = parsePackageSize(item);
   return {
-    barcode,
+    barcode: normalized,
     name: item.product_name_pl || item.product_name || "Produkt bez nazwy",
     brand: item.brands,
     imageUrl: item.image_front_url,
@@ -64,4 +72,22 @@ export async function getProductByBarcode(barcode: string): Promise<Product | nu
     source: "open-food-facts",
     updatedAt: Date.now()
   };
+}
+
+async function fetchProductData(urls: string[]): Promise<any | null> {
+  let lastError: unknown;
+  for (const url of urls) {
+    try {
+      const response = await fetchWithTimeout(url, { headers: { Accept: "application/json" } }, 15_000);
+      if (response.status === 404) return null;
+      if (!response.ok) {
+        lastError = new Error(`Open Food Facts returned ${response.status}`);
+        continue;
+      }
+      return await response.json();
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw new Error("Open Food Facts is unavailable", { cause: lastError });
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { PantryItem, Product } from "@/domain/product";
-import { addPackages, consumePackages, packageSummary } from "@/services/pantryPackages";
+import { addPackages, consumePackages, packageSummary, setPackageExpiryDate } from "@/services/pantryPackages";
 
 const milk: Product = {
   barcode: "milk",
@@ -67,5 +67,17 @@ describe("pantry packages", () => {
     const added = addPackages(null, milk, 3, "szt", 1, undefined, [undefined, "2026-06-18", "2026-06-25"]);
 
     expect(added.packages.map((pack) => pack.expiryDate)).toEqual([undefined, "2026-06-18", "2026-06-25"]);
+  });
+
+  it("updates and clears the expiry date of one selected package", () => {
+    const added = addPackages(null, milk, 2, "szt", 1, undefined, ["2026-06-19", "2026-06-30"]);
+    const pantryItem = { ...item(milk), ...added, expiryDate: "2026-06-19" };
+    const firstPackageId = added.packages[0].id;
+    const changed = setPackageExpiryDate(pantryItem, firstPackageId, "2026-07-01");
+    const cleared = setPackageExpiryDate(changed, firstPackageId);
+
+    expect(changed.packages?.map((pack) => pack.expiryDate)).toEqual(["2026-07-01", "2026-06-30"]);
+    expect(changed.expiryDate).toBeUndefined();
+    expect(cleared.packages?.map((pack) => pack.expiryDate)).toEqual([undefined, "2026-06-30"]);
   });
 });

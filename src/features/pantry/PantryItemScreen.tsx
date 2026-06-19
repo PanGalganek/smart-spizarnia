@@ -11,7 +11,7 @@ import { ChemicalLevel, PantryItem, Unit } from "@/domain/product";
 import { AddDepletedPrompt } from "@/features/shopping/AddDepletedPrompt";
 import { getExpiryWarning } from "@/services/expiry";
 import { changePantryQuantity, deletePantryItem, getPantryItem, saveChemicalPantryItem, savePantryItem } from "@/services/inventoryRepository";
-import { packageSummary } from "@/services/pantryPackages";
+import { normalizePackages, packageSummary, setPackageExpiryDate } from "@/services/pantryPackages";
 import { capConsumptionToAvailable } from "@/services/pantryUnits";
 import { chemicalLevelLabel, chemicalLevels, isChemical } from "@/services/productTypes";
 import { shouldAskToBuyAgain } from "@/services/shoppingPrompt";
@@ -22,7 +22,6 @@ export function PantryItemScreen() {
   const returnType = firstParam(params.type);
   const returnLocation = firstParam(params.location);
   const [item, setItem] = useState<PantryItem | null>(null);
-  const [expiryDate, setExpiryDate] = useState("");
   const [location, setLocation] = useState("");
   const [message, setMessage] = useState("Ładowanie produktu...");
   const [busy, setBusy] = useState(false);
@@ -33,8 +32,10 @@ export function PantryItemScreen() {
   const deleteLayer = useNavigationLayer("pantry-delete-product", "modal", { modal: "pantry-delete-product", mode: "delete-product", editingProductId: barcode ?? null });
   const itemRef = useRef<PantryItem | null>(null);
   const metadataQueue = useRef(Promise.resolve());
-  const expiryWarning = getExpiryWarning(expiryDate);
   const summary = item ? packageSummary(item) : null;
+  const packages = item ? normalizePackages(item) : [];
+  const activeExpiryDate = summary?.activeExpiryDate ?? item?.expiryDate;
+  const expiryWarning = getExpiryWarning(activeExpiryDate);
   const chemical = item ? isChemical(item.product) : false;
   const quickAmount = item?.product.quickUseAmount ?? (item?.product.packageAmount ? 1 : undefined);
   const quickUnit = item?.product.quickUseUnit ?? (item?.product.packageAmount ? "szt" : undefined);
@@ -45,13 +46,12 @@ export function PantryItemScreen() {
       if (!found) return setMessage("Tego produktu nie ma już w spiżarni.");
       itemRef.current = found;
       setItem(found);
-      setExpiryDate(found.expiryDate ?? "");
       setLocation(found.location ?? "");
       setMessage("");
     }).catch(() => setMessage("Nie udało się pobrać produktu."));
   }, [barcode]);
 
-  function saveMetadata(patch: Pick<PantryItem, "expiryDate"> | Pick<PantryItem, "location">, successMessage: string) {
+  function saveMetadata(patch: Partial<Pick<PantryItem, "expiryDate" | "location" | "packages">>, successMessage: string) {
     const current = itemRef.current;
     if (!current) return;
     const next = { ...current, ...patch };
@@ -64,8 +64,14 @@ export function PantryItemScreen() {
       .catch(() => setMessage("Nie udało się zapisać zmiany."));
   }
 
-  function changeExpiryDate(value: string) {
-    setExpiryDate(value);
+  function changeExpiryDate(value: string, packageId?: string) {
+    const current = itemRef.current;
+    if (!current) return;
+    if (packageId) {
+      const next = setPackageExpiryDate(current, packageId, value.trim() || undefined);
+      saveMetadata({ packages: next.packages, expiryDate: undefined }, value ? "Data opakowania została zapisana." : "Data opakowania została usunięta.");
+      return;
+    }
     saveMetadata({ expiryDate: value.trim() || undefined }, value ? "Data ważności została zapisana." : "Data ważności została usunięta.");
   }
 
@@ -98,8 +104,11 @@ export function PantryItemScreen() {
     if (!barcode) return;
     try {
       setBusy(true);
+      await metadataQueue.current;
       await deletePantryItem(barcode);
-      replaceWithRoute({ pathname: "/pantry" });
+      setItem(null);
+      itemRef.current = null;
+      replaceWithRoute({ pathname: "/pantry", params: { ...(returnType ? { type: returnType } : {}), ...(returnLocation ? { location: returnLocation } : {}) } });
     } catch {
       setMessage("Nie udało się usunąć produktu ze spiżarni.");
       setBusy(false);
@@ -163,7 +172,17 @@ export function PantryItemScreen() {
         {chemical && <View style={styles.levelGrid}>{chemicalLevels.map((level) => <Pressable key={level.value} disabled={busy} onPress={() => void changeChemicalLevel(level.value)} style={[styles.levelButton, item.chemicalLevel === level.value && styles.levelActive]}><Text style={item.chemicalLevel === level.value ? styles.white : styles.levelText}>{level.label}</Text></Pressable>)}</View>}
         {!chemical && !!summary?.openText && <Text style={styles.packageLine}>Otwarte: {summary.openText}</Text>}
         {!chemical && !!summary?.closedText && <Text style={styles.packageLine}>Zamknięte: {summary.closedText}</Text>}
-        {!chemical && <DatePickerField value={expiryDate} onChange={changeExpiryDate} />}
+        {!chemical && packages.length === 1 && <DatePickerField value={packages[0].expiryDate ?? ""} onChange={(value) => changeExpiryDate(value, packages[0].id)} />}
+        {!chemical && packages.length > 1 && <View style={styles.packageDates}>
+          <Text style={styles.sectionLabel}>Daty ważności opakowań (opcjonalne)</Text>
+          {packages.map((pack, index) => <DatePickerField
+            key={pack.id}
+            label={`Opakowanie ${index + 1}: ${pack.amount} ${pack.unit}${pack.opened ? " (otwarte)" : ""}`}
+            value={pack.expiryDate ?? ""}
+            onChange={(value) => changeExpiryDate(value, pack.id)}
+          />)}
+        </View>}
+        {!chemical && packages.length === 0 && <DatePickerField value={item.expiryDate ?? ""} onChange={changeExpiryDate} />}
         {!chemical && expiryWarning && <Text style={[styles.expiryWarning, expiryWarning.level === "soon" ? styles.expirySoon : styles.expiryUrgent]}>{expiryWarning.label}</Text>}
         <LocationPicker value={location} onChange={changeLocation} productType={chemical ? "household_chemical" : "food"} />
         {!!message && <Text style={message.startsWith("Nie") ? styles.error : styles.success}>{message}</Text>}
@@ -174,7 +193,7 @@ export function PantryItemScreen() {
         <View style={styles.dangerZone}>
           <Text style={styles.dangerTitle}>Usunięcie ze spiżarni</Text>
           <Text style={styles.muted}>Produkt zniknie ze stanu, ale pozostanie w katalogu Zapisane i w dotychczasowej historii.</Text>
-          {deleteLayer.open ? <View style={styles.confirm}><Pressable disabled={busy} onPress={() => void remove()} style={styles.delete}><Text style={styles.white}>Tak, usuń produkt</Text></Pressable><Pressable onPress={deleteLayer.closeLayer} style={styles.cancel}><Text>Anuluj</Text></Pressable></View> : <Pressable onPress={deleteLayer.openLayer} style={styles.deleteOutline}><Text style={styles.deleteText}>Usuń produkt ze spiżarni</Text></Pressable>}
+          {deleteLayer.open ? <View style={styles.confirm}><Pressable disabled={busy} onPress={() => void remove()} style={styles.delete}><Text style={styles.white}>{busy ? "Usuwanie..." : "Tak, usuń produkt"}</Text></Pressable><Pressable disabled={busy} onPress={deleteLayer.closeLayer} style={styles.cancel}><Text>Anuluj</Text></Pressable></View> : <Pressable onPress={() => deleteLayer.openLayer()} style={styles.deleteOutline}><Text style={styles.deleteText}>Usuń produkt ze spiżarni</Text></Pressable>}
         </View>
       </View>}
     </ScrollView>
@@ -191,7 +210,7 @@ export function PantryItemScreen() {
 const styles = StyleSheet.create({
   scroll: { flex: 1, minHeight: 0 }, content: { flexGrow: 1, paddingBottom: 36 }, loading: { textAlign: "center", color: colors.muted, marginTop: 70 },
   card: { backgroundColor: colors.surface, borderRadius: 18, padding: 22, gap: 16 }, name: { fontSize: 27, fontWeight: "900" }, muted: { color: colors.muted, lineHeight: 20 },
-  nutrition: { flexDirection: "row", flexWrap: "wrap", gap: 18, backgroundColor: colors.background, borderRadius: 12, padding: 14 }, micronutrients: { backgroundColor: colors.background, borderRadius: 12, padding: 14, gap: 5 }, sectionLabel: { fontWeight: "800" },
+  nutrition: { flexDirection: "row", flexWrap: "wrap", gap: 18, backgroundColor: colors.background, borderRadius: 12, padding: 14 }, micronutrients: { backgroundColor: colors.background, borderRadius: 12, padding: 14, gap: 5 }, sectionLabel: { fontWeight: "800" }, packageDates: { backgroundColor: colors.background, borderRadius: 12, padding: 12, gap: 12 },
   stockInfo: { gap: 7, backgroundColor: colors.background, borderRadius: 12, padding: 15 }, stockLabel: { fontWeight: "800" }, stockValue: { color: colors.primary, fontSize: 22, fontWeight: "900" }, packageLine: { color: colors.muted, fontWeight: "800" }, white: { color: "white", fontWeight: "800" },
   levelGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   levelButton: { backgroundColor: colors.background, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11, borderWidth: 1, borderColor: colors.border },

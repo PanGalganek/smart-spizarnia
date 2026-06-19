@@ -206,10 +206,10 @@ export function PantryScreen() {
 
 function ProductCard({ item, returnType, returnLocation, onQuickConsume }: { item: PantryItem; returnType: ProductType; returnLocation: string | null; onQuickConsume: (item: PantryItem) => void }) {
   const chemical = isChemical(item.product);
-  const warning = item.quantity > 0 && !chemical ? getExpiryWarning(item.expiryDate) : null;
   const percentage = stockPercentage(item);
   const summary = packageSummary(item);
   const dateLabel = summary.activeExpiryDate ?? item.expiryDate;
+  const warning = item.quantity > 0 && !chemical ? getExpiryWarning(dateLabel) : null;
   const quickAmount = item.product.quickUseAmount ?? (item.product.packageAmount ? 1 : undefined);
   const quickUnit = item.product.quickUseUnit ?? (item.product.packageAmount ? "szt" : undefined);
   const quantityText = chemical ? chemicalLevelLabel(item.chemicalLevel) : summary.text;
@@ -249,7 +249,7 @@ function PackagePicker({ visible, item, onClose, onSelect }: { visible: boolean;
 
 function isUrgent(item: PantryItem) {
   if (item.quantity <= 0) return false;
-  const warning = getExpiryWarning(item.expiryDate);
+  const warning = getExpiryWarning(packageSummary(item).activeExpiryDate ?? item.expiryDate);
   return warning !== null && warning.days <= 1;
 }
 
