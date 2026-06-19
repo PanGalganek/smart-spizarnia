@@ -1,4 +1,4 @@
-import { deleteDoc, getDocs, setDoc } from "firebase/firestore";
+import { deleteDoc, getDoc, getDocs, setDoc } from "firebase/firestore";
 import { Consumer } from "@/domain/meal";
 import { userCollection, userDoc } from "@/services/userData";
 
@@ -15,7 +15,9 @@ export async function addConsumer(name: string) {
   const id = cleanName.toLocaleLowerCase("pl-PL").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   if (!id) throw new Error("Wpisz poprawne imię osoby.");
   const consumer = { id, name: cleanName };
-  await setDoc(userDoc("consumers", id), consumer);
+  const reference = userDoc("consumers", id);
+  if ((await getDoc(reference)).exists()) throw new Error("Profil o tej nazwie już istnieje.");
+  await setDoc(reference, consumer);
   return consumer;
 }
 

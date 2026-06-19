@@ -10,7 +10,7 @@ import { Nutrients, PantryItem } from "@/domain/product";
 import { MealHistory } from "@/features/meals/MealHistory";
 import { AddDepletedPrompt } from "@/features/shopping/AddDepletedPrompt";
 import { createMeal, getDailySummary, listMeals, listPantry } from "@/services/inventoryRepository";
-import { addConsumer, listConsumers } from "@/services/consumerRepository";
+import { addConsumer, listConsumers, removeConsumer } from "@/services/consumerRepository";
 import { createMealIngredient, dateKey, scaleNutrients, sumNutrients } from "@/services/nutrition";
 import { canUseWholePackage, convertPantryAmount } from "@/services/pantryUnits";
 import { productType } from "@/services/productTypes";
@@ -31,6 +31,7 @@ export function MealsScreen() {
   const compact = width < 700;
   const appNavigation = useAppNavigation();
   const creatorLayer = useNavigationLayer("meal-creator", "modal", { modal: "meal-creator", mode: stepMode("type") });
+  const profileDeleteLayer = useNavigationLayer("meal-profile-delete", "modal", { modal: "meal-profile-delete", mode: "meal-profile-delete" });
   const [pantry, setPantry] = useState<PantryItem[]>([]);
   const [meals, setMeals] = useState<Meal[]>([]);
   const [dailySummary, setDailySummary] = useState<DailySummary>({ dateKey: dateKey(), totals: {}, mealCount: 0, updatedAt: Date.now() });
@@ -46,15 +47,18 @@ export function MealsScreen() {
   const [consumers, setConsumers] = useState<Consumer[]>([]);
   const [consumer, setConsumer] = useState<Consumer | null>(null);
   const [newConsumer, setNewConsumer] = useState("");
+  const [profileBusy, setProfileBusy] = useState(false);
   const creatorOpen = creatorLayer.open;
   const step = creatorOpen ? stepFromMode(appNavigation.state.mode) : "type";
   const editedItem = step === "amount" ? pantry.find((item) => item.barcode === appNavigation.state.selectedId) ?? null : null;
+  const consumerToDelete = profileDeleteLayer.open ? consumers.find((item) => item.id === appNavigation.state.selectedId) ?? null : null;
+  const selectedConsumerId = consumer?.id;
 
   const refresh = useCallback(async () => {
     try {
       const [nextPantry, nextMeals, savedConsumers] = await Promise.all([listPantry(), listMeals(), listConsumers()]);
-      const nextConsumers = mergeConsumers(savedConsumers, consumersFromMeals(nextMeals));
-      const selectedConsumer = consumer ?? nextConsumers[0] ?? null;
+      const nextConsumers = savedConsumers;
+      const selectedConsumer = nextConsumers.find((item) => item.id === selectedConsumerId) ?? nextConsumers[0] ?? null;
       const nextSummary = selectedConsumer
         ? await getDailySummary(dateKey(), selectedConsumer)
         : { dateKey: dateKey(), totals: {}, mealCount: 0, updatedAt: Date.now() };
@@ -62,9 +66,9 @@ export function MealsScreen() {
       setMeals(nextMeals);
       setDailySummary(nextSummary);
       setConsumers(nextConsumers);
-      if (!consumer && selectedConsumer) setConsumer(selectedConsumer);
+      setConsumer((current) => current?.id === selectedConsumer?.id ? current : selectedConsumer);
     } catch { setMessage("Nie udało się pobrać danych."); }
-  }, [consumer]);
+  }, [selectedConsumerId]);
   useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
 
   const ingredientResult = useMemo(() => buildIngredients(pantry, amounts), [amounts, pantry]);
@@ -165,6 +169,34 @@ export function MealsScreen() {
     appNavigation.updateState({ mode: stepMode(nextStep), selectedId }, { push });
   }
 
+  function requestConsumerRemoval(item: Consumer) {
+    setMessage("");
+    profileDeleteLayer.openLayer({ modal: "meal-profile-delete", mode: "meal-profile-delete", selectedId: item.id });
+  }
+
+  async function confirmConsumerRemoval() {
+    if (!consumerToDelete) return;
+    try {
+      setProfileBusy(true);
+      await removeConsumer(consumerToDelete);
+      const nextConsumers = await listConsumers();
+      const nextSelected = consumer?.id === consumerToDelete.id
+        ? nextConsumers[0] ?? null
+        : nextConsumers.find((item) => item.id === consumer?.id) ?? nextConsumers[0] ?? null;
+      setConsumers(nextConsumers);
+      setConsumer(nextSelected);
+      setDailySummary(nextSelected
+        ? await getDailySummary(dateKey(), nextSelected)
+        : { dateKey: dateKey(), totals: {}, mealCount: 0, updatedAt: Date.now() });
+      profileDeleteLayer.closeLayer();
+      setMessage(`Usunięto profil: ${consumerToDelete.name}. Historia posiłków pozostała zapisana.`);
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : "Nie udało się usunąć profilu.");
+    } finally {
+      setProfileBusy(false);
+    }
+  }
+
   function backInCreator() {
     if (step === "amount" || step === "review") {
       setCreatorStep("products", null, false);
@@ -182,14 +214,24 @@ export function MealsScreen() {
           <Pressable onPress={openCreator} style={[styles.newButton, compact && styles.compactNewButton]}><Text style={styles.white}>+ Nowy posiłek</Text></Pressable>
         </View>
         <View style={styles.consumerPanel}>
-          <Text style={styles.consumerTitle}>Czyj bilans pokazujemy?</Text>
-          {consumers.length ? <View style={styles.consumerRow}>{consumers.map((item) => <Pressable key={item.id} onPress={() => setConsumer(item)} style={[styles.consumerChip, consumer?.id === item.id && styles.consumerChipActive]}><Text style={consumer?.id === item.id ? styles.white : styles.consumerChipText}>{item.name}</Text></Pressable>)}</View> : <Text style={styles.emptyConsumers}>Brak profili. Dodaj pierwszą osobę, aby liczyć kalorie.</Text>}
-          <View style={styles.addConsumerRow}><TextInput value={newConsumer} onChangeText={setNewConsumer} placeholder="Dodaj osobę" style={styles.addConsumerInput} /><Pressable onPress={() => void createConsumer()} style={styles.addConsumerButton}><Text style={styles.white}>+ Dodaj</Text></Pressable></View>
+          <Text style={styles.consumerTitle}>Profile posiłków tego konta</Text>
+          <Text style={styles.consumerHint}>Wybierz osobę, której bilans i historia mają być pokazane.</Text>
+          {consumers.length ? <View style={styles.consumerList}>{consumers.map((item) => <View key={item.id} style={styles.consumerEntry}><Pressable onPress={() => setConsumer(item)} style={[styles.consumerChip, consumer?.id === item.id && styles.consumerChipActive]}><Text style={consumer?.id === item.id ? styles.white : styles.consumerChipText}>{item.name}</Text></Pressable><Pressable onPress={() => requestConsumerRemoval(item)} style={styles.removeConsumerButton}><Text style={styles.removeConsumerText}>Usuń</Text></Pressable></View>)}</View> : <Text style={styles.emptyConsumers}>Brak profili. Dodaj pierwszą osobę, aby liczyć kalorie.</Text>}
+          <View style={styles.addConsumerRow}><TextInput value={newConsumer} onChangeText={setNewConsumer} onSubmitEditing={() => void createConsumer()} placeholder="Imię lub nazwa profilu" style={styles.addConsumerInput} /><Pressable onPress={() => void createConsumer()} style={styles.addConsumerButton}><Text style={styles.white}>+ Dodaj profil</Text></Pressable></View>
         </View>
         <DailyNutritionSummary summary={dailySummary} />
         {!!message && <Text style={styles.successBanner}>{message}</Text>}
         <MealHistory meals={consumer ? meals.filter((meal) => meal.consumerId === consumer.id) : []} onChanged={refresh} />
       </ScrollView>
+
+      <Modal visible={profileDeleteLayer.open && !!consumerToDelete} transparent animationType="fade" onRequestClose={profileDeleteLayer.closeLayer}>
+        <View style={styles.backdrop}><View style={styles.confirmProfileCard}>
+          <Text style={styles.confirmProfileTitle}>Usunąć profil „{consumerToDelete?.name}”?</Text>
+          <Text style={styles.confirmProfileText}>Profil zniknie z wyboru na tym koncie. Dotychczasowa historia posiłków pozostanie zapisana.</Text>
+          <Pressable disabled={profileBusy} onPress={() => void confirmConsumerRemoval()} style={[styles.confirmProfileDelete, profileBusy && styles.disabled]}><Text style={styles.white}>{profileBusy ? "Usuwanie..." : "Usuń profil"}</Text></Pressable>
+          <BottomActionBar label="Anuluj" onPress={profileDeleteLayer.closeLayer} />
+        </View></View>
+      </Modal>
 
       <Modal visible={creatorOpen} transparent animationType="fade" onRequestClose={creatorLayer.closeLayer}>
         <View style={[styles.backdrop, compact && styles.compactBackdrop]}>
@@ -266,18 +308,6 @@ function DailyNutritionSummary({ summary }: { summary: DailySummary }) {
 }
 
 function PrimaryButton({ label, onPress, disabled }: { label: string; onPress: () => void; disabled?: boolean }) { return <Pressable disabled={disabled} onPress={onPress} style={[styles.primary, disabled && styles.disabled]}><Text style={styles.white}>{label}</Text></Pressable>; }
-function consumersFromMeals(meals: Meal[]): Consumer[] {
-  const byId = new Map<string, Consumer>();
-  meals.forEach((meal) => {
-    if (meal.consumerId && meal.consumerName) byId.set(meal.consumerId, { id: meal.consumerId, name: meal.consumerName });
-  });
-  return [...byId.values()];
-}
-function mergeConsumers(saved: Consumer[], derived: Consumer[]): Consumer[] {
-  const byId = new Map<string, Consumer>();
-  [...saved, ...derived].forEach((consumer) => byId.set(consumer.id, consumer));
-  return [...byId.values()].sort((left, right) => left.name.localeCompare(right.name, "pl"));
-}
 function buildIngredients(pantry: PantryItem[], amounts: Record<string, string>) { const ingredients: MealIngredient[] = []; let error = ""; for (const item of pantry) { const amount = parseAmount(amounts[item.barcode]); if (amount <= 0) continue; try { ingredients.push(createMealIngredient(item, amount)); } catch (cause) { error = cause instanceof Error ? cause.message : "Nieprawidłowa ilość."; } } return { ingredients, error }; }
 function parseAmount(value?: string) { const number = Number((value ?? "").replace(",", ".")); return Number.isFinite(number) && number > 0 ? Math.round(number * 100) / 100 : 0; }
 function parseServings(value?: string) { const number = Number(value); return Number.isInteger(number) && number >= 1 && number <= 100 ? number : 0; }
@@ -294,7 +324,7 @@ function formatToday() { return new Date().toLocaleDateString("pl-PL", { weekday
 
 const styles = StyleSheet.create({
   pageScroll: { flex: 1, minHeight: 0 }, pageContent: { paddingBottom: 36 }, pageHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 14, marginBottom: 14 }, compactPageHeader: { alignItems: "stretch", flexDirection: "column" }, pageHeading: { flex: 1, minWidth: 0 }, pageTitle: { fontSize: 22, fontWeight: "800" }, muted: { color: colors.muted, fontSize: 13, flexShrink: 1 }, newButton: { backgroundColor: colors.primary, paddingHorizontal: 22, paddingVertical: 14, borderRadius: 12 }, compactNewButton: { alignItems: "center", width: "100%" }, white: { color: "white", fontWeight: "800" },
-  consumerPanel: { backgroundColor: colors.surface, borderRadius: 16, padding: 14, gap: 10, marginBottom: 12 }, consumerTitle: { fontSize: 17, fontWeight: "900" }, consumerRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 }, consumerChip: { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 }, consumerChipActive: { backgroundColor: colors.primary, borderColor: colors.primary }, consumerChipText: { fontWeight: "800" }, emptyConsumers: { color: colors.muted, fontWeight: "700" }, addConsumerRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 }, addConsumerInput: { flex: 1, minWidth: 170, backgroundColor: colors.background, borderRadius: 10, padding: 11 }, addConsumerButton: { backgroundColor: "#1565C0", borderRadius: 10, paddingHorizontal: 16, justifyContent: "center" },
+  consumerPanel: { backgroundColor: colors.surface, borderRadius: 16, padding: 14, gap: 10, marginBottom: 12 }, consumerTitle: { fontSize: 17, fontWeight: "900" }, consumerHint: { color: colors.muted, fontSize: 13 }, consumerList: { gap: 8 }, consumerEntry: { flexDirection: "row", alignItems: "center", gap: 8 }, consumerChip: { flex: 1, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11 }, consumerChipActive: { backgroundColor: colors.primary, borderColor: colors.primary }, consumerChipText: { fontWeight: "800" }, removeConsumerButton: { backgroundColor: "#FFEBEE", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11 }, removeConsumerText: { color: colors.danger, fontWeight: "800" }, emptyConsumers: { color: colors.muted, fontWeight: "700" }, addConsumerRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 }, addConsumerInput: { flex: 1, minWidth: 170, backgroundColor: colors.background, borderRadius: 10, padding: 11 }, addConsumerButton: { minHeight: 48, backgroundColor: "#1565C0", borderRadius: 10, paddingHorizontal: 16, justifyContent: "center" }, confirmProfileCard: { width: "100%", maxWidth: 520, backgroundColor: colors.surface, borderRadius: 20, padding: 20, gap: 14 }, confirmProfileTitle: { fontSize: 22, fontWeight: "900" }, confirmProfileText: { color: colors.muted, fontSize: 16, lineHeight: 22 }, confirmProfileDelete: { backgroundColor: colors.danger, borderRadius: 11, padding: 15, alignItems: "center" },
   dailyPanel: { backgroundColor: colors.surface, borderRadius: 18, padding: 15, marginBottom: 12 }, dailyHeading: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 9 }, dailyTitle: { fontSize: 19, fontWeight: "900" }, dailyCount: { color: colors.muted, fontWeight: "700" }, dailyGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 }, dailyItem: { flexGrow: 1, flexBasis: 90, minWidth: 90, backgroundColor: colors.background, borderRadius: 11, padding: 10 }, dailyValue: { fontSize: 15, fontWeight: "900", color: colors.text }, dailyKcal: { color: colors.primary, fontSize: 19 }, dailyLabel: { color: colors.muted, fontSize: 12, marginTop: 2 },
   successBanner: { color: "#1B5E20", backgroundColor: "#E8F5E9", borderRadius: 10, padding: 12, fontWeight: "700", marginBottom: 12 }, backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.48)", alignItems: "center", justifyContent: "center", padding: 24 }, compactBackdrop: { padding: 8 }, modalCard: { width: "90%", maxWidth: 900, height: "86%", backgroundColor: colors.surface, borderRadius: 22, padding: 22 }, compactModalCard: { width: "100%", height: "100%", borderRadius: 16, padding: 14 },
   modalHeader: { flexDirection: "row", alignItems: "flex-start", gap: 8, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: colors.border }, modalHeading: { flex: 1, minWidth: 0 }, stepLabel: { color: colors.primary, fontWeight: "800", fontSize: 12 }, modalTitle: { fontSize: 25, fontWeight: "900", marginTop: 3 }, compactModalTitle: { fontSize: 21 }, stepScroll: { flex: 1, minHeight: 0 }, stepContent: { paddingVertical: 16, gap: 10 },

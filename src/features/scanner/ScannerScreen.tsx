@@ -258,7 +258,7 @@ export function ScannerScreen() {
               <View style={styles.row}>{!isChemical(product) && <DatePickerField value={expiryDate} onChange={setExpiryDate} />}<LocationPicker value={location} onChange={setLocation} label="Lokalizacja w spiżarni" productType={activeType} /></View>
               {!isChemical(product) && <PackageDateFields product={product} amount={stockAmount} unit={stockUnit} packageDates={packageDates} fallbackDate={expiryDate} onChange={changePackageDate} />}
               {!isChemical(product) && canUseWholePackage(product) && <View style={styles.packageHint}><Text style={styles.packageHintTitle}>Jedno opakowanie: {product.packageAmount} {product.packageUnit}</Text><Text style={styles.muted}>Przy dodawaniu wpisz liczbę opakowań, np. 4 szt. Możesz też odejmować później gramy, ml albo 1 sztukę.</Text></View>}
-              {!isChemical(product) && <ConsumerPicker value={consumer} onChange={setConsumer} label="Dla kogo liczyć po wybraniu Zjedz teraz?" />}
+              {!isChemical(product) && <ConsumerPicker value={consumer} onChange={setConsumer} label="Dla kogo dodać produkt do dzisiejszego bilansu?" />}
               <View style={styles.actions}>
                 {!isChemical(product) && <>
                   <TextInput value={stockAmount} onChangeText={setStockAmount} keyboardType="decimal-pad" style={styles.amount} />
@@ -266,7 +266,7 @@ export function ScannerScreen() {
                 </>}
                 <Pressable disabled={busy} onPress={() => void update(1)} style={[styles.button, busy && styles.disabled]}><Text style={styles.white}>{busy ? "Zapisywanie..." : "+ Dodaj"}</Text></Pressable>
                 {!isChemical(product) && <Pressable disabled={busy} onPress={() => void update(-1)} style={[styles.remove, busy && styles.disabled]}><Text style={styles.white}>- Odejmij</Text></Pressable>}
-                {!isChemical(product) && <Pressable disabled={busy} onPress={() => void eatNow()} style={[styles.eat, busy && styles.disabled]}><Text style={styles.white}>Zjedz teraz - tylko do bilansu</Text></Pressable>}
+                {!isChemical(product) && <Pressable disabled={busy} onPress={() => void eatNow()} style={[styles.eat, busy && styles.disabled]}><Text style={styles.white}>Dodaj do dzisiejszego bilansu</Text></Pressable>}
               </View>
               {!!actionMessage && <Text style={[styles.actionMessage, actionError ? styles.actionError : styles.actionSuccess]}>{actionMessage}</Text>}
               {product.nutrientsPer100g.energyKcal === undefined && <Pressable onPress={() => manualLayer.openLayer()} style={styles.manual}><Text style={styles.white}>Uzupełnij kalorie ręcznie</Text></Pressable>}
