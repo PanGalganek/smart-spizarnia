@@ -28,8 +28,7 @@ export function ScannerScreen() {
   const appNavigation = useAppNavigation();
   const cameraLayer = useNavigationLayer("scanner-camera", "scanner", { scanner: true });
   const manualLayer = useNavigationLayer("scanner-manual-product", "form", { modal: "scanner-manual-product", mode: "add-product" });
-  const activeType = appNavigation.state.view === "scanner" && (appNavigation.state.tab === "food" || appNavigation.state.tab === "household_chemical") ? appNavigation.state.tab : "food";
-  const setActiveType = (type: ProductType) => appNavigation.updateState({ tab: type }, { push: true });
+  const [activeType, setActiveType] = useState<ProductType>("food");
   const [barcode, setBarcode] = useState("");
   const [product, setProduct] = useState<Product | null>(null);
   const [message, setMessage] = useState("Zeskanuj kod lub wpisz go ręcznie.");
@@ -64,7 +63,9 @@ export function ScannerScreen() {
     try {
       const saved = await getSavedProduct(normalized);
       if (saved) {
-        const typedSaved = withProductType(withInferredPackageSize(saved), activeType);
+        const savedType = saved.type ?? "food";
+        const typedSaved = withProductType(withInferredPackageSize(saved), savedType);
+        setActiveType(savedType);
         setProduct(typedSaved);
         setStockUnit(canUseWholePackage(typedSaved) ? "szt" : typedSaved.defaultUnit ?? "szt");
         setStockAmount("1");
@@ -75,7 +76,8 @@ export function ScannerScreen() {
         return;
       }
       const result = await getProductByBarcode(normalized);
-      const typedResult = result ? withProductType(withInferredPackageSize(result), activeType) : null;
+      const typedResult = result ? withProductType(withInferredPackageSize(result), "food") : null;
+      setActiveType("food");
       setProduct(typedResult);
       if (typedResult) {
         setStockUnit(canUseWholePackage(typedResult) ? "szt" : typedResult.defaultUnit ?? "szt");
@@ -115,6 +117,7 @@ export function ScannerScreen() {
   }
 
   function selectUsda(result: UsdaFoodResult) {
+    setActiveType("food");
     setProduct(result.product);
     setBarcode(result.product.barcode);
     setStockAmount("100");
@@ -236,7 +239,6 @@ export function ScannerScreen() {
           showsVerticalScrollIndicator
         >
         <View style={styles.card}>
-          <View style={styles.productTypeToggle}><ProductTypeCheckbox checked={activeType === "household_chemical"} onChange={setChemicalProduct} /></View>
           <View style={styles.row}>
             <TextInput keyboardType="number-pad" value={barcode} onChangeText={setBarcode} placeholder="Kod kreskowy" style={styles.input} />
             <Pressable onPress={() => void search()} style={styles.button}><Text style={styles.white}>Sprawdź</Text></Pressable>
@@ -260,6 +262,7 @@ export function ScannerScreen() {
           {product && (
             <View style={styles.product}>              <Text style={styles.name}>{product.name}</Text>
               <Text>{product.brand}</Text>
+              <View style={styles.productTypeResult}><ProductTypeCheckbox checked={isChemical(product)} onChange={setChemicalProduct} /></View>
               {isChemical(product) ? <><Text style={styles.package}>Produkt chemiczny, niespożywczy</Text><View style={styles.levelGrid}>{chemicalLevels.map((level) => <Pressable key={level.value} onPress={() => setChemicalLevel(level.value)} style={[styles.levelButton, chemicalLevel === level.value && styles.levelActive]}><Text style={chemicalLevel === level.value ? styles.white : styles.levelText}>{level.label}</Text></Pressable>)}</View></> : <>
                 <Text style={styles.package}>{product.source === "usda" ? "Produkt bez kodu - wartości na 100 g" : `Gramatura opakowania: ${product.packageAmount ? `${product.packageAmount} ${product.packageUnit}` : product.servingSize || "brak danych"}`}</Text>
                 <Text>{product.nutrientsPer100g.energyKcal ?? "-"} kcal / 100 g</Text>
@@ -317,7 +320,6 @@ const styles = StyleSheet.create({
   webScroll: { overflow: "scroll" },
   scrollContent: { flexGrow: 1, paddingBottom: 36 },
   card: { backgroundColor: colors.surface, padding: 24, borderRadius: 20 },
-  productTypeToggle: { marginBottom: 14 },
   row: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   input: { flex: 1, backgroundColor: colors.background, padding: 16, borderRadius: 12, fontSize: 18 },
   button: { backgroundColor: colors.primary, paddingHorizontal: 24, justifyContent: "center", borderRadius: 12 },
@@ -330,6 +332,7 @@ const styles = StyleSheet.create({
   usdaTitle: { fontSize: 19, fontWeight: "900" }, usdaHint: { color: colors.muted, lineHeight: 19 }, usdaButton: { backgroundColor: "#7A4E22", paddingHorizontal: 20, paddingVertical: 14, justifyContent: "center", borderRadius: 12 }, usdaMessage: { color: colors.muted, fontWeight: "600" },
   usdaResult: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10, backgroundColor: colors.background, borderRadius: 11, padding: 13 }, usdaResultText: { flex: 1, minWidth: 180 }, usdaName: { fontSize: 16, fontWeight: "800" }, usdaNutrition: { alignItems: "flex-end" }, usdaKcal: { color: colors.primary, fontWeight: "900" },
   product: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 18, gap: 8 },
+  productTypeResult: { marginVertical: 8 },
   name: { fontSize: 24, fontWeight: "800" },
   package: { fontSize: 18, fontWeight: "800", color: colors.primary },
   packageHint: { backgroundColor: "#E8F5E9", borderWidth: 1, borderColor: colors.primary, borderRadius: 11, padding: 12, gap: 4 },
