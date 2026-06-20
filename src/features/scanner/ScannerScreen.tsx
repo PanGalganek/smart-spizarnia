@@ -6,6 +6,7 @@ import { ModuleScreen } from "@/core/components/ModuleScreen";
 import { DatePickerField } from "@/core/components/DatePickerField";
 import { ConsumerPicker } from "@/core/components/ConsumerPicker";
 import { LocationPicker } from "@/core/components/LocationPicker";
+import { ProductTypeCheckbox } from "@/core/components/ProductTypeCheckbox";
 import { useAppNavigation, useNavigationLayer } from "@/core/navigation/useAppNavigation";
 import { colors } from "@/core/theme";
 import { ChemicalLevel, Product, ProductType, Unit } from "@/domain/product";
@@ -19,7 +20,7 @@ import { changePantryQuantity, createUntrackedMeal, getPantryItem, getSavedProdu
 import { createUntrackedMealIngredient } from "@/services/nutrition";
 import { canUseWholePackage, convertPantryAmount, preferredPantryUnit } from "@/services/pantryUnits";
 import { shouldAskToBuyAgain } from "@/services/shoppingPrompt";
-import { chemicalLevelLabel, chemicalLevels, isChemical, productTypes, withProductType } from "@/services/productTypes";
+import { chemicalLevelLabel, chemicalLevels, isChemical, withProductType } from "@/services/productTypes";
 import { searchUsdaFoods, UsdaFoodResult } from "@/services/usdaFoodData";
 
 export function ScannerScreen() {
@@ -91,6 +92,14 @@ export function ScannerScreen() {
 
   function openCamera() {
     cameraLayer.openLayer();
+  }
+
+  function setChemicalProduct(checked: boolean) {
+    const nextType: ProductType = checked ? "household_chemical" : "food";
+    setActiveType(nextType);
+    setProduct((current) => current ? { ...current, type: nextType } : current);
+    setActionMessage("");
+    setActionError(false);
   }
 
   async function searchByName() {
@@ -210,6 +219,7 @@ export function ScannerScreen() {
           onCancel={manualLayer.closeLayer}
           onSaved={(savedProduct) => {
             setProduct(savedProduct);
+            setActiveType(savedProduct.type ?? "food");
             manualLayer.closeLayer();
             setMessage("Produkt został zapisany ręcznie.");
           }}
@@ -226,7 +236,7 @@ export function ScannerScreen() {
           showsVerticalScrollIndicator
         >
         <View style={styles.card}>
-          <View style={styles.tabs}>{productTypes.map((item) => <Pressable key={item.type} onPress={() => { setActiveType(item.type); setProduct(null); setActionMessage(""); }} style={[styles.tab, activeType === item.type && styles.tabActive]}><Text style={activeType === item.type ? styles.tabTextActive : styles.tabText}>{item.label}</Text></Pressable>)}</View>
+          <View style={styles.productTypeToggle}><ProductTypeCheckbox checked={activeType === "household_chemical"} onChange={setChemicalProduct} /></View>
           <View style={styles.row}>
             <TextInput keyboardType="number-pad" value={barcode} onChangeText={setBarcode} placeholder="Kod kreskowy" style={styles.input} />
             <Pressable onPress={() => void search()} style={styles.button}><Text style={styles.white}>Sprawdź</Text></Pressable>
@@ -307,11 +317,7 @@ const styles = StyleSheet.create({
   webScroll: { overflow: "scroll" },
   scrollContent: { flexGrow: 1, paddingBottom: 36 },
   card: { backgroundColor: colors.surface, padding: 24, borderRadius: 20 },
-  tabs: { flexDirection: "row", gap: 8, marginBottom: 14 },
-  tab: { flex: 1, backgroundColor: colors.background, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 10, alignItems: "center", borderWidth: 1, borderColor: colors.border },
-  tabActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  tabText: { color: colors.text, fontWeight: "800", textAlign: "center" },
-  tabTextActive: { color: "white", fontWeight: "900", textAlign: "center" },
+  productTypeToggle: { marginBottom: 14 },
   row: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   input: { flex: 1, backgroundColor: colors.background, padding: 16, borderRadius: 12, fontSize: 18 },
   button: { backgroundColor: colors.primary, paddingHorizontal: 24, justifyContent: "center", borderRadius: 12 },

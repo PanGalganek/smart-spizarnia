@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-
 import { colors } from "@/core/theme";
 import { DatePickerField } from "@/core/components/DatePickerField";
 import { LocationPicker } from "@/core/components/LocationPicker";
+import { ProductTypeCheckbox } from "@/core/components/ProductTypeCheckbox";
 import { ChemicalLevel, Nutrients, NutritionBasis, Product, ProductType, Unit } from "@/domain/product";
 import { changePantryQuantity, saveChemicalPantryItem, saveProduct } from "@/services/inventoryRepository";
 import { chemicalLevels, isChemical, withProductType } from "@/services/productTypes";
@@ -11,6 +12,7 @@ type Props = { barcode: string; onCancel: () => void; onSaved: (product: Product
 type NumericKey = "energyKcal" | "proteins" | "carbohydrates" | "fat" | "fiber" | "salt" | "packageAmount" | "quantity";
 
 export function ManualProductForm({ barcode, onCancel, onSaved, productType = "food" }: Props) {
+  const [selectedProductType, setSelectedProductType] = useState<ProductType>(productType);
   const [manualBarcode, setManualBarcode] = useState(barcode);
   const [name, setName] = useState("");
   const [brand, setBrand] = useState("");
@@ -39,9 +41,9 @@ export function ManualProductForm({ barcode, onCancel, onSaved, productType = "f
   async function submit() {
     const kcal = numberValue("energyKcal");
     if (!name.trim()) return setError("Nazwa produktu jest wymagana.");
-    if (productType === "food" && kcal === undefined) return setError("Wpisz kalorie produktu. Bez nich produkt nie może trafić do posiłku.");
-    if (basis === "perUnit" && unit !== "szt") return setError("Kalorie na sztukę wymagaja jednostki szt.");
-    if (basis === "per100" && unit === "szt" && (!numberValue("packageAmount") || packageUnit === "szt")) return setError("Podaj jedno pełne opakowanie w g albo ml, aby poprawnie liczyć kalorie.");
+    if (selectedProductType === "food" && kcal === undefined) return setError("Wpisz kalorie produktu. Bez nich produkt nie może trafić do posiłku.");
+    if (selectedProductType === "food" && basis === "perUnit" && unit !== "szt") return setError("Kalorie na sztukę wymagaja jednostki szt.");
+    if (selectedProductType === "food" && basis === "per100" && unit === "szt" && (!numberValue("packageAmount") || packageUnit === "szt")) return setError("Podaj jedno pełne opakowanie w g albo ml, aby poprawnie liczyć kalorie.");
     if ((numberValue("quantity") ?? 0) > 0 && !location.trim()) return setError("Dla produktu w spiżarni wybierz lokalizację. Data ważności jest opcjonalna.");
 
     const productCode = manualBarcode.trim() || `manual-${Date.now()}`;
@@ -56,7 +58,7 @@ export function ManualProductForm({ barcode, onCancel, onSaved, productType = "f
         fat: numberValue("fat"), fiber: numberValue("fiber"), salt: numberValue("salt")
       },
       source: "manual", updatedAt: Date.now()
-    }, productType);
+    }, selectedProductType);
 
     try {
       setBusy(true); setError("");
@@ -74,17 +76,18 @@ export function ManualProductForm({ barcode, onCancel, onSaved, productType = "f
   return (
     <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
       <Text style={styles.title}>Dodaj produkt ręcznie</Text>
+      <ProductTypeCheckbox checked={selectedProductType === "household_chemical"} onChange={(checked) => { setSelectedProductType(checked ? "household_chemical" : "food"); setError(""); }} />
       <Field label="Kod kreskowy (opcjonalnie)" value={manualBarcode} onChangeText={setManualBarcode} numeric />
       <View style={styles.row}>
         <Field label="Nazwa produktu *" value={name} onChangeText={setName} />
         <Field label="Marka" value={brand} onChangeText={setBrand} />
-        {productType === "food" && <Field label="Ilość początkowa" value={numbers.quantity} onChangeText={(v) => setNumber("quantity", v)} numeric />}
+        {selectedProductType === "food" && <Field label="Ilość początkowa" value={numbers.quantity} onChangeText={(v) => setNumber("quantity", v)} numeric />}
       </View>
-      {productType === "food" ? <>
+      {selectedProductType === "food" ? <>
       <Text style={styles.section}>Jednostka stanu</Text><ChoiceRow values={["g", "ml", "szt"]} selected={unit} onSelect={(value) => { setUnit(value as Unit); setPackageUnit(value === "szt" ? "g" : value as Unit); if (value !== "szt") setBasis("per100"); }} />
       <View style={styles.row}>
         <DatePickerField value={expiryDate} onChange={setExpiryDate} />
-        <LocationPicker value={location} onChange={setLocation} productType={productType} />
+        <LocationPicker value={location} onChange={setLocation} productType={selectedProductType} />
       </View>
       <Text style={styles.section}>Jedno pełne opakowanie</Text>
       <Text style={styles.muted}>Np. serek 500 g, mleko 1000 ml albo jajko 1 szt. To pole służy do liczenia sztuk, paska zapasu i szybkiego zużycia całego opakowania.</Text>
@@ -98,7 +101,7 @@ export function ManualProductForm({ barcode, onCancel, onSaved, productType = "f
         <Field label="Tłuszcz (g)" value={numbers.fat} onChangeText={(v) => setNumber("fat", v)} numeric />
       </View>
       </> : <>
-        <LocationPicker value={location} onChange={setLocation} productType={productType} />
+        <LocationPicker value={location} onChange={setLocation} productType={selectedProductType} />
         <Text style={styles.section}>Poziom produktu chemicznego</Text>
         <View style={styles.levelGrid}>{chemicalLevels.map((level) => <Pressable key={level.value} onPress={() => setChemicalLevel(level.value)} style={[styles.levelButton, chemicalLevel === level.value && styles.levelActive]}><Text style={chemicalLevel === level.value ? styles.white : styles.choiceText}>{level.label}</Text></Pressable>)}</View>
       </>}
