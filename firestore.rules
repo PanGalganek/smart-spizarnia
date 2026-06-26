@@ -184,72 +184,6 @@ service cloud.firestore {
         && optionalBool(data, "protected");
     }
 
-    function validHydrationSettings(data) {
-      return data.keys().hasOnly([
-          "id", "consumerId", "consumerName", "dailyGoalMl",
-          "remindersEnabled", "reminderIntervalMinutes", "reminderStartHour",
-          "reminderEndHour", "lastReminderAt", "updatedAt"
-        ])
-        && data.id is string
-        && data.consumerId is string
-        && data.consumerName is string
-        && data.dailyGoalMl is number
-        && data.dailyGoalMl >= 250
-        && data.dailyGoalMl <= 10000
-        && data.remindersEnabled is bool
-        && data.reminderIntervalMinutes is number
-        && data.reminderIntervalMinutes >= 30
-        && data.reminderIntervalMinutes <= 720
-        && data.reminderStartHour is number
-        && data.reminderStartHour >= 0
-        && data.reminderStartHour <= 23
-        && data.reminderEndHour is number
-        && data.reminderEndHour >= 1
-        && data.reminderEndHour <= 24
-        && optionalNumber(data, "lastReminderAt")
-        && data.updatedAt is number;
-    }
-
-    function validHydrationEntry(data) {
-      return data.keys().hasOnly(["id", "consumerId", "consumerName", "amountMl", "dateKey", "createdAt"])
-        && data.id is string
-        && data.consumerId is string
-        && data.consumerName is string
-        && data.amountMl is number
-        && data.amountMl > 0
-        && data.amountMl <= 3000
-        && data.dateKey is string
-        && data.createdAt is number;
-    }
-
-    function validHydrationDaily(data) {
-      return data.keys().hasOnly(["id", "consumerId", "consumerName", "dateKey", "totalMl", "goalMl", "entryCount", "updatedAt"])
-        && data.id is string
-        && data.consumerId is string
-        && data.consumerName is string
-        && data.dateKey is string
-        && data.totalMl is number
-        && data.totalMl >= 0
-        && data.goalMl is number
-        && data.goalMl >= 250
-        && data.goalMl <= 10000
-        && data.entryCount is number
-        && data.entryCount >= 0
-        && data.updatedAt is number;
-    }
-
-    function validPushSubscription(data) {
-      return data.keys().hasOnly(["id", "endpoint", "p256dh", "auth", "enabled", "userAgent", "createdAt", "updatedAt"])
-        && data.id is string
-        && data.endpoint is string
-        && data.p256dh is string
-        && data.auth is string
-        && data.enabled is bool
-        && optionalString(data, "userAgent")
-        && data.createdAt is number
-        && data.updatedAt is number;
-    }
-
     function validSettings(settingsId, data) {
       return settingsId in ["storageLocations", "storageLocations_household_chemical", "legacyRootMigration_v1"]
         && data.keys().hasOnly(["values", "updatedAt", "type"])
@@ -303,26 +237,6 @@ service cloud.firestore {
     match /users/{userId}/settings/{settingsId} {
       allow read, delete: if canReadUserData(userId);
       allow create, update: if canWriteUserData(userId) && validSettings(settingsId, request.resource.data);
-    }
-
-    match /users/{userId}/hydrationSettings/{settingsId} {
-      allow read, delete: if canReadUserData(userId);
-      allow create, update: if canWriteUserData(userId) && validHydrationSettings(request.resource.data);
-    }
-
-    match /users/{userId}/hydrationEntries/{entryId} {
-      allow read, delete: if canReadUserData(userId);
-      allow create, update: if canWriteUserData(userId) && validHydrationEntry(request.resource.data);
-    }
-
-    match /users/{userId}/hydrationDaily/{summaryId} {
-      allow read, delete: if canReadUserData(userId);
-      allow create, update: if canWriteUserData(userId) && validHydrationDaily(request.resource.data);
-    }
-
-    match /users/{userId}/pushSubscriptions/{subscriptionId} {
-      allow read, delete: if canReadUserData(userId);
-      allow create, update: if canWriteUserData(userId) && validPushSubscription(request.resource.data);
     }
 
     match /products/{documentId} {

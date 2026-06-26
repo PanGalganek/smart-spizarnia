@@ -9,12 +9,11 @@ const tiles = [
   { title: "Skaner", subtitle: "Dodaj lub odejmij produkt", icon: "barcode-scan", route: "/scanner", color: "#2E7D32" },
   { title: "Spiżarnia", subtitle: "Aktualny stan produktów", icon: "fridge-outline", route: "/pantry", color: "#1565C0" },
   { title: "Posiłki", subtitle: "Kcal, makro i składniki", icon: "silverware-fork-knife", route: "/meals", color: "#EF6C00" },
-  { title: "Nawodnienie", subtitle: "Woda i przypomnienia", icon: "cup-water", route: "/hydration", color: "#00838F" },
   { title: "Zapisane", subtitle: "Baza kodów kreskowych", icon: "bookmark-multiple-outline", route: "/saved", color: "#6A1B9A" },
   { title: "Lista zakupów", subtitle: "Produkty do kupienia", icon: "cart-outline", route: "/shopping", color: "#AD5A00" }
 ] as const;
 
-const APP_VERSION = "0.12.0";
+const APP_VERSION = "0.11.43";
 
 export default function HomeScreen() {
   const { user, profile, isActive, isAdmin, signOut } = useAuth();
