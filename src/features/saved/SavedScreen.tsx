@@ -148,12 +148,12 @@ export function SavedScreen() {
         name: editName.trim(),
         type: selected.type ?? "food",
         brand: editBrand.trim() || undefined,
-        netWeightGrams: parseOptionalNumber(editNumbers.netWeightGrams),
-        packageAmount: parseOptionalNumber(editNumbers.packageAmount),
-        packageUnit: parseOptionalNumber(editNumbers.packageAmount) ? editPackageUnit : undefined,
-        quickUseAmount: parseOptionalNumber(editNumbers.quickUseAmount),
-        quickUseUnit: parseOptionalNumber(editNumbers.quickUseAmount) ? editQuickUseUnit : undefined,
-        defaultUnit: selected.defaultUnit ?? editPackageUnit,
+        netWeightGrams: chemical ? undefined : parseOptionalNumber(editNumbers.netWeightGrams),
+        packageAmount: chemical ? undefined : parseOptionalNumber(editNumbers.packageAmount),
+        packageUnit: chemical ? undefined : parseOptionalNumber(editNumbers.packageAmount) ? editPackageUnit : undefined,
+        quickUseAmount: chemical ? undefined : parseOptionalNumber(editNumbers.quickUseAmount),
+        quickUseUnit: chemical ? undefined : parseOptionalNumber(editNumbers.quickUseAmount) ? editQuickUseUnit : undefined,
+        defaultUnit: chemical ? "szt" : selected.defaultUnit ?? editPackageUnit,
         nutrientsPer100g: chemical ? {} : {
           ...selected.nutrientsPer100g,
           energyKcal: kcal,
@@ -281,6 +281,7 @@ export function SavedScreen() {
               numbers={editNumbers}
               packageUnit={editPackageUnit}
               quickUseUnit={editQuickUseUnit}
+              chemical={isChemical(selected)}
               showUnitWeight={selected.nutritionBasis !== "perUnit" && (editPackageUnit === "szt" || selected.defaultUnit === "szt")}
               onName={setEditName}
               onBrand={setEditBrand}
@@ -326,7 +327,7 @@ function Details({ product }: { product: Product }) {
   if (isChemical(product)) return <>
     <Detail label="Typ" value="Produkt chemiczny, niespożywczy" />
     <Detail label="Kod produktu" value={product.barcode} />
-    <Detail label="Szybkie zużycie" value="Poziom: Cały / Więcej niż pół / Połowa / Mniej niż pół / Zużyty" />
+    <Detail label="Stan w spiżarni" value="Pełny / Więcej niż połowa / Połowa / Mniej niż połowa / Pusty" />
   </>;
   return <>
     <Detail label="Kod produktu" value={product.source === "usda" || product.barcode.startsWith("manual-") ? product.barcode : product.barcode} />
@@ -339,8 +340,9 @@ function Details({ product }: { product: Product }) {
   </>;
 }
 
-function EditForm({ name, brand, numbers, packageUnit, quickUseUnit, showUnitWeight, onName, onBrand, onNumber, onPackageUnit, onQuickUseUnit }: {
+function EditForm({ name, brand, numbers, packageUnit, quickUseUnit, chemical, showUnitWeight, onName, onBrand, onNumber, onPackageUnit, onQuickUseUnit }: {
   name: string; brand: string; numbers: Record<EditKey, string>; packageUnit: Unit; quickUseUnit: Unit;
+  chemical: boolean;
   showUnitWeight: boolean;
   onName: (value: string) => void; onBrand: (value: string) => void; onNumber: (key: EditKey, value: string) => void; onPackageUnit: (value: Unit) => void; onQuickUseUnit: (value: Unit) => void;
 }) {
@@ -348,6 +350,7 @@ function EditForm({ name, brand, numbers, packageUnit, quickUseUnit, showUnitWei
     <Text style={styles.actionTitle}>Ręczna korekta danych</Text>
     <Field label="Nazwa produktu" value={name} onChangeText={onName} />
     <Field label="Marka" value={brand} onChangeText={onBrand} />
+    {chemical ? <Text style={styles.hint}>Dla produktu chemicznego zapisujemy tylko nazwę i markę.</Text> : <>
     <Text style={styles.hint}>Popraw tu dane, jeśli etykieta produktu różni się od informacji pobranych z internetu.</Text>
     <Field label="kcal na 100 g/ml albo szt." value={numbers.energyKcal} onChangeText={(value) => onNumber("energyKcal", value)} numeric />
     <View style={styles.threeColumns}>
@@ -365,6 +368,7 @@ function EditForm({ name, brand, numbers, packageUnit, quickUseUnit, showUnitWei
     <Text style={styles.actionTitle}>Szybki przycisk zużycia</Text>
     <Text style={styles.hint}>Np. 1 szt. dla serka, 200 ml dla mleka albo 50 g dla masła.</Text>
     <View style={styles.amountRow}><TextInput value={numbers.quickUseAmount} onChangeText={(value) => onNumber("quickUseAmount", value)} keyboardType="decimal-pad" placeholder="Np. 1" style={styles.amountInput} />{(["g", "ml", "szt"] as Unit[]).map((value) => <Pressable key={value} onPress={() => onQuickUseUnit(value)} style={[styles.unit, quickUseUnit === value && styles.unitActive]}><Text style={quickUseUnit === value ? styles.white : undefined}>{value}</Text></Pressable>)}</View>
+    </>}
   </View>;
 }
 
