@@ -8,6 +8,7 @@ export const userDataCollections = [
   "pantry",
   "meals",
   "dailySummaries",
+  "mealTemplates",
   "shoppingList",
   "consumers",
   "settings"

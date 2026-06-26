@@ -161,6 +161,21 @@ service cloud.firestore {
         && optionalString(data, "consumerName");
     }
 
+    function validMealTemplate(data) {
+      return data.keys().hasOnly(["id", "name", "type", "ingredients", "servings", "createdAt", "updatedAt"])
+        && data.id is string
+        && data.name is string
+        && data.type in ["breakfast", "lunch", "dinner", "snack", "custom"]
+        && data.ingredients is list
+        && data.ingredients.size() > 0
+        && data.ingredients.size() <= 50
+        && data.servings is number
+        && data.servings >= 1
+        && data.servings <= 100
+        && data.createdAt is number
+        && data.updatedAt is number;
+    }
+
     function validShoppingItem(data) {
       return data.keys().hasOnly([
           "id", "name", "productBarcode", "product", "source",
@@ -222,6 +237,11 @@ service cloud.firestore {
     match /users/{userId}/dailySummaries/{summaryId} {
       allow read, delete: if canReadUserData(userId);
       allow create, update: if canWriteUserData(userId) && validDailySummary(request.resource.data);
+    }
+
+    match /users/{userId}/mealTemplates/{templateId} {
+      allow read, delete: if canReadUserData(userId);
+      allow create, update: if canWriteUserData(userId) && validMealTemplate(request.resource.data);
     }
 
     match /users/{userId}/shoppingList/{itemId} {

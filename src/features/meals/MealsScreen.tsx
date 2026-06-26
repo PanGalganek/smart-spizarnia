@@ -5,12 +5,14 @@ import { BottomActionBar } from "@/core/components/BottomActionBar";
 import { ModuleScreen } from "@/core/components/ModuleScreen";
 import { useAppNavigation, useNavigationLayer } from "@/core/navigation/useAppNavigation";
 import { colors } from "@/core/theme";
-import { Consumer, DailySummary, Meal, MealIngredient, MealType } from "@/domain/meal";
+import { Consumer, DailySummary, Meal, MealIngredient, MealTemplate, MealType } from "@/domain/meal";
 import { Nutrients, PantryItem } from "@/domain/product";
 import { MealHistory } from "@/features/meals/MealHistory";
+import { MealTemplates } from "@/features/meals/MealTemplates";
 import { AddDepletedPrompt } from "@/features/shopping/AddDepletedPrompt";
 import { createMeal, getDailySummary, listMeals, listPantry } from "@/services/inventoryRepository";
 import { addConsumer, listConsumers, removeConsumer } from "@/services/consumerRepository";
+import { createMealTemplateFromMeal, listMealTemplates } from "@/services/mealTemplateRepository";
 import { createMealIngredient, dateKey, scaleNutrients, sumNutrients, usesWeightPerPiece } from "@/services/nutrition";
 import { wholePackageConsumptionAmount } from "@/services/pantryUnits";
 import { productType } from "@/services/productTypes";
@@ -34,6 +36,7 @@ export function MealsScreen() {
   const profileDeleteLayer = useNavigationLayer("meal-profile-delete", "modal", { modal: "meal-profile-delete", mode: "meal-profile-delete" });
   const [pantry, setPantry] = useState<PantryItem[]>([]);
   const [meals, setMeals] = useState<Meal[]>([]);
+  const [templates, setTemplates] = useState<MealTemplate[]>([]);
   const [dailySummary, setDailySummary] = useState<DailySummary>({ dateKey: dateKey(), totals: {}, mealCount: 0, updatedAt: Date.now() });
   const [type, setType] = useState<MealType | null>(null);
   const [customName, setCustomName] = useState("");
@@ -56,7 +59,7 @@ export function MealsScreen() {
 
   const refresh = useCallback(async () => {
     try {
-      const [nextPantry, nextMeals, savedConsumers] = await Promise.all([listPantry(), listMeals(), listConsumers()]);
+      const [nextPantry, nextMeals, nextTemplates, savedConsumers] = await Promise.all([listPantry(), listMeals(), listMealTemplates(), listConsumers()]);
       const nextConsumers = savedConsumers;
       const selectedConsumer = nextConsumers.find((item) => item.id === selectedConsumerId) ?? nextConsumers[0] ?? null;
       const nextSummary = selectedConsumer
@@ -64,6 +67,7 @@ export function MealsScreen() {
         : { dateKey: dateKey(), totals: {}, mealCount: 0, updatedAt: Date.now() };
       setPantry(nextPantry.filter((item) => productType(item.product) === "food"));
       setMeals(nextMeals);
+      setTemplates(nextTemplates);
       setDailySummary(nextSummary);
       setConsumers(nextConsumers);
       setConsumer((current) => current?.id === selectedConsumer?.id ? current : selectedConsumer);
@@ -168,6 +172,12 @@ export function MealsScreen() {
     } catch (cause) { setMessage(cause instanceof Error ? cause.message : "Nie udało się dodać osoby."); }
   }
 
+  async function saveMealAsTemplate(meal: Meal) {
+    const template = await createMealTemplateFromMeal(meal);
+    await refresh();
+    setMessage(`Dodano szablon: ${template.name}.`);
+  }
+
   function setCreatorStep(nextStep: Step, selectedId: string | null = null, push = true) {
     setModalMessage("");
     appNavigation.updateState({ mode: stepMode(nextStep), selectedId }, { push });
@@ -223,9 +233,10 @@ export function MealsScreen() {
           {consumers.length ? <View style={styles.consumerList}>{consumers.map((item) => <View key={item.id} style={styles.consumerEntry}><Pressable onPress={() => setConsumer(item)} style={[styles.consumerChip, consumer?.id === item.id && styles.consumerChipActive]}><Text style={consumer?.id === item.id ? styles.white : styles.consumerChipText}>{item.name}</Text></Pressable><Pressable onPress={() => requestConsumerRemoval(item)} style={styles.removeConsumerButton}><Text style={styles.removeConsumerText}>Usuń</Text></Pressable></View>)}</View> : <Text style={styles.emptyConsumers}>Brak profili. Dodaj pierwszą osobę, aby liczyć kalorie.</Text>}
           <View style={styles.addConsumerRow}><TextInput value={newConsumer} onChangeText={setNewConsumer} onSubmitEditing={() => void createConsumer()} placeholder="Imię lub nazwa profilu" style={styles.addConsumerInput} /><Pressable onPress={() => void createConsumer()} style={styles.addConsumerButton}><Text style={styles.white}>+ Dodaj profil</Text></Pressable></View>
         </View>
+        <MealTemplates templates={templates} pantry={pantry} consumer={consumer} onChanged={refresh} />
         <DailyNutritionSummary summary={dailySummary} />
         {!!message && <Text style={styles.successBanner}>{message}</Text>}
-        <MealHistory meals={consumer ? meals.filter((meal) => meal.consumerId === consumer.id) : []} onChanged={refresh} />
+        <MealHistory meals={consumer ? meals.filter((meal) => meal.consumerId === consumer.id) : []} onChanged={refresh} onCreateTemplate={saveMealAsTemplate} />
       </ScrollView>
 
       <Modal visible={profileDeleteLayer.open && !!consumerToDelete} transparent animationType="fade" onRequestClose={profileDeleteLayer.closeLayer}>

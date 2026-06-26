@@ -12,6 +12,23 @@ export type MealIngredient = {
   tracksPantry?: boolean;
 };
 
+export type MealTemplateIngredient = {
+  barcode: string;
+  productName: string;
+  amount: number;
+  unit: Unit;
+};
+
+export type MealTemplate = {
+  id: string;
+  name: string;
+  type: MealType;
+  ingredients: MealTemplateIngredient[];
+  servings: number;
+  createdAt: number;
+  updatedAt: number;
+};
+
 export type Meal = {
   id: string;
   name: string;

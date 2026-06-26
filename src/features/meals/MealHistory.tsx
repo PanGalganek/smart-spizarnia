@@ -5,14 +5,15 @@ import { colors } from "@/core/theme";
 import { Meal } from "@/domain/meal";
 import { deleteMeal, renameMeal } from "@/services/inventoryRepository";
 
-type Props = { meals: Meal[]; onChanged: () => Promise<void> };
+type Props = { meals: Meal[]; onChanged: () => Promise<void>; onCreateTemplate: (meal: Meal) => Promise<void> };
 type DeleteMode = "restore" | "history";
 
-export function MealHistory({ meals, onChanged }: Props) {
+export function MealHistory({ meals, onChanged, onCreateTemplate }: Props) {
   const appNavigation = useAppNavigation();
   const actionLayer = useNavigationLayer("meal-history-action", "modal", { modal: "meal-history-action", mode: "meal-history-edit" });
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [templateBusyId, setTemplateBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const selectedMeal = actionLayer.open ? meals.find((meal) => meal.id === appNavigation.state.selectedId) ?? null : null;
   const editing = appNavigation.state.mode === "meal-history-edit" ? selectedMeal : null;
@@ -61,12 +62,25 @@ export function MealHistory({ meals, onChanged }: Props) {
     }
   }
 
+  async function saveAsTemplate(meal: Meal) {
+    try {
+      setTemplateBusyId(meal.id);
+      await onCreateTemplate(meal);
+      setMessage("Posiłek zapisano jako szablon.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Nie udało się zapisać szablonu.");
+    } finally {
+      setTemplateBusyId(null);
+    }
+  }
+
   return (
     <View style={styles.panel}>
       <Text style={styles.title}>Historia posiłków</Text>
       {!!message && <Text style={styles.message}>{message}</Text>}
       {!meals.length ? <Text style={styles.empty}>Nie zapisano jeszcze zadnego posiłku.</Text> : meals.map((item) => {
           const canRestore = item.ingredients.some((ingredient) => ingredient.tracksPantry !== false);
+          const canSaveTemplate = item.ingredients.length > 0 && item.ingredients.every((ingredient) => ingredient.tracksPantry !== false);
           return <View key={item.id} style={styles.card}>
             {editing?.id === item.id ? (
               <View style={styles.editRow}>
@@ -91,6 +105,7 @@ export function MealHistory({ meals, onChanged }: Props) {
               </View>
             ) : (
               <View style={styles.actions}>
+                {canSaveTemplate && <Pressable disabled={templateBusyId === item.id} onPress={() => void saveAsTemplate(item)} style={[styles.template, templateBusyId === item.id && styles.disabled]}><Text style={styles.white}>{templateBusyId === item.id ? "Zapisywanie..." : "Zapisz jako szablon"}</Text></Pressable>}
                 <Pressable onPress={() => startEditing(item)} style={styles.cancel}><Text>Edytuj nazwę</Text></Pressable>
                 {canRestore && <Pressable onPress={() => startDeleting(item, "restore")} style={styles.restore}><Text style={styles.white}>Cofnij</Text></Pressable>}
                 <Pressable onPress={() => startDeleting(item, "history")} style={styles.delete}><Text style={styles.white}>Usuń wpis</Text></Pressable>
@@ -119,7 +134,7 @@ const styles = StyleSheet.create({
   save: { backgroundColor: colors.primary, borderRadius: 9, paddingHorizontal: 14, justifyContent: "center" },
   cancel: { backgroundColor: colors.surface, borderRadius: 9, paddingHorizontal: 14, paddingVertical: 10, justifyContent: "center" },
   delete: { backgroundColor: colors.danger, borderRadius: 9, paddingHorizontal: 14, paddingVertical: 10, justifyContent: "center" },
-  restore: { backgroundColor: colors.primary, borderRadius: 9, paddingHorizontal: 14, paddingVertical: 10, justifyContent: "center" },
+  restore: { backgroundColor: colors.primary, borderRadius: 9, paddingHorizontal: 14, paddingVertical: 10, justifyContent: "center" }, template: { backgroundColor: "#6A1B9A", borderRadius: 9, paddingHorizontal: 14, paddingVertical: 10, justifyContent: "center" }, disabled: { opacity: 0.55 },
   white: { color: "white", fontWeight: "700" }, confirmBox: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 8 },
   confirmText: { width: "100%", fontWeight: "700" }, empty: { textAlign: "center", color: colors.muted, marginTop: 50 }
 });
