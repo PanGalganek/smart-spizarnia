@@ -11,6 +11,7 @@ import { MealHistory } from "@/features/meals/MealHistory";
 import { AddDepletedPrompt } from "@/features/shopping/AddDepletedPrompt";
 import { createMeal, getDailySummary, listMeals, listPantry } from "@/services/inventoryRepository";
 import { addConsumer, listConsumers, removeConsumer } from "@/services/consumerRepository";
+import { removeHydrationConsumerData } from "@/services/hydrationRepository";
 import { createMealIngredient, dateKey, scaleNutrients, sumNutrients, usesWeightPerPiece } from "@/services/nutrition";
 import { wholePackageConsumptionAmount } from "@/services/pantryUnits";
 import { productType } from "@/services/productTypes";
@@ -182,6 +183,7 @@ export function MealsScreen() {
     if (!consumerToDelete) return;
     try {
       setProfileBusy(true);
+      await removeHydrationConsumerData(consumerToDelete.id);
       await removeConsumer(consumerToDelete);
       const nextConsumers = await listConsumers();
       const nextSelected = consumer?.id === consumerToDelete.id

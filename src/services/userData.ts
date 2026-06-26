@@ -10,7 +10,11 @@ export const userDataCollections = [
   "dailySummaries",
   "shoppingList",
   "consumers",
-  "settings"
+  "settings",
+  "hydrationSettings",
+  "hydrationEntries",
+  "hydrationDaily",
+  "pushSubscriptions"
 ] as const;
 
 export type UserDataCollection = typeof userDataCollections[number];

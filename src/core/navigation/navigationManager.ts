@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 
-export type AppView = "root" | "login" | "home" | "scanner" | "pantry" | "pantryItem" | "meals" | "saved" | "shopping" | "admin" | "unknown";
+export type AppView = "root" | "login" | "home" | "scanner" | "pantry" | "pantryItem" | "meals" | "hydration" | "saved" | "shopping" | "admin" | "unknown";
 export type NavigationLayerKind = "modal" | "scanner" | "form" | "edit" | "subview";
 
 export type AppNavigationState = {
@@ -63,6 +63,7 @@ export function deriveNavigationState(pathname: string, params: SearchParams = {
   if (pathname === "/home") return baseState("home", pathname, cleanUrl);
   if (pathname === "/scanner") return baseState("scanner", pathname, cleanUrl);
   if (pathname === "/meals") return baseState("meals", pathname, cleanUrl);
+  if (pathname === "/hydration") return baseState("hydration", pathname, cleanUrl);
   if (pathname === "/saved") return baseState("saved", pathname, cleanUrl);
   if (pathname === "/shopping") return baseState("shopping", pathname, cleanUrl);
   if (pathname === "/admin") return baseState("admin", pathname, cleanUrl);
