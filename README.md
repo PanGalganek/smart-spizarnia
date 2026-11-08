@@ -57,6 +57,8 @@ Ekran Posilki pokazuje dzienna sume kalorii, makro i pozostale skladniki odzywcz
 
 ## Weryfikacja
 
+`npm run audit:security` sprawdza zgłoszenia zależności przed publikacją. Zakres aktualizacji i pozostałe zgłoszenia opisuje [stan bezpieczeństwa zależności](docs/dependency-security.md).
+
 Uruchom `npm test`, `npm run typecheck` oraz testowe pakowanie Expo dla platform `web` i `android`. Testy obejmuja obliczenia kcal, jednostki, odejmowanie stanu, blokowanie nadmiernego zuzycia, oznaczenie produktu jako zuzyty, cofanie posilku i brak danych kalorycznych.
 
 Do testow na fizycznym tablecie pozostaja aparat, ergonomia dotykowa oraz zachowanie przy chwilowej utracie sieci.
