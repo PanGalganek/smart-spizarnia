@@ -41,7 +41,11 @@ Nowe konta moga sie rejestrowac, ale otrzymuja status `pending` i wymagaja aktyw
 
 Utworzenie posilku, odjecie wszystkich skladnikow i aktualizacja podsumowania dnia sa jedna transakcja Firestore. Cofniecie posilku atomowo przywraca te same ilosci i odejmuje wartosci posilku od podsumowania dnia.
 
-Cofniecie odczytuje aktualny posilek w transakcji. Ponowna proba cofniecia usunietego wpisu nie zmienia zapasow ani kalorii. Edycja lokalizacji i dat nie nadpisuje ilosci ze starego widoku; zakup dopisuje opakowania z zachowaniem dotychczasowych dat i stanu otwarcia. Cofanie posilku nadal odtwarza ilosc, a nie pierwotny podzial zuzycia na opakowania.
+Cofniecie odczytuje aktualny posilek w transakcji. Ponowna proba cofniecia usunietego wpisu nie zmienia zapasow ani kalorii. Edycja lokalizacji i dat nie nadpisuje ilosci ze starego widoku; zakup dopisuje opakowania z zachowaniem dotychczasowych dat i stanu otwarcia.
+
+Nowe posilki zapisuja w skladnikach `consumedPackages`: identyfikator, zuzyta ilosc, pojemnosc i metadane kazdego opakowania. Cofniecie zwraca ilosci do tych samych opakowan, odtwarza calkowicie zuzyte opakowania z ich datami i zachowuje pozniejsze zakupy oraz zmiany dat istniejacych opakowan. Starsze posilki bez tej historii nadal zwracaja tylko ilosc. Usuniecie calego produktu ze spizarni lub zmiana jednostki blokuje zwrot skladnika; nadal mozna usunac sam wpis z historii.
+
+Kolejnosc zuzycia: recznie wskazane opakowanie, opakowania otwarte, najblizszy termin waznosci, najstarsze dodanie. Opakowania bez daty sa na koncu swojej grupy. Podsumowanie zapasu korzysta z tej samej kolejnosci co zuzycie.
 
 ## Licznik kalorii i posilki
 

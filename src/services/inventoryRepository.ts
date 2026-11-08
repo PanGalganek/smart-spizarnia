@@ -3,7 +3,7 @@ import { db } from "@/core/firebase";
 import { Consumer, DailySummary, Meal, MealIngredient, MealType } from "@/domain/meal";
 import { PantryItem, Product, Unit } from "@/domain/product";
 import { addNutrients, dateKey, scaleNutrients, sumNutrients } from "@/services/nutrition";
-import { addPackages, consumePackages, normalizePackages, packageCapacity, packageTotal, packageUnit } from "@/services/pantryPackages";
+import { addPackages, consumePackages, normalizePackages, packageCapacity, packageTotal, packageUnit, restorePackages } from "@/services/pantryPackages";
 import { capacityForPackage, stockCapacity } from "@/services/stockLevel";
 import { chemicalLevelQuantity, isChemical, normalizeChemicalItem } from "@/services/productTypes";
 import { userCollection, userDoc } from "@/services/userData";
@@ -175,12 +175,13 @@ export async function changePantryQuantity(
       capacity: stock.capacity || Math.max(previousQuantity, 1),
       packages: stock.packages,
       unit: stock.unit,
-      expiryDate: metadata?.expiryDate ?? current?.expiryDate,
       location: metadata?.location ?? current?.location,
       status: stock.quantity === 0 ? "consumed" : "active",
       updatedAt: Date.now()
     };
-    transaction.set(ref, withoutUndefined(next), { merge: true });
+    // Dates now belong to packages; a legacy root date must not be inherited
+    // by new packages without an expiry date.
+    transaction.set(ref, { ...withoutUndefined(next), expiryDate: deleteField() }, { merge: true });
     return next;
   });
   await saveProduct(product);
@@ -218,6 +219,9 @@ export async function createMeal(
   consumer: Consumer | null = null
 ): Promise<Meal> {
   if (!ingredients.length) throw new Error("Dodaj przynajmniej jeden składnik.");
+  if (new Set(ingredients.map((item) => item.barcode)).size !== ingredients.length) {
+    throw new Error("Produkt może wystąpić w posiłku tylko raz. Połącz jego ilości.");
+  }
   if (!Number.isInteger(servings) || servings < 1 || servings > 100) throw new Error("Podaj liczbę porcji od 1 do 100.");
   if (!consumer) throw new Error("Najpierw wybierz profil osoby.");
   const mealRef = doc(userCollection("meals"));
@@ -238,7 +242,7 @@ export async function createMeal(
     consumerName: consumer.name
   };
 
-  await runTransaction(db, async (transaction) => {
+  return runTransaction(db, async (transaction) => {
     const pantryRefs = ingredients.map((item) => userDoc("pantry", item.barcode));
     const pantrySnapshots = await Promise.all(pantryRefs.map((ref) => transaction.get(ref)));
     const summarySnapshot = await transaction.get(summaryRef);
@@ -248,20 +252,23 @@ export async function createMeal(
       if (!snapshot.exists()) throw new Error(`Brak produktu: ${ingredient.productName}`);
       const item = normalizePantryItem(snapshot.data() as PantryItem);
       if (item.unit !== ingredient.unit) throw new Error(`Jednostka produktu ulegla zmianie: ${ingredient.productName}`);
-      if (ingredient.amount <= 0 || ingredient.amount > item.quantity) throw new Error(`Za malo produktu: ${ingredient.productName}`);
+      if (!Number.isFinite(ingredient.amount) || ingredient.amount <= 0 || ingredient.amount > item.quantity) throw new Error(`Za malo produktu: ${ingredient.productName}`);
     });
 
-    pantrySnapshots.forEach((snapshot, index) => {
+    const recordedIngredients = pantrySnapshots.map((snapshot, index) => {
       const item = normalizePantryItem(snapshot.data() as PantryItem);
       const stock = consumePackages(item, ingredients[index].amount, ingredients[index].unit);
       transaction.update(pantryRefs[index], {
         quantity: stock.quantity,
         capacity: stock.capacity,
         packages: withoutUndefined(stock.packages),
+        expiryDate: deleteField(),
         status: stock.quantity === 0 ? "consumed" : "active",
         updatedAt: Date.now()
       });
+      return { ...ingredients[index], tracksPantry: true, consumedPackages: stock.consumedPackages };
     });
+    const recordedMeal = { ...meal, ingredients: recordedIngredients };
 
     const current = summarySnapshot.exists()
       ? summarySnapshot.data() as DailySummary
@@ -274,10 +281,9 @@ export async function createMeal(
       mealCount: (current.mealCount ?? 0) + 1,
       updatedAt: Date.now()
     }));
-    transaction.set(mealRef, withoutUndefined(meal));
+    transaction.set(mealRef, withoutUndefined(recordedMeal));
+    return recordedMeal;
   });
-
-  return meal;
 }
 
 export async function createUntrackedMeal(
@@ -369,11 +375,16 @@ export async function deleteMeal(mealInput: Meal, restoreIngredients = true) {
 
     pantrySnapshots.forEach((snapshot, index) => {
       const current = normalizePantryItem(snapshot.data() as PantryItem);
-      const stock = addPackages(current, current.product, restorableIngredients[index].amount, restorableIngredients[index].unit);
+      const ingredient = restorableIngredients[index];
+      // Older meals have no package history and retain quantity-only restoration.
+      const stock = ingredient.consumedPackages !== undefined
+        ? restorePackages(current, ingredient.consumedPackages, ingredient.amount)
+        : addPackages(current, current.product, ingredient.amount, ingredient.unit);
       transaction.update(pantryRefs[index], {
         quantity: stock.quantity,
         capacity: stock.capacity,
         packages: withoutUndefined(stock.packages),
+        expiryDate: deleteField(),
         status: "active",
         updatedAt: Date.now()
       });

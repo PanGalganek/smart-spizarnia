@@ -12,11 +12,13 @@ const store = vi.hoisted(() => {
   const removed = Symbol("deleteField");
   let nextId = 0;
   function put(path: string, data?: Data) {
+    path = String(path);
     if (data) documents.set(path, structuredClone(data));
     else documents.delete(path);
     versions.set(path, (versions.get(path) ?? 0) + 1);
   }
   function snapshot(path: string) {
+    path = String(path);
     const data = documents.get(path);
     return { exists: () => !!data, data: () => data && structuredClone(data) };
   }
@@ -26,14 +28,21 @@ const store = vi.hoisted(() => {
       const writes: (() => void)[] = [];
       const transaction = {
         get: async (path: string) => {
+          path = String(path);
           if (writes.length) throw new Error("Transaction reads must precede writes");
           reads.set(path, versions.get(path) ?? 0);
           return snapshot(path);
         },
         set: (path: string, data: Data, options?: { merge?: boolean }) => {
-          writes.push(() => put(path, options?.merge ? { ...documents.get(path), ...data } : data));
+          path = String(path);
+          writes.push(() => {
+            const next = options?.merge ? { ...documents.get(path), ...data } : { ...data };
+            for (const key of Object.keys(next)) if (next[key] === removed) delete next[key];
+            put(path, next);
+          });
         },
         update: (path: string, patch: Data) => {
+          path = String(path);
           writes.push(() => {
             if (!documents.has(path)) throw new Error("Missing document");
             const data = { ...documents.get(path) };
@@ -72,7 +81,8 @@ vi.mock("firebase/firestore", () => ({
   deleteDoc: vi.fn(), getDoc: vi.fn(), getDocs: vi.fn(), setDoc: vi.fn()
 }));
 
-import { deleteMeal, updatePantryMetadata, updateProductDetails } from "@/services/inventoryRepository";
+import { changePantryQuantity, createMeal, deleteMeal, updatePantryMetadata, updateProductDetails } from "@/services/inventoryRepository";
+import { createMealIngredient } from "@/services/nutrition";
 import { purchaseKnownProduct } from "@/services/shoppingRepository";
 
 const product: Product = {
@@ -230,5 +240,83 @@ describe("shopping purchases", () => {
     await purchaseKnownProduct(shopping, 1, "szt");
     expect(pantry().quantity).toBe(1000);
     expect(pantry().packages).toHaveLength(1);
+  });
+});
+
+const consumer = { id: "person", name: "Jan" };
+const mealTime = new Date(2026, 10, 8, 12).getTime();
+function cook(amount: number) {
+  return createMeal("Obiad", "lunch", [createMealIngredient(pantry(), amount)], 1, mealTime, consumer);
+}
+
+describe("persisted meal package history", () => {
+  it("keeps legacy dates on existing packages without leaking them to a new package", async () => {
+    store.put(pantryPath, { ...seedPantry(), packages: undefined, expiryDate: "2026-11-12" });
+    await changePantryQuantity(product, 1, "szt");
+    expect(pantry()).not.toHaveProperty("expiryDate");
+    expect(pantry().packages!.map((entry) => entry.expiryDate)).toEqual(["2026-11-12", undefined]);
+    await cook(800);
+    expect(pantry().packages!.map((entry) => entry.expiryDate)).toEqual([undefined]);
+  });
+
+  it("records the actual packages consumed and restores their dates after total depletion", async () => {
+    const original = seedPantry();
+    const created = await cook(800);
+    expect(pantry().quantity).toBe(0);
+    expect(pantry().packages).toEqual([]);
+    expect(created.ingredients[0].consumedPackages).toEqual(original.packages);
+    expect(store.documents.get(`meals/${created.id}`)?.ingredients).toEqual(created.ingredients);
+    await deleteMeal(created);
+    expect(pantry().quantity).toBe(800);
+    expect(pantry().packages).toEqual(original.packages);
+    expect(store.documents.has(summaryPath)).toBe(false);
+  });
+
+  it("preserves a later purchase and date edit during cancellation", async () => {
+    const created = await cook(200);
+    await purchaseKnownProduct(shopping, 1, "szt");
+    await updatePantryMetadata("milk", { packageExpiry: { packageId: "original", expiryDate: "2026-11-25" } });
+    const purchased = pantry().packages!.find((entry) => entry.id !== "original");
+    await deleteMeal(created);
+    expect(pantry().quantity).toBe(1800);
+    expect(pantry().packages!.find((entry) => entry.id === "original")).toMatchObject({ amount: 800, expiryDate: "2026-11-25" });
+    expect(pantry().packages!.find((entry) => entry.id !== "original")).toEqual(purchased);
+  });
+
+  it("keeps exact histories after concurrent meals retry and cancellation is repeated", async () => {
+    const original = seedPantry();
+    const created = await Promise.all([cook(200), cook(300)]);
+    expect(pantry().quantity).toBe(300);
+    for (const entry of created) {
+      expect(entry.ingredients[0].consumedPackages![0]).toMatchObject({ id: "original", amount: entry.ingredients[0].amount, expiryDate: "2026-11-12" });
+    }
+    await Promise.all([deleteMeal(created[0]), deleteMeal(created[1])]);
+    await deleteMeal(created[0]);
+    expect(pantry().packages).toEqual(original.packages);
+    expect(pantry().quantity).toBe(800);
+    expect(store.documents.has(summaryPath)).toBe(false);
+  });
+
+  it("does not return stock when a new meal is removed from history only", async () => {
+    const created = await cook(200);
+    await deleteMeal(created, false);
+    expect(pantry().quantity).toBe(600);
+    expect(store.documents.has(`meals/${created.id}`)).toBe(false);
+  });
+
+  it("rejects duplicate ingredients before changing stock", async () => {
+    const ingredient = createMealIngredient(pantry(), 100);
+    await expect(createMeal("Obiad", "lunch", [ingredient, ingredient], 1, mealTime, consumer)).rejects.toThrow("tylko raz");
+    expect(pantry().quantity).toBe(800);
+    expect([...store.documents.keys()].some((key) => key.startsWith("meals/"))).toBe(false);
+  });
+
+  it("rejects corrupted package history without deleting the meal or changing summary", async () => {
+    const created = await cook(200);
+    store.put(`meals/${created.id}`, { ...created, ingredients: [{ ...created.ingredients[0], consumedPackages: [] }] });
+    await expect(deleteMeal(created)).rejects.toThrow("niezgodny");
+    expect(pantry().quantity).toBe(600);
+    expect(store.documents.has(`meals/${created.id}`)).toBe(true);
+    expect(store.documents.get(summaryPath)?.mealCount).toBe(1);
   });
 });
