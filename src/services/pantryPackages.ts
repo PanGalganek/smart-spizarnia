@@ -11,7 +11,7 @@ export function normalizePackages(item: PantryItem): PantryPackage[] {
     .filter((pack) => Number(pack.amount) > 0)
     .map((pack, index) => ({
       ...pack,
-      id: pack.id || packageId(index),
+      id: pack.id || `legacy-index-${index}`,
       unit: pack.unit ?? unit,
       amount: round(Number(pack.amount) || 0),
       capacity: round(Math.max(Number(pack.capacity) || 0, Number(pack.amount) || 0)),
@@ -20,7 +20,8 @@ export function normalizePackages(item: PantryItem): PantryPackage[] {
       createdAt: pack.createdAt ?? index
     }));
   if (existing.length) return existing;
-  return packagesFromQuantity(item.product, Number(item.quantity) || 0, unit, Number(item.capacity) || 0);
+  return packagesFromQuantity(item.product, Number(item.quantity) || 0, unit, Number(item.capacity) || 0)
+    .map((pack) => ({ ...pack, expiryDate: item.expiryDate }));
 }
 
 export function addPackages(current: PantryItem | null, product: Product, amount: number, inputUnit: Unit, now = Date.now(), expiryDate?: string, expiryDates?: (string | undefined)[]) {
@@ -67,20 +68,53 @@ export function consumePackages(current: PantryItem, amount: number, inputUnit: 
   const packages = normalizePackages(current);
   const total = packageTotal(packages);
   if (toConsume > total) throw new Error(`W spiżarni jest tylko ${total} ${unit}.`);
+  if (preferredPackageId && !packages.some((pack) => pack.id === preferredPackageId)) {
+    throw new Error("Wybrane opakowanie zostało już zużyte. Odśwież produkt.");
+  }
 
   let remaining = toConsume;
-  const ordered = [...packages].sort((left, right) => packageSort(left, preferredPackageId) - packageSort(right, preferredPackageId));
+  const ordered = [...packages].sort((left, right) => comparePackages(left, right, preferredPackageId));
   const next = ordered.map((pack) => ({ ...pack }));
+  const consumedPackages: PantryPackage[] = [];
 
   for (const pack of next) {
     if (remaining <= 0) break;
     const used = Math.min(pack.amount, remaining);
+    consumedPackages.push({ ...pack, amount: used });
     pack.amount = round(pack.amount - used);
     pack.opened = pack.amount > 0 && pack.amount < pack.capacity;
     remaining = round(remaining - used);
   }
 
-  return normalizePackageState(next.filter((pack) => pack.amount > 0), unit);
+  return { ...normalizePackageState(next.filter((pack) => pack.amount > 0), unit), consumedPackages };
+}
+
+export function restorePackages(current: PantryItem, consumedPackages: PantryPackage[], amount: number) {
+  if (!consumedPackages.length || Math.abs(packageTotal(consumedPackages) - amount) > 0.001) {
+    throw new Error("Zapis zużycia opakowań jest niezgodny z ilością składnika.");
+  }
+  const packages = normalizePackages(current).map((pack) => ({ ...pack }));
+  const seen = new Set<string>();
+  for (const consumed of consumedPackages) {
+    if (!consumed.id || seen.has(consumed.id) || consumed.unit !== current.unit
+      || !Number.isFinite(consumed.amount) || consumed.amount <= 0
+      || !Number.isFinite(consumed.capacity) || consumed.capacity < consumed.amount) {
+      throw new Error("Nieprawidłowy zapis zużycia opakowania.");
+    }
+    seen.add(consumed.id);
+    const existing = packages.find((pack) => pack.id === consumed.id);
+    const restored = round((existing?.amount ?? 0) + consumed.amount);
+    const capacity = existing?.capacity ?? consumed.capacity;
+    if (restored > capacity) throw new Error("Nie można przywrócić ilości większej od pojemności opakowania.");
+    if (existing) {
+      // Keep dates edited since the meal and stock changes from other meals.
+      existing.amount = restored;
+      existing.opened = restored < capacity;
+    } else {
+      packages.push({ ...consumed, amount: restored, opened: restored < capacity });
+    }
+  }
+  return normalizePackageState(packages, current.unit);
 }
 
 export function packageTotal(packages: PantryPackage[]) {
@@ -92,15 +126,15 @@ export function packageCapacity(packages: PantryPackage[]) {
 }
 
 export function packageSummary(item: PantryItem) {
-  const packages = normalizePackages(item);
+  const packages = normalizePackages(item).sort(comparePackages);
   const unit = item.unit;
-  const open = packages.filter((pack) => pack.amount > 0 && pack.amount < pack.capacity);
-  const full = packages.filter((pack) => pack.amount > 0 && pack.amount >= pack.capacity);
+  const open = packages.filter(isOpenPackage);
+  const full = packages.filter((pack) => !isOpenPackage(pack));
   const fullGroups = new Map<string, number>();
   full.forEach((pack) => fullGroups.set(`${pack.capacity} ${pack.unit}`, (fullGroups.get(`${pack.capacity} ${pack.unit}`) ?? 0) + 1));
   const fullText = [...fullGroups.entries()].map(([label, count]) => `${count} × ${label}`);
   const openText = open.map((pack) => `${pack.amount} ${unit}`);
-  const activePackage = open[0] ?? full.sort((left, right) => expirySort(left.expiryDate, right.expiryDate))[0];
+  const activePackage = packages[0];
   return {
     fullCount: full.length,
     openCount: open.length,
@@ -109,7 +143,7 @@ export function packageSummary(item: PantryItem) {
     closedText: fullText.join(" + "),
     activeExpiryDate: activePackage?.expiryDate,
     hasOpenPackage: open.length > 0,
-    fullPackages: full.sort((left, right) => expirySort(left.expiryDate, right.expiryDate))
+    fullPackages: full
   };
 }
 
@@ -124,13 +158,13 @@ function packagesFromQuantity(product: Product, quantityInput: number, unit: Uni
   const quantity = round(quantityInput);
   if (quantity <= 0) return [];
   const packageAmount = packageAmountFor(product, unit);
-  if (!packageAmount) return [{ id: packageId(0), amount: quantity, capacity: Math.max(savedCapacity, quantity), unit, expiryDate: undefined, opened: true, createdAt: 0 }];
+  if (!packageAmount) return [{ id: "legacy-0", amount: quantity, capacity: Math.max(savedCapacity, quantity), unit, expiryDate: undefined, opened: true, createdAt: 0 }];
 
   const fullCount = Math.floor(quantity / packageAmount);
   const remainder = round(quantity - fullCount * packageAmount);
   const packages: PantryPackage[] = [];
-  if (remainder > 0) packages.push({ id: packageId("open"), amount: remainder, capacity: packageAmount, unit, expiryDate: undefined, opened: true, createdAt: 0 });
-  for (let index = 0; index < fullCount; index += 1) packages.push(fullPackage(packageAmount, unit, index + 1));
+  if (remainder > 0) packages.push({ id: "legacy-open", amount: remainder, capacity: packageAmount, unit, expiryDate: undefined, opened: true, createdAt: 0 });
+  for (let index = 0; index < fullCount; index += 1) packages.push({ ...fullPackage(packageAmount, unit, index + 1), id: `legacy-${index + 1}` });
   return packages;
 }
 
@@ -160,10 +194,19 @@ function fullPackage(amount: number, unit: Unit, seed: number, expiryDate?: stri
   return { id: packageId(seed), amount, capacity: amount, unit, expiryDate, opened: false, createdAt: seed };
 }
 
-function packageSort(pack: PantryPackage, preferredPackageId?: string) {
-  if (preferredPackageId && pack.id === preferredPackageId) return -2000000;
-  if (pack.opened || pack.amount < pack.capacity) return -1000000 + (pack.createdAt ?? 0);
-  return pack.createdAt ?? 0;
+function isOpenPackage(pack: PantryPackage) {
+  return Boolean(pack.opened || pack.amount < pack.capacity);
+}
+
+function comparePackages(left: PantryPackage, right: PantryPackage, preferredPackageId?: string) {
+  if (preferredPackageId && left.id !== right.id) {
+    if (left.id === preferredPackageId) return -1;
+    if (right.id === preferredPackageId) return 1;
+  }
+  return Number(isOpenPackage(right)) - Number(isOpenPackage(left))
+    || expirySort(left.expiryDate, right.expiryDate)
+    || (left.createdAt ?? 0) - (right.createdAt ?? 0)
+    || left.id.localeCompare(right.id);
 }
 
 function expirySort(left?: string, right?: string) {

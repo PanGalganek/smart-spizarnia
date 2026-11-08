@@ -1,4 +1,4 @@
-import { Nutrients, NutritionBasis, Unit } from "@/domain/product";
+import { Nutrients, NutritionBasis, PantryPackage, Unit } from "@/domain/product";
 
 export type MealType = "breakfast" | "lunch" | "dinner" | "snack" | "custom";
 
@@ -10,6 +10,8 @@ export type MealIngredient = {
   nutritionBasis: NutritionBasis;
   nutrients: Nutrients;
   tracksPantry?: boolean;
+  // Amount is the quantity taken from this package, not its remaining stock.
+  consumedPackages?: PantryPackage[];
 };
 
 export type MealTemplateIngredient = {

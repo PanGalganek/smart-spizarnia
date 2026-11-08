@@ -3,7 +3,7 @@ import { db } from "@/core/firebase";
 import { PantryItem, Product, Unit } from "@/domain/product";
 import { ShoppingItem, ShoppingItemSource } from "@/domain/shopping";
 import { manualShoppingItemId, productShoppingItemId } from "@/services/shopping";
-import { convertPantryAmount, preferredPantryUnit } from "@/services/pantryUnits";
+import { addPackages } from "@/services/pantryPackages";
 import { isChemical } from "@/services/productTypes";
 import { userCollection, userDoc } from "@/services/userData";
 
@@ -88,15 +88,11 @@ export async function purchaseKnownProduct(item: ShoppingItem, amount: number, i
   await runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(pantryRef);
     const current = snapshot.exists() ? snapshot.data() as PantryItem : null;
-    const pantryUnit = current?.unit ?? preferredPantryUnit(product, inputUnit);
-    const addedAmount = convertPantryAmount(product, amount, inputUnit, pantryUnit);
-    const previousQuantity = Number(current?.quantity) || 0;
+    const stock = addPackages(current, product, amount, inputUnit, now);
     const next: PantryItem = {
       barcode: product.barcode,
       product,
-      quantity: Math.round((previousQuantity + addedAmount) * 100) / 100,
-      unit: pantryUnit,
-      expiryDate: previousQuantity > 0 ? current?.expiryDate : undefined,
+      ...stock,
       location: current?.location,
       status: "active",
       updatedAt: now

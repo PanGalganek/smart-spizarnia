@@ -19,7 +19,7 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
 export async function ensureUserProfile(user: User): Promise<UserProfile> {
   const existing = await getUserProfile(user.uid);
   if (existing) {
-    await migrateLegacyAdminData(user.uid);
+    if (existing.role === "admin" && existing.status === "active") await migrateLegacyAdminData(user.uid);
     return existing;
   }
   const now = Date.now();

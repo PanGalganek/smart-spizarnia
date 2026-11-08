@@ -1,4 +1,4 @@
-﻿import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { BottomActionBar } from "@/core/components/BottomActionBar";
@@ -10,8 +10,8 @@ import { colors } from "@/core/theme";
 import { ChemicalLevel, PantryItem, Unit } from "@/domain/product";
 import { AddDepletedPrompt } from "@/features/shopping/AddDepletedPrompt";
 import { getExpiryWarning } from "@/services/expiry";
-import { changePantryQuantity, deletePantryItem, getPantryItem, saveChemicalPantryItem, savePantryItem } from "@/services/inventoryRepository";
-import { normalizePackages, packageSummary, setPackageExpiryDate } from "@/services/pantryPackages";
+import { changePantryQuantity, deletePantryItem, getPantryItem, PantryMetadataPatch, saveChemicalPantryItem, updatePantryMetadata } from "@/services/inventoryRepository";
+import { normalizePackages, packageSummary } from "@/services/pantryPackages";
 import { capConsumptionToAvailable } from "@/services/pantryUnits";
 import { chemicalLevelLabel, chemicalLevels, isChemical } from "@/services/productTypes";
 import { shouldAskToBuyAgain } from "@/services/shoppingPrompt";
@@ -51,25 +51,25 @@ export function PantryItemScreen() {
     }).catch(() => setMessage("Nie udało się pobrać produktu."));
   }, [barcode]);
 
-  function saveMetadata(patch: Partial<Pick<PantryItem, "expiryDate" | "location" | "packages">>, successMessage: string) {
+  function saveMetadata(patch: PantryMetadataPatch, successMessage: string) {
     const current = itemRef.current;
     if (!current) return;
-    const next = { ...current, ...patch };
-    itemRef.current = next;
-    setItem(next);
     setMessage("Zapisywanie...");
     metadataQueue.current = metadataQueue.current
-      .then(() => savePantryItem(next))
-      .then(() => setMessage(successMessage))
-      .catch(() => setMessage("Nie udało się zapisać zmiany."));
+      .then(() => updatePantryMetadata(current.barcode, patch))
+      .then((updated) => {
+        itemRef.current = updated;
+        setItem(updated);
+        setMessage(successMessage);
+      })
+      .catch((cause) => setMessage(cause instanceof Error ? cause.message : "Nie udało się zapisać zmiany."));
   }
 
   function changeExpiryDate(value: string, packageId?: string) {
     const current = itemRef.current;
     if (!current) return;
     if (packageId) {
-      const next = setPackageExpiryDate(current, packageId, value.trim() || undefined);
-      saveMetadata({ packages: next.packages, expiryDate: undefined }, value ? "Data opakowania została zapisana." : "Data opakowania została usunięta.");
+      saveMetadata({ packageExpiry: { packageId, expiryDate: value.trim() || undefined } }, value ? "Data opakowania została zapisana." : "Data opakowania została usunięta.");
       return;
     }
     saveMetadata({ expiryDate: value.trim() || undefined }, value ? "Data ważności została zapisana." : "Data ważności została usunięta.");

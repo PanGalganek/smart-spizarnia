@@ -8,7 +8,8 @@
     "android": "expo start --android",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-smart-spizarnia \"vitest run --config vitest.rules.config.ts\""
   },
   "dependencies": {
     "@expo/vector-icons": "^14.1.0",
@@ -18,6 +19,8 @@
     "expo": "~53.0.0",
     "expo-asset": "~11.1.7",
     "expo-camera": "~16.1.6",
+    "expo-font": "~13.3.2",
+    "expo-linking": "~7.1.7",
     "expo-router": "~5.0.0",
     "expo-status-bar": "~2.2.3",
     "firebase": "^11.8.1",
@@ -29,7 +32,9 @@
     "react-native-web": "^0.20.0"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
     "@types/react": "~19.0.10",
+    "firebase-tools": "^15.35.0",
     "typescript": "~5.8.3",
     "vitest": "^4.1.8"
   }
