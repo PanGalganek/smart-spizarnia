@@ -88,17 +88,13 @@ service cloud.firestore {
     function validNutrients(data) {
       return data is map
         && data.keys().hasOnly(["energyKcal", "proteins", "carbohydrates", "fat", "fiber", "salt", "sodium", "potassium", "calcium", "iron", "magnesium", "vitaminC", "vitaminA"])
-        && validNutrient(data, "energyKcal") && validNutrient(data, "proteins")
-        && validNutrient(data, "carbohydrates") && validNutrient(data, "fat")
-        && validNutrient(data, "fiber") && validNutrient(data, "salt")
-        && validNutrient(data, "sodium") && validNutrient(data, "potassium")
-        && validNutrient(data, "calcium") && validNutrient(data, "iron")
-        && validNutrient(data, "magnesium") && validNutrient(data, "vitaminC")
-        && validNutrient(data, "vitaminA");
-    }
-
-    function validNutrient(data, field) {
-      return !(field in data) || nonNegativeNumber(data[field]);
+        && nonNegativeNumber(data.get("energyKcal", 0)) && nonNegativeNumber(data.get("proteins", 0))
+        && nonNegativeNumber(data.get("carbohydrates", 0)) && nonNegativeNumber(data.get("fat", 0))
+        && nonNegativeNumber(data.get("fiber", 0)) && nonNegativeNumber(data.get("salt", 0))
+        && nonNegativeNumber(data.get("sodium", 0)) && nonNegativeNumber(data.get("potassium", 0))
+        && nonNegativeNumber(data.get("calcium", 0)) && nonNegativeNumber(data.get("iron", 0))
+        && nonNegativeNumber(data.get("magnesium", 0)) && nonNegativeNumber(data.get("vitaminC", 0))
+        && nonNegativeNumber(data.get("vitaminA", 0));
     }
 
     function validServings(data) {

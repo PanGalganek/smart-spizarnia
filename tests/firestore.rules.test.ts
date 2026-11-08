@@ -151,6 +151,18 @@ describe("registration and roles", () => {
 });
 
 describe("stored data validation", () => {
+  it.each(["alice", "admin"])("validates full nutrition and optional product fields within the evaluation budget for %s", async (uid) => {
+    const fullProduct = {
+      ...product, brand: "USDA", imageUrl: "https://example.test/image.jpg", servingSize: "100 g",
+      netWeightGrams: 500, packageAmount: 500, packageUnit: "g", quickUseAmount: 100, quickUseUnit: "g",
+      defaultUnit: "g", nutritionBasis: "per100", type: "food", updatedAt: Date.now(),
+      nutrientsPer100g: { energyKcal: 100, proteins: 1, carbohydrates: 1, fat: 1, fiber: 1, salt: 1, sodium: 1, potassium: 1, calcium: 1, iron: 1, magnesium: 1, vitaminC: 1, vitaminA: 1 }
+    };
+    const ref = doc(db(uid), "users/alice/pantry/milk");
+    await assertSucceeds(setDoc(ref, { ...pantry, product: fullProduct, location: "Szafka", expiryDate: "2026-11-12", updatedAt: Date.now() }));
+    await assertSucceeds(updateDoc(ref, { location: "Spiżarnia" }));
+  });
+
   const invalidWrites: [string, object][] = [
     ["products/wrong", product],
     ["products/milk", { ...product, name: "" }],
