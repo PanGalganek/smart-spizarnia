@@ -37,6 +37,14 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Check Firestore rules in emulator
+        run: npm run test:rules
+
       - name: Build web app
         run: npx expo export --platform web --output-dir dist
         env:

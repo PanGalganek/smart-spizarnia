@@ -19,14 +19,9 @@ service cloud.firestore {
 
     function isAdmin() {
       return signedIn()
-        && (
-          request.auth.uid == adminUid()
-          || (
-            exists(profilePath(request.auth.uid))
-            && existingProfile(request.auth.uid).role == "admin"
-            && existingProfile(request.auth.uid).status == "active"
-          )
-        );
+        && exists(profilePath(request.auth.uid))
+        && existingProfile(request.auth.uid).role == "admin"
+        && existingProfile(request.auth.uid).status == "active";
     }
 
     function isActiveUser(uid) {
@@ -45,11 +40,31 @@ service cloud.firestore {
     }
 
     function optionalString(data, field) {
-      return !(field in data) || data[field] is string;
+      return !(field in data) || (data[field] is string && data[field].size() <= 2000);
+    }
+
+    function nonNegativeNumber(value) {
+      return value is number && value >= 0 && value <= 1000000000000;
+    }
+
+    function validTime(value) {
+      return value is int && value >= 0 && value <= 8640000000000000;
+    }
+
+    function validName(value) {
+      return value is string && value.size() > 0 && value.size() <= 200;
+    }
+
+    function validDate(value) {
+      return value is string && value.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$');
+    }
+
+    function optionalTime(data, field) {
+      return !(field in data) || data[field] == null || validTime(data[field]);
     }
 
     function optionalNumber(data, field) {
-      return !(field in data) || data[field] is number || data[field] == null;
+      return !(field in data) || data[field] == null || nonNegativeNumber(data[field]);
     }
 
     function optionalBool(data, field) {
@@ -57,7 +72,9 @@ service cloud.firestore {
     }
 
     function optionalList(data, field) {
-      return !(field in data) || data[field] is list;
+      // Bounds the container only. Per-entry and cross-document business
+      // invariants remain application-side; see README's protection scope.
+      return !(field in data) || (data[field] is list && data[field].size() <= 1000);
     }
 
     function optionalMap(data, field) {
@@ -68,20 +85,41 @@ service cloud.firestore {
       return value in ["g", "ml", "szt"];
     }
 
+    function validNutrients(data) {
+      return data is map
+        && data.keys().hasOnly(["energyKcal", "proteins", "carbohydrates", "fat", "fiber", "salt", "sodium", "potassium", "calcium", "iron", "magnesium", "vitaminC", "vitaminA"])
+        && validNutrient(data, "energyKcal") && validNutrient(data, "proteins")
+        && validNutrient(data, "carbohydrates") && validNutrient(data, "fat")
+        && validNutrient(data, "fiber") && validNutrient(data, "salt")
+        && validNutrient(data, "sodium") && validNutrient(data, "potassium")
+        && validNutrient(data, "calcium") && validNutrient(data, "iron")
+        && validNutrient(data, "magnesium") && validNutrient(data, "vitaminC")
+        && validNutrient(data, "vitaminA");
+    }
+
+    function validNutrient(data, field) {
+      return !(field in data) || nonNegativeNumber(data[field]);
+    }
+
+    function validServings(data) {
+      return !("servings" in data) || (data.servings is int && data.servings >= 1 && data.servings <= 100);
+    }
+
     function validUserProfile(data) {
       return data.keys().hasOnly(["uid", "email", "displayName", "role", "status", "createdAt", "updatedAt"])
-        && data.uid is string
+        && validName(data.uid)
         && data.email is string
         && data.role in ["admin", "user"]
         && data.status in ["pending", "active", "blocked"]
-        && data.createdAt is number
-        && data.updatedAt is number
+        && validTime(data.createdAt)
+        && validTime(data.updatedAt)
         && optionalString(data, "displayName");
     }
 
     function validOwnPendingProfile(uid, data) {
       return validUserProfile(data)
         && data.uid == uid
+        && data.email == request.auth.token.get("email", "")
         && data.role == "user"
         && data.status == "pending";
     }
@@ -93,12 +131,12 @@ service cloud.firestore {
           "quickUseAmount", "quickUseUnit", "defaultUnit",
           "nutritionBasis", "nutrientsPer100g", "source", "type", "updatedAt"
         ])
-        && data.barcode is string
-        && data.name is string
-        && data.nutrientsPer100g is map
+        && validName(data.barcode)
+        && validName(data.name)
+        && validNutrients(data.nutrientsPer100g)
         && data.source in ["open-food-facts", "usda", "manual"]
         && (!("type" in data) || data.type in ["food", "household_chemical"])
-        && data.updatedAt is number
+        && validTime(data.updatedAt)
         && optionalString(data, "brand")
         && optionalString(data, "imageUrl")
         && optionalString(data, "servingSize")
@@ -116,17 +154,20 @@ service cloud.firestore {
           "barcode", "product", "quantity", "capacity", "packages",
           "unit", "expiryDate", "location", "status", "chemicalLevel", "updatedAt"
         ])
-        && data.barcode is string
-        && data.product is map
-        && data.quantity is number
+        && validName(data.barcode)
+        && validProduct(data.product)
+        && data.product.barcode == data.barcode
+        && nonNegativeNumber(data.quantity)
         && isUnit(data.unit)
         && optionalNumber(data, "capacity")
+        && (!("capacity" in data) || data.capacity == null || data.capacity >= data.quantity)
         && optionalList(data, "packages")
-        && optionalString(data, "expiryDate")
+        && (!("expiryDate" in data) || validDate(data.expiryDate))
         && optionalString(data, "location")
         && (!("chemicalLevel" in data) || data.chemicalLevel in ["full", "more_than_half", "half", "less_than_half", "empty"])
         && (!("status" in data) || data.status in ["active", "consumed"])
-        && optionalNumber(data, "updatedAt");
+        && (!("status" in data) || data.status != "consumed" || data.quantity == 0)
+        && optionalTime(data, "updatedAt");
     }
 
     function validMeal(data) {
@@ -135,15 +176,16 @@ service cloud.firestore {
           "recipeTotals", "totals", "dateKey", "createdAt",
           "consumerId", "consumerName"
         ])
-        && data.id is string
-        && data.name is string
+        && validName(data.id)
+        && validName(data.name)
         && data.type in ["breakfast", "lunch", "dinner", "snack", "custom"]
         && data.ingredients is list
-        && data.totals is map
-        && data.dateKey is string
-        && data.createdAt is number
-        && optionalNumber(data, "servings")
-        && optionalMap(data, "recipeTotals")
+        && data.ingredients.size() > 0 && data.ingredients.size() <= 50
+        && validNutrients(data.totals)
+        && validDate(data.dateKey)
+        && validTime(data.createdAt)
+        && validServings(data)
+        && (!("recipeTotals" in data) || validNutrients(data.recipeTotals))
         && optionalString(data, "consumerId")
         && optionalString(data, "consumerName");
     }
@@ -153,27 +195,27 @@ service cloud.firestore {
           "dateKey", "totals", "mealCount", "updatedAt",
           "consumerId", "consumerName"
         ])
-        && data.dateKey is string
-        && data.totals is map
-        && data.mealCount is number
-        && data.updatedAt is number
+        && validDate(data.dateKey)
+        && validNutrients(data.totals)
+        && data.mealCount is int && data.mealCount >= 0 && data.mealCount <= 1000000
+        && validTime(data.updatedAt)
         && optionalString(data, "consumerId")
         && optionalString(data, "consumerName");
     }
 
     function validMealTemplate(data) {
       return data.keys().hasOnly(["id", "name", "type", "ingredients", "servings", "createdAt", "updatedAt"])
-        && data.id is string
-        && data.name is string
+        && validName(data.id)
+        && validName(data.name)
         && data.type in ["breakfast", "lunch", "dinner", "snack", "custom"]
         && data.ingredients is list
         && data.ingredients.size() > 0
         && data.ingredients.size() <= 50
-        && data.servings is number
+        && data.servings is int
         && data.servings >= 1
         && data.servings <= 100
-        && data.createdAt is number
-        && data.updatedAt is number;
+        && validTime(data.createdAt)
+        && validTime(data.updatedAt);
     }
 
     function validShoppingItem(data) {
@@ -181,21 +223,22 @@ service cloud.firestore {
           "id", "name", "productBarcode", "product", "source",
           "status", "createdAt", "updatedAt", "purchasedAt"
         ])
-        && data.id is string
-        && data.name is string
+        && validName(data.id)
+        && validName(data.name)
         && data.source in ["depleted", "saved", "manual"]
         && data.status in ["active", "purchased"]
-        && data.createdAt is number
-        && data.updatedAt is number
+        && validTime(data.createdAt)
+        && validTime(data.updatedAt)
         && optionalString(data, "productBarcode")
         && optionalMap(data, "product")
-        && optionalNumber(data, "purchasedAt");
+        && (!("product" in data) || (validProduct(data.product) && data.productBarcode == data.product.barcode))
+        && optionalTime(data, "purchasedAt");
     }
 
     function validConsumer(data) {
       return data.keys().hasOnly(["id", "name", "protected"])
-        && data.id is string
-        && data.name is string
+        && validName(data.id)
+        && validName(data.name)
         && optionalBool(data, "protected");
     }
 
@@ -203,7 +246,8 @@ service cloud.firestore {
       return settingsId in ["storageLocations", "storageLocations_household_chemical", "legacyRootMigration_v1"]
         && data.keys().hasOnly(["values", "updatedAt", "type"])
         && data.values is list
-        && data.updatedAt is number
+        && data.values.size() <= 100
+        && validTime(data.updatedAt)
         && (!("type" in data) || data.type in ["food", "household_chemical"]);
     }
 
@@ -212,46 +256,54 @@ service cloud.firestore {
       allow create: if signedIn()
         && (
           (request.auth.uid == uid && validOwnPendingProfile(uid, request.resource.data))
-          || (isAdmin() && validUserProfile(request.resource.data))
-          || (request.auth.uid == adminUid() && uid == adminUid() && validUserProfile(request.resource.data))
+          || (isAdmin() && validUserProfile(request.resource.data) && request.resource.data.uid == uid)
+          // Bootstrap applies only to create, never to an existing blocked profile.
+          || (request.auth.uid == adminUid() && uid == adminUid()
+            && validUserProfile(request.resource.data) && request.resource.data.uid == uid
+            && request.resource.data.role == "admin" && request.resource.data.status == "active")
         );
-      allow update: if isAdmin() && validUserProfile(request.resource.data);
-      allow delete: if isAdmin() && uid != request.auth.uid;
+      allow update: if isAdmin() && validUserProfile(request.resource.data) && request.resource.data.uid == uid;
+      allow delete: if isAdmin() && uid != request.auth.uid && uid != adminUid();
     }
 
     match /users/{userId}/products/{barcode} {
       allow read, delete: if canReadUserData(userId);
-      allow create, update: if canWriteUserData(userId) && validProduct(request.resource.data);
+      allow create, update: if canWriteUserData(userId) && validProduct(request.resource.data) && request.resource.data.barcode == barcode;
     }
 
     match /users/{userId}/pantry/{barcode} {
       allow read, delete: if canReadUserData(userId);
-      allow create, update: if canWriteUserData(userId) && validPantryItem(request.resource.data);
+      allow create, update: if canWriteUserData(userId) && validPantryItem(request.resource.data) && request.resource.data.barcode == barcode;
     }
 
     match /users/{userId}/meals/{mealId} {
       allow read, delete: if canReadUserData(userId);
-      allow create, update: if canWriteUserData(userId) && validMeal(request.resource.data);
+      allow create, update: if canWriteUserData(userId) && validMeal(request.resource.data) && request.resource.data.id == mealId;
     }
 
     match /users/{userId}/dailySummaries/{summaryId} {
       allow read, delete: if canReadUserData(userId);
-      allow create, update: if canWriteUserData(userId) && validDailySummary(request.resource.data);
+      allow create, update: if canWriteUserData(userId) && validDailySummary(request.resource.data)
+        && (summaryId == request.resource.data.dateKey + "__" + request.resource.data.get("consumerId", "legacy")
+          || (!("consumerId" in request.resource.data) && summaryId == request.resource.data.dateKey));
     }
 
     match /users/{userId}/mealTemplates/{templateId} {
       allow read, delete: if canReadUserData(userId);
-      allow create, update: if canWriteUserData(userId) && validMealTemplate(request.resource.data);
+      allow create, update: if canWriteUserData(userId) && validMealTemplate(request.resource.data) && request.resource.data.id == templateId;
     }
 
     match /users/{userId}/shoppingList/{itemId} {
       allow read, delete: if canReadUserData(userId);
-      allow create, update: if canWriteUserData(userId) && validShoppingItem(request.resource.data);
+      allow create, update: if canWriteUserData(userId) && validShoppingItem(request.resource.data) && request.resource.data.id == itemId;
     }
 
     match /users/{userId}/consumers/{consumerId} {
-      allow read, delete: if canReadUserData(userId);
-      allow create, update: if canWriteUserData(userId) && validConsumer(request.resource.data);
+      allow read: if canReadUserData(userId);
+      allow delete: if canWriteUserData(userId) && (isAdmin() || !resource.data.get("protected", false));
+      allow create: if canWriteUserData(userId) && validConsumer(request.resource.data) && request.resource.data.id == consumerId;
+      allow update: if canWriteUserData(userId) && validConsumer(request.resource.data) && request.resource.data.id == consumerId
+        && (isAdmin() || !resource.data.get("protected", false) || request.resource.data.get("protected", false));
     }
 
     match /users/{userId}/settings/{settingsId} {

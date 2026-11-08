@@ -219,6 +219,7 @@ export async function createMeal(
   consumer: Consumer | null = null
 ): Promise<Meal> {
   if (!ingredients.length) throw new Error("Dodaj przynajmniej jeden składnik.");
+  if (ingredients.length > 50) throw new Error("Posiłek może zawierać maksymalnie 50 składników.");
   if (new Set(ingredients.map((item) => item.barcode)).size !== ingredients.length) {
     throw new Error("Produkt może wystąpić w posiłku tylko raz. Połącz jego ilości.");
   }

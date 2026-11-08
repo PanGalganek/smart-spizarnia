@@ -61,4 +61,16 @@ Uruchom `npm test`, `npm run typecheck` oraz testowe pakowanie Expo dla platform
 
 Do testow na fizycznym tablecie pozostaja aparat, ergonomia dotykowa oraz zachowanie przy chwilowej utracie sieci.
 
-Testy repozytoriow korzystaja z pamieciowego modelu dokumentow, wersji i atomowych transakcji. Obejmuja ponawianie cofniecia, konflikty rownoleglych operacji, edycje metadanych i zachowanie opakowan przy zakupie. Nie zastepuja testow regul i transakcji w emulatorze Firebase. Publikacja GitHub Pages wymaga przejscia testow i kontroli typow.
+Testy repozytoriow korzystaja z pamieciowego modelu dokumentow, wersji i atomowych transakcji. Obejmuja ponawianie cofniecia, konflikty rownoleglych operacji, edycje metadanych i zachowanie opakowan przy zakupie.
+
+`npm run test:rules` uruchamia oficjalny emulator Firestore i osobny zestaw testow dostepu oraz walidacji danych. Wymaga Node.js 22 i Java 21 dostepnych w PATH. Projekt testowy `demo-smart-spizarnia` i host lokalny sa zapisane na stale; testy nie wymagaja logowania Firebase ani danych prawdziwego projektu. Testy obejmuja izolacje kont, blokade administratora, rejestracje pending, eskalacje roli, operacje na starszych danych, chronione osoby oraz przykladowe transakcje posilkow. CI uruchamia je przy pull requestach i przed publikacja GitHub Pages wraz z testami jednostkowymi i kontrola typow.
+
+## Zakres ochrony danych
+
+Uprawnienia administratora wymagaja aktywnego profilu z rola `admin`, takze dla `ADMIN_UID`. Ten identyfikator pozwala jedynie utworzyc wlasny pierwszy profil administratora; istniejacego zablokowanego profilu nie mozna w ten sposob odblokowac. Profil konta jest powiazany z identyfikatorem dokumentu, a adres przy samodzielnej rejestracji musi odpowiadac zalogowanemu kontu.
+
+Reguly sprawdzaja identyfikatory dokumentow, dozwolone pola, typy, nieujemne i skonczone ilosci, mapy wartosci odzywczych produktow i podsumowan oraz zakres porcji 1-100. Obowiazuja limity: 50 skladnikow posilku lub szablonu, 1000 opakowan, 100 lokalizacji, 200 znakow nazwy/identyfikatora i 2000 znakow opcjonalnego tekstu. Daty sa sprawdzane pod katem formatu oraz zakresu miesiaca i dnia, nie pelnego kalendarza. Starsze dokumenty niezgodne z nowymi wymaganiami trzeba poprawic przed ich kolejnym zapisem lub migracja; odczyt pozostaje dostepny zgodnie z uprawnieniami.
+
+Reguly nie sprawdzaja kazdego elementu list `ingredients`, `packages`, `consumedPackages` i `values` ani nie przeliczaja ich sum. Walidacja calej transakcji biznesowej (np. zgodnosc kalorii ze skladnikami i zapasu z opakowaniami) pozostaje po stronie aplikacji. Aktywny wlasciciel nadal moze edytowac wlasne dane bezposrednim zadaniem. Pelne wymuszenie tych zaleznosci wymaga osobnej zmiany modelu danych lub zaufanej uslugi serwerowej; obecny pakiet nie daje takiej gwarancji. Ograniczenia walidacji list opisuje [dokumentacja Firebase](https://firebase.google.com/docs/firestore/security/rules-fields#enforcing_field_types).
+
+Sama publikacja aplikacji w GitHub Pages nie wdraza `firestore.rules`. Zmiana reguł w rzeczywistym projekcie Firebase to osobny krok po przejrzeniu zgodnosci istniejacych danych. Testy lokalne nie zmieniaja produkcyjnej bazy.
