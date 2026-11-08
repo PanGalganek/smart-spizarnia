@@ -22,6 +22,21 @@ jobs:
           distribution: temurin
           java-version: '21'
       - run: npm ci --legacy-peer-deps
+      - run: npm run audit:security
       - run: npm run typecheck
       - run: npm test
       - run: npm run test:rules
+      - name: Check Expo compatibility
+        run: npx expo install --check
+      - name: Package web
+        run: npx expo export --platform web --output-dir dist
+        env:
+          EXPO_PUBLIC_FIREBASE_API_KEY: test-api-key
+          EXPO_PUBLIC_FIREBASE_PROJECT_ID: test-project
+          EXPO_PUBLIC_FIREBASE_APP_ID: '1:123:web:test'
+      - name: Package Android JavaScript
+        run: npx expo export --platform android --output-dir work/export-android
+        env:
+          EXPO_PUBLIC_FIREBASE_API_KEY: test-api-key
+          EXPO_PUBLIC_FIREBASE_PROJECT_ID: test-project
+          EXPO_PUBLIC_FIREBASE_APP_ID: '1:123:web:test'
