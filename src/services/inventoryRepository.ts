@@ -1,4 +1,4 @@
-import { deleteDoc, doc, getDoc, getDocs, runTransaction, setDoc } from "firebase/firestore";
+import { deleteDoc, deleteField, doc, getDoc, getDocs, runTransaction, setDoc, UpdateData } from "firebase/firestore";
 import { db } from "@/core/firebase";
 import { Consumer, DailySummary, Meal, MealIngredient, MealType } from "@/domain/meal";
 import { PantryItem, Product, Unit } from "@/domain/product";
@@ -57,9 +57,7 @@ export async function getSavedProduct(barcode: string): Promise<Product | null> 
 
 export async function updateProductDetails(product: Product): Promise<Product> {
   const updated = { ...product, updatedAt: Date.now() };
-  await saveProduct(updated);
-  const pantryItem = await getPantryItem(product.barcode);
-  if (pantryItem) await savePantryItem({ ...pantryItem, product: updated });
+  await saveProductDetails(updated);
   return updated;
 }
 
@@ -76,22 +74,62 @@ export async function updateProductPackage(product: Product, packageAmount: numb
     netWeightGrams: packageUnit === "g" ? packageAmount : product.netWeightGrams,
     updatedAt: Date.now()
   };
-  await saveProduct(updated);
-  const pantryItem = await getPantryItem(product.barcode);
-  if (pantryItem) {
-    await savePantryItem({
-      ...pantryItem,
-      product: updated,
-      capacity: capacityForPackage(pantryItem, packageAmount, packageUnit)
-    });
-  }
+  await saveProductDetails(updated, { amount: packageAmount, unit: packageUnit });
   return updated;
 }
 
-export async function savePantryItem(item: PantryItem) {
-  const normalized = normalizePantryItem({ ...item, updatedAt: Date.now() });
-  await setDoc(userDoc("pantry", item.barcode), withoutUndefined(normalized));
-  await saveProduct(normalized.product);
+async function saveProductDetails(product: Product, pack?: { amount: number; unit: Unit }) {
+  const pantryRef = userDoc("pantry", product.barcode);
+  const productRef = userDoc("products", product.barcode);
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(pantryRef);
+    transaction.set(productRef, withoutUndefined({ ...product, type: product.type ?? "food" }), { merge: true });
+    if (snapshot.exists()) {
+      const current = normalizePantryItem(snapshot.data() as PantryItem);
+      transaction.update(pantryRef, withoutUndefined({
+        product,
+        ...(pack ? { capacity: capacityForPackage(current, pack.amount, pack.unit) } : {}),
+        updatedAt: Date.now()
+      }));
+    }
+  });
+}
+
+export type PantryMetadataPatch = {
+  location?: string;
+  expiryDate?: string;
+  packageExpiry?: { packageId: string; expiryDate?: string };
+};
+
+export async function updatePantryMetadata(barcode: string, patch: PantryMetadataPatch): Promise<PantryItem> {
+  const ref = userDoc("pantry", barcode);
+  return runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) throw new Error("Tego produktu nie ma już w spiżarni.");
+    const current = normalizePantryItem(snapshot.data() as PantryItem);
+    const next = { ...current, updatedAt: Date.now() };
+    const fields: UpdateData<PantryItem> = { updatedAt: next.updatedAt };
+    for (const key of ["location", "expiryDate"] as const) {
+      if (Object.prototype.hasOwnProperty.call(patch, key)) {
+        next[key] = patch[key]?.trim() || undefined;
+        fields[key] = next[key] ?? deleteField();
+      }
+    }
+    if (patch.packageExpiry) {
+      const { packageId, expiryDate } = patch.packageExpiry;
+      const packages = normalizePackages(current);
+      if (!packages.some((pack) => pack.id === packageId)) {
+        throw new Error("To opakowanie zostało już zużyte. Odśwież produkt.");
+      }
+      next.packages = packages.map((pack) => pack.id === packageId
+        ? { ...pack, expiryDate: expiryDate?.trim() || undefined } : pack);
+      next.expiryDate = undefined;
+      fields.packages = withoutUndefined(next.packages);
+      fields.expiryDate = deleteField();
+    }
+    transaction.update(ref, fields);
+    return next;
+  });
 }
 
 export async function saveChemicalPantryItem(product: Product, chemicalLevel: PantryItem["chemicalLevel"], metadata?: { location?: string }) {
@@ -310,11 +348,13 @@ export async function renameMeal(mealId: string, name: string) {
 }
 
 export async function deleteMeal(mealInput: Meal, restoreIngredients = true) {
-  const meal = normalizeMeal(mealInput);
-  const mealRef = userDoc("meals", meal.id);
-  const summaryRef = userDoc("dailySummaries", summaryId(meal.dateKey, meal.consumerId ?? "legacy"));
+  const mealRef = userDoc("meals", mealInput.id);
 
   await runTransaction(db, async (transaction) => {
+    const mealSnapshot = await transaction.get(mealRef);
+    if (!mealSnapshot.exists()) return;
+    const meal = normalizeMeal(mealSnapshot.data() as Meal);
+    const summaryRef = userDoc("dailySummaries", summaryId(meal.dateKey, meal.consumerId ?? "legacy"));
     const restorableIngredients = restoreIngredients ? meal.ingredients.filter((item) => item.tracksPantry !== false) : [];
     const pantryRefs = restorableIngredients.map((item) => userDoc("pantry", item.barcode));
     const pantrySnapshots = await Promise.all(pantryRefs.map((ref) => transaction.get(ref)));

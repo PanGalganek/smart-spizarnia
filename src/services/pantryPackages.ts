@@ -11,7 +11,7 @@ export function normalizePackages(item: PantryItem): PantryPackage[] {
     .filter((pack) => Number(pack.amount) > 0)
     .map((pack, index) => ({
       ...pack,
-      id: pack.id || packageId(index),
+      id: pack.id || `legacy-index-${index}`,
       unit: pack.unit ?? unit,
       amount: round(Number(pack.amount) || 0),
       capacity: round(Math.max(Number(pack.capacity) || 0, Number(pack.amount) || 0)),
@@ -20,7 +20,8 @@ export function normalizePackages(item: PantryItem): PantryPackage[] {
       createdAt: pack.createdAt ?? index
     }));
   if (existing.length) return existing;
-  return packagesFromQuantity(item.product, Number(item.quantity) || 0, unit, Number(item.capacity) || 0);
+  return packagesFromQuantity(item.product, Number(item.quantity) || 0, unit, Number(item.capacity) || 0)
+    .map((pack) => ({ ...pack, expiryDate: item.expiryDate }));
 }
 
 export function addPackages(current: PantryItem | null, product: Product, amount: number, inputUnit: Unit, now = Date.now(), expiryDate?: string, expiryDates?: (string | undefined)[]) {
@@ -124,13 +125,13 @@ function packagesFromQuantity(product: Product, quantityInput: number, unit: Uni
   const quantity = round(quantityInput);
   if (quantity <= 0) return [];
   const packageAmount = packageAmountFor(product, unit);
-  if (!packageAmount) return [{ id: packageId(0), amount: quantity, capacity: Math.max(savedCapacity, quantity), unit, expiryDate: undefined, opened: true, createdAt: 0 }];
+  if (!packageAmount) return [{ id: "legacy-0", amount: quantity, capacity: Math.max(savedCapacity, quantity), unit, expiryDate: undefined, opened: true, createdAt: 0 }];
 
   const fullCount = Math.floor(quantity / packageAmount);
   const remainder = round(quantity - fullCount * packageAmount);
   const packages: PantryPackage[] = [];
-  if (remainder > 0) packages.push({ id: packageId("open"), amount: remainder, capacity: packageAmount, unit, expiryDate: undefined, opened: true, createdAt: 0 });
-  for (let index = 0; index < fullCount; index += 1) packages.push(fullPackage(packageAmount, unit, index + 1));
+  if (remainder > 0) packages.push({ id: "legacy-open", amount: remainder, capacity: packageAmount, unit, expiryDate: undefined, opened: true, createdAt: 0 });
+  for (let index = 0; index < fullCount; index += 1) packages.push({ ...fullPackage(packageAmount, unit, index + 1), id: `legacy-${index + 1}` });
   return packages;
 }
 

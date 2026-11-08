@@ -13,9 +13,9 @@ Tabletowa aplikacja mobilna do zarzadzania domowa spizarnia. Projekt jest podzie
 
 1. Zainstaluj Node.js LTS i Git.
 2. Skopiuj `.env.example` do `.env` i uzupelnij dane projektu Firebase.
-3. W Firebase wlacz logowanie Email/Password i utworz jednego uzytkownika tabletu.
+3. W Firebase wlacz logowanie Email/Password. Konto administratora musi odpowiadac `ADMIN_UID` w `src/services/userData.ts` i `adminUid()` w `firestore.rules`.
 4. Utworz baze Firestore i opublikuj reguly z `firestore.rules`.
-5. Uruchom `npm install`, a potem `npm run android`.
+5. Uruchom `npm ci --legacy-peer-deps`, a potem `npm run android`.
 
 ## Struktura projektu
 
@@ -30,14 +30,18 @@ Tabletowa aplikacja mobilna do zarzadzania domowa spizarnia. Projekt jest podzie
 
 ## Kolekcje Firestore
 
-- `products/{barcode}` - dane produktu z API lub wpisane recznie
-- `pantry/{barcode}` - produkt, ilosc, jednostka, data waznosci, lokalizacja i status
-- `meals/{mealId}` - typ posilku, data, skladniki z ilosciami oraz podsumowanie odzywcze
-- `dailySummaries/{YYYY-MM-DD}` - dzienna suma kcal, makro i liczba posilkow
+- `userProfiles/{uid}` - rola konta i status: pending, active lub blocked
+- `users/{uid}/products/{barcode}` - dane produktu z API lub wpisane recznie
+- `users/{uid}/pantry/{barcode}` - ilosc, opakowania z datami waznosci, lokalizacja i status
+- `users/{uid}/meals/{mealId}` - posilek, skladniki, osoba i podsumowanie odzywcze
+- `users/{uid}/dailySummaries/{YYYY-MM-DD}__{consumerId}` - dzienna suma kcal, makro i liczba posilkow osoby
+- `users/{uid}/mealTemplates`, `shoppingList`, `consumers`, `settings` - szablony, zakupy, osoby i ustawienia
 
-Reguly Firestore ograniczaja odczyt i zapis do jednego, wskazanego konta tabletu. Samodzielna rejestracja nowych uzytkownikow jest wylaczona.
+Nowe konta moga sie rejestrowac, ale otrzymuja status `pending` i wymagaja aktywacji przez administratora. Aktywny uzytkownik ma dostep do swoich danych; administrator ma dostep do danych wszystkich kont. Kolekcje bez prefiksu `users/{uid}` sa starszym formatem, dostepnym tylko do odczytu przez administratora na potrzeby migracji.
 
 Utworzenie posilku, odjecie wszystkich skladnikow i aktualizacja podsumowania dnia sa jedna transakcja Firestore. Cofniecie posilku atomowo przywraca te same ilosci i odejmuje wartosci posilku od podsumowania dnia.
+
+Cofniecie odczytuje aktualny posilek w transakcji. Ponowna proba cofniecia usunietego wpisu nie zmienia zapasow ani kalorii. Edycja lokalizacji i dat nie nadpisuje ilosci ze starego widoku; zakup dopisuje opakowania z zachowaniem dotychczasowych dat i stanu otwarcia. Cofanie posilku nadal odtwarza ilosc, a nie pierwotny podzial zuzycia na opakowania.
 
 ## Licznik kalorii i posilki
 
@@ -52,3 +56,5 @@ Ekran Posilki pokazuje dzienna sume kalorii, makro i pozostale skladniki odzywcz
 Uruchom `npm test`, `npm run typecheck` oraz testowe pakowanie Expo dla platform `web` i `android`. Testy obejmuja obliczenia kcal, jednostki, odejmowanie stanu, blokowanie nadmiernego zuzycia, oznaczenie produktu jako zuzyty, cofanie posilku i brak danych kalorycznych.
 
 Do testow na fizycznym tablecie pozostaja aparat, ergonomia dotykowa oraz zachowanie przy chwilowej utracie sieci.
+
+Testy repozytoriow korzystaja z pamieciowego modelu dokumentow, wersji i atomowych transakcji. Obejmuja ponawianie cofniecia, konflikty rownoleglych operacji, edycje metadanych i zachowanie opakowan przy zakupie. Nie zastepuja testow regul i transakcji w emulatorze Firebase. Publikacja GitHub Pages wymaga przejscia testow i kontroli typow.
